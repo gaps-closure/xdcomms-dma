@@ -1,7 +1,7 @@
 CC           = gcc
-INCL         = -I ../log
+INCL         = -I ../log -I ../crc
 CFLAGS      ?= -O2 -Wall -Wstrict-prototypes
-SRCS         = $(wildcard *.c) $(wildcard ../log/*.c)
+SRCS         = $(wildcard *.c) $(wildcard ../log/*.c) $(wildcard ../crc/*.c)
 OBJS        := $(SRCS:%.c=%.o)
 
 all:	libxdcomms.so
