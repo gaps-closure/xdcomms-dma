@@ -29,37 +29,6 @@
 #include "xdcomms.h"
 #include "dma-proxy.h"
 
-#define BW_PACKET      /* choose between ha and bw packet formats */
-#define TX_CHANNEL_COUNT 1
-#define RX_CHANNEL_COUNT 1
-
-typedef struct channel {
-  struct channel_buffer *buf_ptr;
-  int fd;
-  pthread_t tid;
-} chan;
-
-typedef struct _thread_args {
-  struct channel_buffer *buf_ptr;
-  int                    fd;
-  int                    buffer_id;
-} thread_args;
-thread_args  args;
-
-#ifdef BW_PACKET
-#include "crc.h"
-
-#define CTAG_MOD               256
-#define PKT_G1_ADU_SIZE_MAX  65536
-/* BW Compressed Mode packet */
-typedef struct _sdh_bw {
-  uint32_t  message_tag_ID;        /* App Mux */
-  uint16_t  data_len;              /* Length (in bytes) */
-  uint16_t  crc16;                 /* XXX: what is the generator polynomial? */
-  uint8_t   data[PKT_G1_ADU_SIZE_MAX];
-} bw;
-#endif
-
 codec_map  cmap[DATA_TYP_MAX];    /* maps data type to its data encode + decode functions */
 
 /**********************************************************************/
@@ -68,12 +37,13 @@ codec_map  cmap[DATA_TYP_MAX];    /* maps data type to its data encode + decode 
 void xdc_log_level(int new_level) {
   static int do_once = 1;
   
+//  fprintf(stderr, "%s: once=%d new_level=%d\n", __func__, do_once, new_level);
   // set to default if User has not already set
   if (new_level == -1) {
     if (do_once == 1) {
       log_set_quiet(0);               /* not quiet */
-      log_set_level(LOG_INFO);        /* default level */
-//      log_set_level(LOG_TRACE);       /* test */
+//      log_set_level(LOG_INFO);        /* default level */
+      log_set_level(LOG_DEBUG);       /* for initial testing */
     }
     return;
   }
@@ -103,6 +73,10 @@ void bw_print(bw *p) {
 
 /* calculate packet's crc */
 uint16_t bw_crc_calc(bw *pkt) {
+//  uint16_t crc;
+//  long *p=(long *) pkt;
+//  crc = crc16((uint8_t *) pkt, sizeof(pkt->message_tag_ID) + sizeof (pkt->data_len));
+//  log_debug("pkt = %x%x, len = %d crc=%d", *p, *(p+1), sizeof(pkt->message_tag_ID) + sizeof (pkt->data_len), crc);
   return (crc16((uint8_t *) pkt, sizeof(pkt->message_tag_ID) + sizeof (pkt->data_len)));
 }
 
@@ -281,7 +255,7 @@ void bw_gaps_data_encode(bw *p, size_t *p_len, uint8_t *buff_in, size_t *buff_le
   /* b) Create CLOSURE packet header */
   bw_ctag_encode(&(p->message_tag_ID), tag);
   bw_len_encode(&(p->data_len), *buff_len);
-  bw_crc_calc(p);
+  p->crc16 = htons(bw_crc_calc(p));
   /* c) Return packet length */
   *p_len = bw_get_packet_length(p, *buff_len);
 }
@@ -340,6 +314,7 @@ void gaps_data_decode(sdh_ha_v1 *p, size_t p_len, uint8_t *buff_out, size_t *len
   len_decode(len_out, p->data_len);
 //  fprintf(stderr, "%s\n", __func__); cmap_print();
   cm->decode (buff_out, p->data, &p_len);
+//  log_trace("%s: plen=%d, %x  %x typ=%d, p_ptr=%p", __func__, p_len, *len_out, p->data_len, tag->typ, p);
   log_buf_trace("API -> raw app data:", p->data,  *len_out);
   log_buf_trace("    <- decoded data:", buff_out, *len_out);
   // TODO - return value to indicate an error
@@ -384,11 +359,6 @@ int open_channel(chan *c, const char **channel_name, int channel_count, int buff
 #else
   log_trace("DMA IOCTL mode", __func__);
 #endif
-#ifdef BW_PACKET
-  log_trace("BW Packet", __func__);
-#else
-  log_trace("HA Packet", __func__);
-#endif
   for (i = 0; i < channel_count; i++) {
     c[i].fd = open(channel_name[i], O_RDWR);
     if (c[i].fd < 1) {
@@ -428,18 +398,17 @@ pthread_attr_t *low_thread_priority(void) {
   }
   return (attr_ptr);
 }
+
+#ifndef SHARED_MEMORY_MODE
 /*
  * Perform DMA ioctl operations to tx or rx data
  */
-#ifndef SHARED_MEMORY_MODE
-void *dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *channel_buffer_ptr) {
+void dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *channel_buffer_ptr) {
   ioctl(fd, START_XFER,  buffer_id_ptr);
   ioctl(fd, FINISH_XFER, buffer_id_ptr);
   if (channel_buffer_ptr->status != PROXY_NO_ERROR) {
     log_warn("Proxy tx transfer error");
   }
-  log_trace("%s: Completed data transfer of buffer id=%d (fd=%d)", __func__, *buffer_id_ptr, fd);
-  return(NULL);
 }
 #endif
 
@@ -449,15 +418,16 @@ void *dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *cha
  */
 
 void *tx_thread(thread_args *vargs) {
-  log_trace("%s: ptr=%p fd=%d id=%d len=%d (arg_ptr=%p)", __func__,  vargs->buf_ptr, vargs->fd, vargs->buffer_id, vargs->buf_ptr->length, vargs);
+//  log_trace("%s: ptr=%p fd=%d id=%d len=%d (arg_ptr=%p)", __func__,  vargs->buf_ptr, vargs->fd, vargs->buffer_id, vargs->buf_ptr->length, vargs);
 #ifndef SHARED_MEMORY_MODE
     dma_start_to_finish(vargs->fd, &(vargs->buffer_id), vargs->buf_ptr);
 #endif
+  log_trace("%s: Exut Tx thread (Finished TX of buffer (id=%d)", __func__, vargs->buffer_id);
   return (NULL);
 }
 
 /*
- * Send Pack to DMA driver in a new thread
+ * Send Packet to DMA driver in a new thread
  */
 void send_channel_buffer(chan *c, size_t packet_len, void *thread_func, int buffer_count) {
   static int buffer_id=0;
@@ -480,7 +450,7 @@ void send_channel_buffer(chan *c, size_t packet_len, void *thread_func, int buff
 }
 
 /*
- * Send Pack to DMA driver in a new thread
+ * Receive packet from DMA driver
  */
 void receive_channel_buffer(chan *c, size_t *packet_len) {
 
@@ -519,15 +489,19 @@ void xdc_asyn_send(void *socket, void *adu, gaps_tag *tag) {
   /* open channel and save virtual address of buffer pointer (in tx_channels) */
   if (once == 1) once = open_channel(tx_channels, tx_channel_names, TX_CHANNEL_COUNT, TX_BUFFER_COUNT);
 #ifdef BW_PACKET
+  char fmt[] = "bw";
   bw  *p;                                                   /* Packet pointer */
   p = (bw *) tx_channels[i].buf_ptr;                        /* DMA channel buffer holds created packet */
   bw_gaps_data_encode(p, &packet_len, adu, &adu_len, tag);  /* Put packet into channel buffer */
 #else
+  char fmt[] = "ha";
   sdh_ha_v1  *p;                                            /* Packet pointer */
   p = (sdh_ha_v1 *) tx_channels[i].buf_ptr;                 /* DMA channel buffer holds created packet */
   gaps_data_encode(p, &packet_len, adu, &adu_len, tag);     /* Put packet into channel buffer */
 #endif
   send_channel_buffer(&tx_channels[i], packet_len, (void *)tx_thread, TX_BUFFER_COUNT);  /* Send packet */
+  log_debug("XDCOMMS writes (format=%s) into DMA channel %s (id=%d, buf_ptr=%p) len=%d", fmt, tx_channel_names[i], i, p, packet_len);
+
 }
 
 /*
@@ -545,22 +519,24 @@ int xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   const char *rx_channel_names[] = { "dma_proxy_rx", /* add unique channel names here */ };
 #endif
 
-
   log_trace("Start of %s", __func__);
   /* open channel and save virtual address of buffer pointer (in channel structure) */
   if (once == 1) once = open_channel(rx_channels, rx_channel_names, RX_CHANNEL_COUNT, RX_BUFFER_COUNT);
-  log_trace("%s: once-%d buf_ptr=%p", __func__, once, &(rx_channels[i].buf_ptr[0]));
+//  log_trace("%s: once-%d buf_ptr=%p", __func__, once, &(rx_channels[i].buf_ptr[0]));
   receive_channel_buffer(&(rx_channels[i]), &packet_len);  /* Wait for packet in channel buffer */
 #ifdef BW_PACKET
+  char fmt[] = "bw";
   bw  *p;                                                   /* Packet pointer */
   p = (bw *) &(rx_channels[i].buf_ptr[0]);                  /* DMA channel buffer with packet */
   bw_gaps_data_decode(p, packet_len, adu, &adu_len, tag);   /* Put packet into ADU */
 #else
+  char fmt[] = "ha";
   sdh_ha_v1  *p;                                            /* Packet pointer */
   p = (sdh_ha_v1 *) &(rx_channels[i].buf_ptr[0]);           /* DMA channel buffer with packet */
   gaps_data_decode(p, packet_len, adu, &adu_len, tag);      /* Put packet into ADU */
 #endif
-  log_trace("%s: ptr=%p = %p", __func__, p, rx_channels[i].buf_ptr);
+
+  log_debug("XDCOMMS reads  (format=%s) from DMA channel %s (id=%d, buf_ptr=%p) len=%d", fmt, rx_channel_names[i], i, p, packet_len);
   log_buf_trace("API recv packet", (uint8_t *) p, packet_len);
   return (packet_len);
 }
