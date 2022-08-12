@@ -23,5 +23,5 @@ lib$(NAME).so: lib$(NAME).so.$(VERSION)
 	$(CC) $(CFLAGS) $(INCL) -fPIC -c $< -o $@
 
 clean: 
-	rm -f $(OBJS) *.so
+	rm -f $(OBJS) *.so.* *.so
 
