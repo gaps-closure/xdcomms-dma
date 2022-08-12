@@ -365,7 +365,7 @@ int open_channel(chan *c, const char **channel_name, int channel_count, int buff
     c[i].fd = open(channel_name[i], O_RDWR);
 #else
     char dev_chan[64] = "/dev/";
-    if strlen(channel_name[i]) >= 60 {
+    if (strlen(channel_name[i]) >= 60) {
       log_fatal("Channel name must be less than 60 chars: %s", channel_name[i]);
       exit(EXIT_FAILURE);
     }
