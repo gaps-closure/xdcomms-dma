@@ -29,7 +29,7 @@ void table_create(uint16_t *fcstab) {
   for (LookupIndex=0; LookupIndex<256; LookupIndex++) {
     v = LookupIndex;
     for (i=8; i>0; i--)
-      v = v & 1 ? (v >> 1) ^ P : v >> 1;
+      v = v & 1 ? (v >> 1) ^ _CRC_P : v >> 1;
     fcstab[LookupIndex]=v;
   }
 //  fprintf(stderr, "CRC: creating table fcstab[256]: ");
@@ -64,12 +64,12 @@ void tryfcs16(uint16_t *fcstab) {
   uint16_t trialfcs;
 
   /* add on output */
-  trialfcs = pppfcs16(fcstab, PPPINITFCS16, cp, len );
+  trialfcs = pppfcs16(fcstab, _CRC_PPPINITFCS16, cp, len );
   cp[len] = (trialfcs & 0x00ff);      /* least significant byte first */
   cp[len+1] = ((trialfcs >> 8) & 0x00ff);
 
   /* check on input */
-  trialfcs = pppfcs16(fcstab, PPPINITFCS16, cp, len + 2 );
+  trialfcs = pppfcs16(fcstab, _CRC_PPPINITFCS16, cp, len + 2 );
 //  if ( trialfcs == 0x0f47 ) printf("Good FCS\n");
 //  else printf("Bad FCS %04x\n", trialfcs);
 }
@@ -85,7 +85,7 @@ uint16_t crc16(uint8_t *buf, size_t len) {
     do_once=0;
   }
   // Step 1) Initialize crc to starting value to all 1's
-  crc = pppfcs16(fcstab, PPPINITFCS16, buf, len);
+  crc = pppfcs16(fcstab, _CRC_PPPINITFCS16, buf, len);
   return (crc);
 }
 
