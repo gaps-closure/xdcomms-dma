@@ -30,6 +30,7 @@
 #include "dma-proxy.h"
 
 codec_map  cmap[DATA_TYP_MAX];    /* maps data type to its data encode + decode functions */
+static thread_args args;
 
 /**********************************************************************/
 /* A) Set API Logging to a new level */

@@ -58,7 +58,6 @@ typedef struct _thread_args {
   int                    fd;
   int                    buffer_id;
 } thread_args;
-thread_args  args;
 
 /* If using BW_v1 packet format */
 #define BW_PACKET         /* choose between ha (not defined) and bw packet formats */
