@@ -16,6 +16,9 @@
 /* Non Legacy versions */
 #define MY_DATA_TYP_MAX 200
 
+#define TX_CHANNEL_COUNT  1
+#define RX_CHANNEL_COUNT  1
+
 /**********************************************************************/
 /* LIB Structures */
 /*********t************************************************************/
@@ -42,6 +45,36 @@ typedef struct _codec_map {
   codec_func_ptr  decode;
 } codec_map;
 //extern codec_map  cmap[DATA_TYP_MAX];   /* declare for global use (where?) */
+
+/* DMA structures */
+typedef struct channel {
+  struct channel_buffer *buf_ptr;
+  int fd;
+  pthread_t tid;
+} chan;
+
+typedef struct _thread_args {
+  struct channel_buffer *buf_ptr;
+  int                    fd;
+  int                    buffer_id;
+} thread_args;
+thread_args  args;
+
+/* If using BW_v1 packet format */
+#define BW_PACKET         /* choose between ha (not defined) and bw packet formats */
+
+#ifdef BW_PACKET
+#include "crc.h"
+#define CTAG_MOD               256
+#define PKT_G1_ADU_SIZE_MAX  65528      /* Max size with 16-bit data_laen = 2^16 - 8 (see bw header) */
+/* BW Compressed Mode packet */
+typedef struct _sdh_bw {
+  uint32_t  message_tag_ID;             /* Compressed Application Mux, Sec, Typ */
+  uint16_t  data_len;                   /* Length (in bytes) */
+  uint16_t  crc16;                      /* Error detection field */
+  uint8_t   data[PKT_G1_ADU_SIZE_MAX];  /* Application data unit */
+} bw;
+#endif
 
 extern void tag_print     (gaps_tag *, FILE *);
 extern void tag_write     (gaps_tag *, uint32_t,   uint32_t,   uint32_t);
