@@ -361,7 +361,17 @@ int open_channel(chan *c, const char **channel_name, int channel_count, int buff
   log_trace("DMA IOCTL mode", __func__);
 #endif
   for (i = 0; i < channel_count; i++) {
+#ifdef SHARED_MEMORY_MODE
     c[i].fd = open(channel_name[i], O_RDWR);
+#else
+    char dev_chan[64] = "/dev/";
+    if strlen(channel_name[i]) >= 60 {
+      log_fatal("Channel name must be less than 60 chars: %s", channel_name[i]);
+      exit(EXIT_FAILURE);
+    }
+    strcat(dev_chan, channel_name[i]);
+    c[i].fd = open(dev_chan, O_RDWR);
+#endif
     if (c[i].fd < 1) {
       log_fatal("Unable to open DMA proxy device file: %s", channel_name[i]);
       exit(EXIT_FAILURE);
