@@ -1,5 +1,5 @@
 CC           = gcc
-INCL         = -I ../log
+INCL         = -I ../log -I /opt/include/closure
 CFLAGS      ?= -O2 -Wall -Wstrict-prototypes
 SRCS         = $(wildcard *.c) $(wildcard ../log/*.c)
 OBJS        := $(SRCS:%.c=%.o)
