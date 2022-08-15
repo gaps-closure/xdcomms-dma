@@ -354,7 +354,10 @@ void *xdc_sub_socket(gaps_tag tag) { return NULL; }
  */
 int open_channel(chan *c, const char **channel_name, int channel_count, int buffer_count) {
   int i;
-  
+  char* ll;
+  if ((ll = getenv("XDCLOGLEVEL")) != NULL) {
+    xdc_log_level(atoi(ll));
+  }
 #ifdef SHARED_MEMORY_MODE
   log_trace("Shared Memory mode", __func__);
 #else
@@ -364,7 +367,7 @@ int open_channel(chan *c, const char **channel_name, int channel_count, int buff
 #ifdef SHARED_MEMORY_MODE
     c[i].fd = open(channel_name[i], O_RDWR);
 #else
-    char dev_chan[64] = "/dev/";
+    char dev_chan[64] = "/dev/"
     if (strlen(channel_name[i]) >= 60) {
       log_fatal("Channel name must be less than 60 chars: %s", channel_name[i]);
       exit(EXIT_FAILURE);
