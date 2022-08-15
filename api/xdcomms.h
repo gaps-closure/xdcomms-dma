@@ -53,11 +53,11 @@ typedef struct channel {
   pthread_t tid;
 } chan;
 
-typedef struct _thread_args {
-  struct channel_buffer *buf_ptr;
-  int                    fd;
-  int                    buffer_id;
-} thread_args;
+//typedef struct _thread_args {
+//  struct channel_buffer *buf_ptr;
+//  int                    fd;
+//  int                    buffer_id;
+//} thread_args;
 
 /* If using BW_v1 packet format */
 #define BW_PACKET         /* choose between ha (not defined) and bw packet formats */
