@@ -225,7 +225,6 @@ dmamap *dma_map_add(gaps_tag *tag_in) {
 }
 
 dmamap *dma_map_search(gaps_tag *tag_in) {
-  int     i;
   dmamap *dm = NULL;
 
   for(dm = dma_map_root; dm != NULL; dm = dm->next) {
@@ -236,6 +235,7 @@ dmamap *dma_map_search(gaps_tag *tag_in) {
       return (dm);
     }
   }
+  return NULL;
 }
 
 dmamap *dma_map_search_and_add(gaps_tag *tag_in) {
