@@ -614,7 +614,7 @@ void *rcvr_thread_function(thread_args *vargs) {
     else{
       pthread_mutex_lock(&(vargs->dm->lock));
       vargs->dm->cbuf_ptr[vargs->dm->index_w] = &(vargs->c->buf_ptr[buffer_id]);
-      (vargs->dm->index_w)++;
+      vargs->dm->index_w = ((vargs->dm->index_w) + 1) % MAX_BUFS_PER_TAG;
       pthread_mutex_unlock(&(vargs->dm->lock));
       log_debug("Adding packet pointer to Rx-ptr-list of tag=<%d,%d,%d>", tag.mux, tag.sec, tag.typ);
     }
@@ -684,6 +684,8 @@ int xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   if (packet_len < 543) log_buf_trace("API recv packet", (uint8_t *) p, packet_len);
   
   /* 5) Flip to next buffer, treating them as a circular list */
+  dm->index_r = ((dm->index_r) + 1) % MAX_BUFS_PER_TAG;
+
 //  buffer_id += BUFFER_INCREMENT;
 //  buffer_id %= RX_BUFFER_COUNT;
   return (packet_len);
