@@ -69,7 +69,7 @@ typedef struct _dmamap {
 typedef struct _thread_args {
 //  struct channel_buffer *buf_ptr;
   chan    *c;
-  dmamap  *dm;
+//  dmamap  *dm;
 //  int     fd;
 //  int                    buffer_id;
 } thread_args;
