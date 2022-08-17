@@ -668,6 +668,10 @@ int xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   log_debug("%s: Waiting for received packet on tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
   cbuf_ptr = dma_buffer_ready_wait(dm, 5);        /* wait 5 seconds for entry in this tag's dmamap queue */
   if (cbuf_ptr == NULL) return (-1);
+  
+  pthread_mutex_lock(&(dm->lock));
+  dm->index_r = ((dm->index_r) + 1) % MAX_BUFS_PER_TAG;
+  pthread_mutex_unlock(&(dm->lock));
   packet_len = cbuf_ptr->length;
 
   /* 4) Decode packet */
@@ -684,8 +688,6 @@ int xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   if (packet_len < 543) log_buf_trace("API recv packet", (uint8_t *) p, packet_len);
   
   /* 5) Flip to next buffer, treating them as a circular list */
-  dm->index_r = ((dm->index_r) + 1) % MAX_BUFS_PER_TAG;
-
 //  buffer_id += BUFFER_INCREMENT;
 //  buffer_id %= RX_BUFFER_COUNT;
   return (packet_len);
