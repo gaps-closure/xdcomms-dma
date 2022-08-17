@@ -18,7 +18,7 @@
 
 #define TX_CHANNEL_COUNT  1
 #define RX_CHANNEL_COUNT  1
-
+#define MAX_BUFS_PER_TAG  RX_BUFFER_COUNT
 /**********************************************************************/
 /* LIB Structures */
 /*********t************************************************************/
@@ -46,6 +46,7 @@ typedef struct _codec_map {
 } codec_map;
 //extern codec_map  cmap[DATA_TYP_MAX];   /* declare for global use (where?) */
 
+
 /* DMA structures */
 typedef struct channel {
   struct channel_buffer *buf_ptr;
@@ -53,11 +54,24 @@ typedef struct channel {
   pthread_t tid;
 } chan;
 
-//typedef struct _thread_args {
+
+/* node storing packet pointers to DMA rx buffer for a tag (in circular linked list) */
+typedef struct _dmamap {
+  gaps_tag               tag;
+  pthread_mutex_t        lock;
+  int                    index_r;
+  int                    index_w;
+  struct channel_buffer *cbuf_ptr[MAX_BUFS_PER_TAG];
+  struct _dmamap        *next;
+} dmamap;
+
+typedef struct _thread_args {
 //  struct channel_buffer *buf_ptr;
-//  int                    fd;
+  chan    *c;
+  dmamap  *dm;
+//  int     fd;
 //  int                    buffer_id;
-//} thread_args;
+} thread_args;
 
 /* If using BW_v1 packet format */
 #define BW_PACKET         /* choose between ha (not defined) and bw packet formats */

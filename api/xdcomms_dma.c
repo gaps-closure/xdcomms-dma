@@ -24,12 +24,15 @@
 #include <time.h>
 #include <errno.h>
 #include <sys/param.h>
+#include <pthread.h>
 
-#include "xdcomms.h"
 #include "dma-proxy.h"
+#include "xdcomms.h"
 
 codec_map  cmap[DATA_TYP_MAX];    /* maps data type to its data encode + decode functions */
-//static thread_args args;
+pthread_mutex_t lock;
+dmamap *dma_map_root = NULL;
+thread_args args;
 
 /**********************************************************************/
 /* A) Set API Logging to a new level */
@@ -108,9 +111,9 @@ void bw_ctag_encode(uint32_t *ctag, gaps_tag *tag) {
 /* Decode compressed teg (ctag -> tag) */
 void bw_ctag_decode(uint32_t *ctag, gaps_tag *tag) {
   uint32_t ctag_h = ntohl(*ctag);
-  tag->mux = ctag_h & 0xff0000;
-  tag->sec = ctag_h &   0xff00;
-  tag->typ = ctag_h &     0xff;
+  tag->mux = (ctag_h & 0xff0000) >> 16 ;
+  tag->sec = (ctag_h &   0xff00) >> 8;
+  tag->typ = (ctag_h &     0xff);
 }
 
 #endif
@@ -166,7 +169,101 @@ void len_decode (size_t *out, uint32_t in) {
 }
 
 /**********************************************************************/
-/* C) Legacy CMAP table to store encoding and decoding function pointers */
+/* C) Linked list with packet pointers to DMA rx buffers for all registered tags   */
+/**********************************************************************/
+void dma_map_print(void) {
+  int     i;
+  dmamap *dm;
+  
+  fprintf(stderr, "DMA map entries:\n");
+  for(dm = dma_map_root; dm != NULL; dm = dm->next) {
+    fprintf(stderr, "  ");
+    tag_print(&(dm->tag), stderr);
+    fprintf(stderr, "index=(r=%d w=%d) next=%p ptr_list=[ ", dm->index_r, dm->index_w, dm->next);
+    for (i=dm->index_r; i!=dm->index_w; i++) {
+      fprintf(stderr, "%p ", dm->cbuf_ptr[i]);
+    }
+    fprintf(stderr, "]\n");
+  }
+}
+
+dmamap *dma_map_add(gaps_tag *tag_in) {
+  int     i;
+  static int once=1;
+  static pthread_mutex_t dma_lock;
+  dmamap *new = (dmamap *) malloc(sizeof(dmamap));
+  dmamap *old = dma_map_root;
+  
+  if (once == 1) {
+    if (pthread_mutex_init(&dma_lock, NULL) != 0) {
+      log_fatal("mutex init has failed failed");
+      exit(EXIT_FAILURE);
+    }
+    once = 0;
+  }
+  
+  pthread_mutex_lock(&dma_lock);
+  /* link at end of linked list */
+  if (dma_map_root == NULL) {
+    dma_map_root = new;
+  }
+  else {
+    while (old->next != NULL)
+      old = old->next;
+    old->next = new;
+  }
+  /* initialize new dmamap node */
+  tag_cp (&(new->tag), tag_in);
+  new->index_r = 0;
+  new->index_w = 0;
+  for (i=0; i<MAX_BUFS_PER_TAG; i++) {
+    new->cbuf_ptr[i] = NULL;
+  }
+  new->next = NULL;
+  pthread_mutex_unlock(&dma_lock);
+  return (new);
+}
+
+dmamap *dma_map_search(gaps_tag *tag_in) {
+  int     i;
+  dmamap *dm = NULL;
+
+  for(dm = dma_map_root; dm != NULL; dm = dm->next) {
+    if ( (dm->tag.mux == tag_in->mux)
+      && (dm->tag.sec == tag_in->sec)
+      && (dm->tag.typ == tag_in->typ)
+       ) {
+      return (dm);
+    }
+  }
+}
+
+dmamap *dma_map_search_and_add(gaps_tag *tag_in) {
+  dmamap *dm;
+  dm = dma_map_search(tag_in);
+  if (dm == NULL) {
+    log_debug("Could not find tag <%d, %d, %d> adding into dma_map", tag_in->mux, tag_in->sec, tag_in->typ);
+    dm = dma_map_add(tag_in);
+  }
+  dma_map_print();
+  return (dm);
+}
+  
+/* Wiat for new packet for tag associated with dm (up to timeout_count seconds) */
+struct channel_buffer *dma_buffer_ready_wait(dmamap *dm, int timeout_count) {
+  int index_next = dm->index_r;
+  
+  while ((timeout_count--) > 0)  {
+    if (index_next < dm->index_w) {
+      return ( dm->cbuf_ptr[index_next] );
+    }
+    sleep(1);
+  }
+  return (NULL);
+}
+
+/**********************************************************************/
+/* D) Legacy CMAP table to store encoding and decoding function pointers */
 /**********************************************************************/
 /*
  * Print Codec Table entry
@@ -212,6 +309,10 @@ void cmap_init(void) {
   
   if (do_once == 1) {
     for (i=0; i < DATA_TYP_MAX; i++) cmap[i].valid=0;
+    if (pthread_mutex_init(&lock, NULL) != 0) {
+      log_fatal("mutex init has failed failed");
+      exit(EXIT_FAILURE);
+    }
     do_once = 0;
   }
 }
@@ -346,12 +447,12 @@ void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout) { return NULL; }
 void *xdc_sub_socket(gaps_tag tag) { return NULL; }
 
 /**********************************************************************/
-/* X) Tx/Rx Threads and DMA Open/Map device  */
+/* X)  DMA Open/Map device and Tx/Rx  */
 /**********************************************************************/
 /*
  * Open channel and save virtual address of buffer pointer
  */
-int open_channel(chan *c, const char **channel_name, int channel_count, int buffer_count) {
+int dma_open_channel(chan *c, const char **channel_name, int channel_count, int buffer_count) {
   int i;
   char* ll;
   
@@ -394,56 +495,41 @@ int open_channel(chan *c, const char **channel_name, int channel_count, int buff
 /*
  * Perform DMA ioctl operations to tx or rx data
  */
-void dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *channel_buffer_ptr) {
-  log_trace("START_XFER (fd=%d, id=%d buf_ptr=%p unset-status=%d)", fd, *buffer_id_ptr, channel_buffer_ptr, channel_buffer_ptr->status);
+void dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *cbuf_ptr) {
+  log_trace("START_XFER (fd=%d, id=%d buf_ptr=%p unset-status=%d)", fd, *buffer_id_ptr, cbuf_ptr, cbuf_ptr->status);
 #ifndef SHARED_MEMORY_MODE
   ioctl(fd, START_XFER,  buffer_id_ptr);
 #endif
-  log_trace("MID_XFER");
+//  log_trace("MID_XFER");
 #ifndef SHARED_MEMORY_MODE
   ioctl(fd, FINISH_XFER, buffer_id_ptr);
-#endif
-  if (channel_buffer_ptr->status != PROXY_NO_ERROR) {
-    log_warn("Proxy transfer error (fd=%d, id=%d): status=%d (BUSY=1, TIMEOUT=2, ERROR=3)", fd, *buffer_id_ptr, channel_buffer_ptr->status);
+  if (cbuf_ptr->status != PROXY_NO_ERROR) {
+    log_warn("Proxy transfer error (fd=%d, id=%d): status=%d (BUSY=1, TIMEOUT=2, ERROR=3)", fd, *buffer_id_ptr, cbuf_ptr->status);
   }
+#endif
   log_trace("FINISH_XFER");
 }
 
+/**********************************************************************/
+/* G) Legacy Send  */
+/**********************************************************************/
 /*
- * Send Packet to DMA driver in a new thread
+ * Send Packet to DMA driver
  */
 void send_channel_buffer(chan *c, size_t packet_len, int buffer_id) {
   log_trace("Start of %s: Ready to Write packet (len=%d) to fd=%d (id=%d) ", __func__, packet_len, c->fd, buffer_id);
   c->buf_ptr[buffer_id].length = packet_len;
-  log_buf_trace("API sends Packet", (uint8_t *) &(c->buf_ptr[buffer_id]), packet_len);
+  if (packet_len < 543) log_buf_trace("API sends Packet", (uint8_t *) &(c->buf_ptr[buffer_id]), packet_len);
   dma_start_to_finish(c->fd, &buffer_id, &(c->buf_ptr[buffer_id]));
 }
 
-/*
- * Receive packet from DMA driver
- */
-void receive_channel_buffer(chan *c, size_t *packet_len, int buffer_id) {
-  log_trace("Start of %s: Ready to Read packet (unset len=%d) from fd=%d (id=%d) ", __func__, c->buf_ptr[buffer_id].length, c->fd, buffer_id);
-#ifdef SHARED_MEMORY_MODE
-  while (c->buf_ptr[buffer_id].length < 1 ) {
-    sleep(1);
-    log_trace("%s len=%d, data[0]=%x ptr=(%p-%p = %x)", __func__, c->buf_ptr[buffer_id].length, c->buf_ptr[buffer_id].buffer[buffer_id], c->buf_ptr[buffer_id].buffer, &(c->buf_ptr[buffer_id].length), c->buf_ptr[buffer_id].buffer - (&(c->buf_ptr[buffer_id].length)));
-  }
-#endif
-  dma_start_to_finish(c->fd, &buffer_id, &(c->buf_ptr[buffer_id]));
-  *packet_len = c->buf_ptr[buffer_id].length;
-}
-
-/**********************************************************************/
-/* G) Legacy ZMQ Communication Send and Receive */
-/**********************************************************************/
 /*
  * Send ADU to DMA driver in 'bw' or 'ha; packet
  */
 void xdc_asyn_send(void *socket, void *adu, gaps_tag *tag) {
   int          i=0;                                      /* Initially assume 1 DMA channel */
   size_t       packet_len, adu_len;                      /* Note; encoder calculates lengiha */
-  static int   once=1;
+  static int   once=1;                                   /* Open tx_channels only once */
   static chan  tx_channels[TX_CHANNEL_COUNT];            /* DMA channels */
   static int   buffer_id=0;
 #ifdef SHARED_MEMORY_MODE
@@ -454,7 +540,12 @@ void xdc_asyn_send(void *socket, void *adu, gaps_tag *tag) {
     
   /* 1) open channel and save virtual address of buffer pointer in channel_buffer */
   log_trace("Start of %s", __func__);
-  if (once == 1) once = open_channel(tx_channels, tx_channel_names, TX_CHANNEL_COUNT, TX_BUFFER_COUNT);
+  if (once == 1) {
+    pthread_mutex_lock(&lock);
+    /* Ensure not reopen by checking 'once' again after lock is released */
+    if (once == 1) once = dma_open_channel(tx_channels, tx_channel_names, TX_CHANNEL_COUNT, TX_BUFFER_COUNT);
+    pthread_mutex_unlock(&lock);
+  }
   
   /* 2) Encode */
 #ifdef BW_PACKET
@@ -470,54 +561,131 @@ void xdc_asyn_send(void *socket, void *adu, gaps_tag *tag) {
 #endif
   
   /* 3) Send Packet */
+  pthread_mutex_lock(&lock);
   send_channel_buffer(&tx_channels[i], packet_len, buffer_id);
   log_debug("XDCOMMS writes (format=%s) into DMA channel %s (id=%d, buf_ptr=%p) len=%d", fmt, tx_channel_names[i], i, p, packet_len);
-  
+  pthread_mutex_unlock(&lock);
+
   /* 4) Flip to next buffer, treating them as a circular list */
   buffer_id += BUFFER_INCREMENT;
   buffer_id %= TX_BUFFER_COUNT;
+}
+
+/**********************************************************************/
+/* H) Legacy Receive  */
+/**********************************************************************/
+/*
+ * Receive packet from DMA driver
+ */
+void receive_channel_buffer(chan *c, size_t *packet_len, int *buffer_id) {
+  log_trace("Start of %s: Ready to Read packet from fd=%d (unset len=%d, unset id=%d) ", __func__, c->fd, c->buf_ptr[*buffer_id].length, *buffer_id);
+#ifdef SHARED_MEMORY_MODE
+  while (c->buf_ptr[*buffer_id].length < 1 ) {
+    sleep(1);
+    log_trace("%s len=%d, data[0]=%x ptr=(%p-%p = %x)", __func__, c->buf_ptr[*buffer_id].length, c->buf_ptr[*buffer_id].buffer[*buffer_id], c->buf_ptr[*buffer_id].buffer, &(c->buf_ptr[*buffer_id].length), c->buf_ptr[*buffer_id].buffer - (&(c->buf_ptr[*buffer_id].length)));
+  }
+#endif
+  dma_start_to_finish(c->fd, buffer_id, &(c->buf_ptr[*buffer_id]));
+  *packet_len = c->buf_ptr[*buffer_id].length;
+//  bw  *p = (bw *) &(c->buf_ptr[*buffer_id]);
+//  log_buf_trace("YYY", (uint8_t *) p, *packet_len);
+//  log_trace("len=%d", *packet_len);
+}
+
+void *rcvr_thread_function(thread_args *vargs) {
+  int       buffer_id = 0;
+  size_t    packet_len = 0;
+  gaps_tag  tag;
+  dmamap   *dm;
+
+  log_debug("%s: fd=%d (ptr: a=%p, b=%p, c=%p d=%p", __func__, vargs->c->fd, vargs, vargs->c->buf_ptr, vargs->c, vargs->dm);
+  while (1) {
+    receive_channel_buffer(vargs->c, &packet_len, &buffer_id);
+    /* XXX: Only supports BW - update if need to support HA */
+    bw  *p = (bw *) &(vargs->c->buf_ptr[buffer_id]);        /* Packet pointer in DMA channel buffer */
+//    log_buf_trace("QQQ", (uint8_t *) p, packet_len);
+//    log_trace("QQQ: len=%d packet ptr=%p", packet_len, p);
+    bw_ctag_decode(&(p->message_tag_ID), &tag);
+    log_debug("Received packet len=%ld, id=%d, tag=<%d,%d,%d>", packet_len, buffer_id, tag.mux, tag.sec, tag.typ);
+    
+    if ( (dm = dma_map_search(&tag)) == NULL) {
+      log_warn("Could not find tag=<%d,%d,%d> in DMA-map, so ignoring", tag.mux, tag.sec, tag.typ);
+    }
+    else{
+      pthread_mutex_lock(&(vargs->dm->lock));
+      vargs->dm->cbuf_ptr[vargs->dm->index_w] = &(vargs->c->buf_ptr[buffer_id]);
+      (vargs->dm->index_w)++;
+      pthread_mutex_unlock(&(vargs->dm->lock));
+      log_debug("Adding packet pointer to Rx-ptr-list of tag=<%d,%d,%d>", tag.mux, tag.sec, tag.typ);
+    }
+    dma_map_print();
+    log_debug("Receive Loop complete (len=%d id=%d)", packet_len, buffer_id);
+#ifdef SHARED_MEMORY_MODE
+    sleep(10);  /* give time to change received packet manually */
+#endif
+  }
+}
+
+void rcvr_thread_start(chan *c, dmamap *dm) {
+  args.c   = c;
+  args.dm  = dm;
+//  log_debug("%s: fd=%d (ptr: a=%p, b=%p, c=%p)", __func__, c->fd, &args, c->buf_ptr, c);
+  if (pthread_create(&(c->tid), NULL, (void *) rcvr_thread_function, (void *)&args) != 0) {
+    log_fatal("Failed to create tx thread");
+    exit(EXIT_FAILURE);
+  }
 }
 
 /*
  * Receive 'bw' or 'ha; packet from DMA driver, storing data and length in ADU
  */
 int xdc_recv(void *socket, void *adu, gaps_tag *tag) {
-  int          i=0;                                      /* Initially assume 1 DMA channel */
-  size_t       packet_len=0, adu_len=0;                      /* Note; encoder calculates lengiha */
-  static int   once=1;
-  static chan  rx_channels[TX_CHANNEL_COUNT];            /* DMA channels */
-  static int   buffer_id=0;
+  size_t                 packet_len=0, adu_len=0;        /* packet length is read from dma buffer */
+  static int             once=1;
+  static chan            rx_channels[TX_CHANNEL_COUNT];  /* DMA channels */
+//  static int             buffer_id=0;
+  dmamap                *dm;
+  struct channel_buffer *cbuf_ptr;
+  
 #ifdef SHARED_MEMORY_MODE
   const char  *rx_channel_names[] = { "orange_to_green_channel", /* add unique channel names here */ };
 #else
   const char  *rx_channel_names[] = { "dma_proxy_rx", /* add unique channel names here */ };
 #endif
 
-  /* 1) open channel and save virtual address of buffer pointer in channel_buffer */
+  /* 1) find or create DMA map */
   log_trace("Start of %s", __func__);
-  if (once == 1) once = open_channel(rx_channels, rx_channel_names, RX_CHANNEL_COUNT, RX_BUFFER_COUNT);
+  dm = dma_map_search_and_add(tag);
+
+  /* 2) Initialize channel and receive thread (only once) */
+  if (once == 1) {
+    /* open channel and save virtual address of buffer pointer in channel_buffer */
+    once = dma_open_channel(rx_channels, rx_channel_names, RX_CHANNEL_COUNT, RX_BUFFER_COUNT);
+    rcvr_thread_start(rx_channels, dm);
+  }
   
-  /* 2) Recieve Packet */
-  receive_channel_buffer(&(rx_channels[i]), &packet_len, buffer_id);
-  
-  /* 3) Decode */
+  /* 3) Wait for packet */
+  log_debug("%s: Waiting for received packet on tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
+  cbuf_ptr = dma_buffer_ready_wait(dm, 5);        /* wait 5 seconds for entry in this tag's dmamap queue */
+  if (cbuf_ptr == NULL) return (-1);
+  packet_len = cbuf_ptr->length;
+
+  /* 4) Decode packet */
 #ifdef BW_PACKET
   char fmt[] = "bw";
-  bw  *p;                                                   /* Packet pointer */
-  p = (bw *) &(rx_channels[i].buf_ptr[0]);                  /* DMA channel buffer with packet */
+  bw  *p = (bw *) cbuf_ptr;                                 /* Packet pointer in DMA channel buffer */
   bw_gaps_data_decode(p, packet_len, adu, &adu_len, tag);   /* Put packet into ADU */
 #else
   char fmt[] = "ha";
-  sdh_ha_v1  *p;                                            /* Packet pointer */
-  p = (sdh_ha_v1 *) &(rx_channels[i].buf_ptr[0]);           /* DMA channel buffer with packet */
+  sdh_ha_v1  *p = (sdh_ha_v1 *) cbuf_ptr;           /* DMA channel buffer with packet */
   gaps_data_decode(p, packet_len, adu, &adu_len, tag);      /* Put packet into ADU */
 #endif
-  log_debug("XDCOMMS reads  (format=%s) from DMA channel %s (id=%d, buf_ptr=%p) len=%d", fmt, rx_channel_names[i], i, p, packet_len);
-  log_buf_trace("API recv packet", (uint8_t *) p, packet_len);
+  log_debug("XDCOMMS reads  (format=%s) from DMA channel %s (buf_ptr=%p) len=%d", fmt, rx_channel_names[0], p, packet_len);
+  if (packet_len < 543) log_buf_trace("API recv packet", (uint8_t *) p, packet_len);
   
-  /* 4) Flip to next buffer, treating them as a circular list */
-  buffer_id += BUFFER_INCREMENT;
-  buffer_id %= RX_BUFFER_COUNT;
+  /* 5) Flip to next buffer, treating them as a circular list */
+//  buffer_id += BUFFER_INCREMENT;
+//  buffer_id %= RX_BUFFER_COUNT;
   return (packet_len);
 }
 
@@ -525,5 +693,6 @@ int xdc_recv(void *socket, void *adu, gaps_tag *tag) {
  * Receive ADU from HAL (HAL is the ZMQ publisher) - Blocks until it gets a valid adu
  */
 void xdc_blocking_recv(void *socket, void *adu, gaps_tag *tag) {
+  log_trace("Start of %s", __func__);
   while (xdc_recv(socket, adu, tag) < 0);
 }
