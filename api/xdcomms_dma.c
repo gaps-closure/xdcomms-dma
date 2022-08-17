@@ -21,7 +21,6 @@
 #include <signal.h>
 #include <string.h>
 #include <sched.h>
-#include <time.h>
 #include <errno.h>
 #include <sys/param.h>
 #include <pthread.h>
@@ -32,7 +31,7 @@
 codec_map  cmap[DATA_TYP_MAX];    /* maps data type to its data encode + decode functions */
 pthread_mutex_t lock;
 dmamap *dma_map_root = NULL;
-thread_args args;
+thread_args rxargs;
 
 /**********************************************************************/
 /* A) Set API Logging to a new level */
@@ -191,7 +190,7 @@ dmamap *dma_map_add(gaps_tag *tag_in) {
   int     i;
   static int once=1;
   static pthread_mutex_t dma_lock;
-  dmamap *new = (dmamap *) malloc(sizeof(dmamap));
+  dmamap *new_dm = (dmamap *) malloc(sizeof(dmamap));
   dmamap *old = dma_map_root;
   
   /* 1) Initialize the dma_lock*/
@@ -203,27 +202,20 @@ dmamap *dma_map_add(gaps_tag *tag_in) {
     }
   }
   
-  /* 2) Add empty new node to the at end of linked list */
-  pthread_mutex_lock(&dma_lock);
-  /* link at end of linked list */
-  if (dma_map_root == NULL) {
-    dma_map_root = new;
-  }
-  else {
-    while (old->next != NULL)
-      old = old->next;
-    old->next = new;
-  }
-  /* 3) initialize new dmamap node */
-  tag_cp (&(new->tag), tag_in);
-  new->index_r = 0;
-  new->index_w = 0;
+  /* =2) initialize new_dm dmamap node */
+  tag_cp (&(new_dm->tag), tag_in);
+  new_dm->index_r = 0;
+  new_dm->index_w = 0;
   for (i=0; i<MAX_BUFS_PER_TAG; i++) {
-    new->cbuf_ptr[i] = NULL;
+    new_dm->cbuf_ptr[i] = NULL;
   }
-  new->next = NULL;
+  new_dm->next = old;
+
+  /* 3) Add  new node to start of linked list */
+  pthread_mutex_lock(&dma_lock);
+  dma_map_root = new_dm;
   pthread_mutex_unlock(&dma_lock);
-  return (new);
+  return (new_dm);
 }
 
 dmamap *dma_map_search(gaps_tag *tag_in) {
@@ -252,14 +244,16 @@ dmamap *dma_map_search_and_add(gaps_tag *tag_in) {
 }
   
 /* Wiat for new packet for tag associated with dm (up to timeout_count seconds) */
-struct channel_buffer *dma_buffer_ready_wait(dmamap *dm, int timeout_count) {
+/* MUST USE NAON SLEEP and elapsed time from start */
+struct channel_buffer *dma_buffer_ready_wait(dmamap *dm, long nanosec, int ntries) {
   int index_next = dm->index_r;
+  struct timespec request = {0, nanosec};
   
-  while ((timeout_count--) > 0)  {
+  while ((ntries--) > 0)  {
     if (index_next < dm->index_w) {
       return ( dm->cbuf_ptr[index_next] );
     }
-    sleep(1);
+    nanosleep(&request, NULL);
   }
   return (NULL);
 }
@@ -491,7 +485,7 @@ int dma_open_channel(chan *c, const char **channel_name, int channel_count, int 
     }
     log_trace("Opened channel (id=%d): %s (buf_ptr=%p, fd=%d)", i, channel_name[i], c[i].buf_ptr, c[i].fd);
   }
-  return (0);
+  return (0); /* success */
 }
 
 /*
@@ -598,12 +592,12 @@ void *rcvr_thread_function(thread_args *vargs) {
   int       buffer_id = 0;
   size_t    packet_len = 0;
   gaps_tag  tag;
-  dmamap   *dm;
+  dmamap   *dm;     /* DMA-map corresponding to the tag of message just received */
   bw       *p;
 
   log_trace("THREAD %s: fd=%d (ptr: a=%p, b=%p, c=%p", __func__, vargs->c->fd, vargs, vargs->c->buf_ptr, vargs->c);
   while (1) {
-    receive_channel_buffer(vargs->c, &packet_len, &buffer_id);
+    receive_channel_buffer(vargs->c, &packet_len, &buffer_id);  /* Only a single thread uses dma_proxy_rx, so no need to lock */
     /* XXX: Only supports BW - update if need to support HA */
     p = (bw *) &(vargs->c->buf_ptr[buffer_id]);        /* Packet pointer in DMA channel buffer */
 //    log_buf_trace("QQQ", (uint8_t *) p, packet_len);
@@ -622,19 +616,18 @@ void *rcvr_thread_function(thread_args *vargs) {
       log_debug("THREAD adds packet pointer to Rx-ptr-list of tag=<%d,%d,%d>", tag.mux, tag.sec, tag.typ);
     }
 //    dma_map_print();
-    log_trace("THREAD rx Loop complete (len=%d id=%d)", packet_len, buffer_id);
+    log_trace("THREAD rx done with message (len=%d id=%d) - loop for next ", packet_len, buffer_id);
 #ifdef SHARED_MEMORY_MODE
     sleep(10);  /* give time to change received packet manually */
 #endif
   }
 }
 
-void rcvr_thread_start(chan *c, dmamap *dm) {
-  args.c   = c;
-//  args.dm  = dm;
-//  log_debug("%s: fd=%d (ptr: a=%p, b=%p, c=%p)", __func__, c->fd, &args, c->buf_ptr, c);
-  if (pthread_create(&(c->tid), NULL, (void *) rcvr_thread_function, (void *)&args) != 0) {
-    log_fatal("Failed to create tx thread");
+void rcvr_thread_start(chan *c) {
+  rxargs.c   = c;
+//  log_debug("%s: fd=%d (ptr: a=%p, b=%p, c=%p)", __func__, c->fd, &rxargs, c->buf_ptr, c);
+  if (pthread_create(&(c->tid), NULL, (void *) rcvr_thread_function, (void *)&rxargs) != 0) {
+    log_fatal("Failed to create rx thread");
     exit(EXIT_FAILURE);
   }
 }
@@ -647,7 +640,7 @@ int xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   static int             once=1;
   static chan            rx_channels[TX_CHANNEL_COUNT];  /* DMA channels */
 //  static int             buffer_id=0;
-  dmamap                *dm;
+  dmamap                *dm;      /* Ptr to DMA-map associated with the tag for this receive */
   struct channel_buffer *cbuf_ptr;
   
 #ifdef SHARED_MEMORY_MODE
@@ -656,20 +649,21 @@ int xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   const char  *rx_channel_names[] = { "dma_proxy_rx", /* add unique channel names here */ };
 #endif
 
-  /* 1) ffind and create (if not already created) a DMA map for this tag */
+  /* 1) find and create (if not already created) a DMA map for this tag */
   log_trace("Start of %s", __func__);
   dm = dma_map_search_and_add(tag);
 
   /* 2) Initialize channel and receive thread (only once) */
-  if (once == 1) {
+  if (once != 0) {
     /* open channel and save virtual address of buffer pointer in channel_buffer */
-    once = dma_open_channel(rx_channels, rx_channel_names, RX_CHANNEL_COUNT, RX_BUFFER_COUNT);
-    rcvr_thread_start(rx_channels, dm);
+    once = dma_open_channel(rx_channels, rx_channel_names, RX_CHANNEL_COUNT, RX_BUFFER_COUNT);  /* return 0 on success */
+    rcvr_thread_start(rx_channels);
   }
   
   /* 3) Wait for packet */
   log_debug("%s: Waiting for received packet on tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
-  cbuf_ptr = dma_buffer_ready_wait(dm, 5);  /* wait x seconds for packet (in tag's dmamap queue) */
+  /* Checks up to 15 times for packet (in tag's dmamap queue) with 1ms delay between tries */
+  cbuf_ptr = dma_buffer_ready_wait(dm, 1000000, 15);
   if (cbuf_ptr == NULL) return (-1);
   
   pthread_mutex_lock(&(dm->lock));
@@ -689,10 +683,7 @@ int xdc_recv(void *socket, void *adu, gaps_tag *tag) {
 #endif
   log_debug("XDCOMMS reads  (format=%s) from DMA channel %s (buf_ptr=%p) len=%d", fmt, rx_channel_names[0], p, packet_len);
   if (packet_len < 543) log_buf_trace("API recv packet", (uint8_t *) p, packet_len);
-  
-  /* 5) Flip to next buffer, treating them as a circular list */
-//  buffer_id += BUFFER_INCREMENT;
-//  buffer_id %= RX_BUFFER_COUNT;
+
   return (packet_len);
 }
 
