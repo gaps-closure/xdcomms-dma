@@ -242,17 +242,15 @@ dmamap *dma_map_search_and_add(gaps_tag *tag_in) {
   dma_map_print();
   return (dm);
 }
-  
+
 /* Wiat for new packet for tag associated with dm (up to timeout_count seconds) */
 /* MUST USE NAON SLEEP and elapsed time from start */
 struct channel_buffer *dma_buffer_ready_wait(dmamap *dm, long nanosec, int ntries) {
-  int index_next = dm->index_r;
+  int index_diff = ((dm->index_w) - (dm->index_r)) % MAX_BUFS_PER_TAG;
   struct timespec request = {0, nanosec};
   
   while ((ntries--) > 0)  {
-    if (index_next < dm->index_w) {
-      return ( dm->cbuf_ptr[index_next] );
-    }
+    if (index_diff != 0) return (dm->cbuf_ptr[dm->index_r]);
     nanosleep(&request, NULL);
   }
   return (NULL);
