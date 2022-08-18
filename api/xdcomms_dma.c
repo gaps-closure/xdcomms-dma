@@ -24,6 +24,7 @@
 #include <errno.h>
 #include <sys/param.h>
 #include <pthread.h>
+#include <math.h>
 
 #include "dma-proxy.h"
 #include "xdcomms.h"
@@ -170,28 +171,11 @@ void len_decode (size_t *out, uint32_t in) {
 /**********************************************************************/
 /* C) Linked list with packet pointers to DMA rx buffers for all registered tags   */
 /**********************************************************************/
-void dma_map_print(void) {
-  int     i;
-  dmamap *dm;
-  
-  fprintf(stderr, "DMA map entries:\n");
-  for(dm = dma_map_root; dm != NULL; dm = dm->next) {
-    fprintf(stderr, "  ");
-    tag_print(&(dm->tag), stderr);
-    fprintf(stderr, "index=(r=%d w=%d) next=%p ptr_list=[ ", dm->index_r, dm->index_w, dm->next);
-    for (i=dm->index_r; i!=dm->index_w; i++) {
-      fprintf(stderr, "%p ", dm->cbuf_ptr[i]);
-    }
-    fprintf(stderr, "]\n");
-  }
-}
-
 dmamap *dma_map_add(gaps_tag *tag_in) {
   int     i;
   static int once=1;
   static pthread_mutex_t dma_lock;
   dmamap *new_dm = (dmamap *) malloc(sizeof(dmamap));
-  dmamap *old = dma_map_root;
   
   /* 1) Initialize the dma_lock*/
   if (once == 1) {
@@ -206,13 +190,14 @@ dmamap *dma_map_add(gaps_tag *tag_in) {
   tag_cp (&(new_dm->tag), tag_in);
   new_dm->index_r = 0;
   new_dm->index_w = 0;
+  new_dm->next    = NULL;
   for (i=0; i<MAX_BUFS_PER_TAG; i++) {
     new_dm->cbuf_ptr[i] = NULL;
   }
-  new_dm->next = old;
 
   /* 3) Add  new node to start of linked list */
   pthread_mutex_lock(&dma_lock);
+  new_dm->next = dma_map_root;
   dma_map_root = new_dm;
   pthread_mutex_unlock(&dma_lock);
   return (new_dm);
@@ -221,6 +206,7 @@ dmamap *dma_map_add(gaps_tag *tag_in) {
 dmamap *dma_map_search(gaps_tag *tag_in) {
   dmamap *dm = NULL;
 
+  /* Not locking dma_map_root: if root changes because of head insert, then new map will not be found in this seach */
   for(dm = dma_map_root; dm != NULL; dm = dm->next) {
     if ( (dm->tag.mux == tag_in->mux)
       && (dm->tag.sec == tag_in->sec)
@@ -239,18 +225,22 @@ dmamap *dma_map_search_and_add(gaps_tag *tag_in) {
     log_debug("Could not find tag <%d, %d, %d> adding into dma_map", tag_in->mux, tag_in->sec, tag_in->typ);
     dm = dma_map_add(tag_in);
   }
-  dma_map_print();
   return (dm);
 }
 
 /* Wiat for new packet for tag associated with dm (up to timeout_count seconds) */
 /* MUST USE NAON SLEEP and elapsed time from start */
 struct channel_buffer *dma_buffer_ready_wait(dmamap *dm, long nanosec, int ntries) {
-  int index_diff = ((dm->index_w) - (dm->index_r)) % MAX_BUFS_PER_TAG;
   struct timespec request = {0, nanosec};
   
   while ((ntries--) > 0)  {
-    if (index_diff != 0) return (dm->cbuf_ptr[dm->index_r]);
+    pthread_mutex_lock(&(dm->lock));
+    if ((dm->index_w) != (dm->index_r)) {   /* If read, write indexes match, then buffer is empty */
+      struct channel_buffer * ret=dm->cbuf_ptr[dm->index_r];
+      pthread_mutex_unlock(&(dm->lock));
+      return (ret);
+    }
+    pthread_mutex_unlock(&(dm->lock));
     nanosleep(&request, NULL);
   }
   return (NULL);
@@ -609,11 +599,11 @@ void *rcvr_thread_function(thread_args *vargs) {
     else{
       pthread_mutex_lock(&(dm->lock));
       dm->cbuf_ptr[dm->index_w] = &(vargs->c->buf_ptr[buffer_id]);
+      /* XXX ought to check if buffer will wrap around and log warning */
       dm->index_w = ((dm->index_w) + 1) % MAX_BUFS_PER_TAG;
       pthread_mutex_unlock(&(dm->lock));
       log_debug("THREAD adds packet pointer to Rx-ptr-list of tag=<%d,%d,%d>", tag.mux, tag.sec, tag.typ);
     }
-//    dma_map_print();
     log_trace("THREAD rx done with message (len=%d id=%d) - loop for next ", packet_len, buffer_id);
 #ifdef SHARED_MEMORY_MODE
     sleep(10);  /* give time to change received packet manually */
@@ -664,9 +654,6 @@ int xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   cbuf_ptr = dma_buffer_ready_wait(dm, 1000000, 15);
   if (cbuf_ptr == NULL) return (-1);
   
-  pthread_mutex_lock(&(dm->lock));
-  dm->index_r = ((dm->index_r) + 1) % MAX_BUFS_PER_TAG;
-  pthread_mutex_unlock(&(dm->lock));
   packet_len = cbuf_ptr->length;
 
   /* 4) Decode packet */
@@ -684,6 +671,10 @@ int xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   log_debug("XDCOMMS reads  (format=%s) from DMA channel %s (buf_ptr=%p) len=%d dlen=%d", fmt, rx_channel_names[0], p, packet_len, len_out);
   if (packet_len < 543) log_buf_trace("API recv packet", (uint8_t *) p, packet_len);
 
+  /* Everything in cbuf pointer is processed, so release it back to the pool */
+  pthread_mutex_lock(&(dm->lock));
+  dm->index_r = ((dm->index_r) + 1) % MAX_BUFS_PER_TAG;
+  pthread_mutex_unlock(&(dm->lock));
   return (packet_len);
 }
 
