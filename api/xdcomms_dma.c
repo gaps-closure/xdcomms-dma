@@ -679,7 +679,9 @@ int xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   sdh_ha_v1  *p = (sdh_ha_v1 *) cbuf_ptr;           /* DMA channel buffer with packet */
   gaps_data_decode(p, packet_len, adu, &adu_len, tag);      /* Put packet into ADU */
 #endif
-  log_debug("XDCOMMS reads  (format=%s) from DMA channel %s (buf_ptr=%p) len=%d", fmt, rx_channel_names[0], p, packet_len);
+  size_t len_out;
+  bw_len_decode(&len_out, p->data_len);
+  log_debug("XDCOMMS reads  (format=%s) from DMA channel %s (buf_ptr=%p) len=%d dlen=%d", fmt, rx_channel_names[0], p, packet_len, len_out);
   if (packet_len < 543) log_buf_trace("API recv packet", (uint8_t *) p, packet_len);
 
   return (packet_len);
