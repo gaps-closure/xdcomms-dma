@@ -409,17 +409,19 @@ void len_decode (size_t *out, uint32_t in) {
 
 /* Set API Logging to a new level */
 void xdc_log_level(int new_level) {
-  static int do_once = 1;
-  if ((new_level >= LOG_TRACE) && (new_level <= LOG_FATAL)) {
-    if (do_once == 1) {
-      log_set_quiet(0);
-      log_set_level(new_level);
-      log_trace("User sets API log level: %d", new_level);
-      do_once = 0;
-    }
+  char *ll;
+  int lvl;
+
+  /* XXX: warn if new_level does not match XDCLOGLEVEL */
+  if ((ll = getenv("XDCLOGLEVEL")) != NULL) { lvl = atoi(ll); } else { lvl = new_level; }
+
+  if ((lvl >= LOG_TRACE) && (lvl <= LOG_FATAL)) {
+    log_set_quiet(0);
+    log_set_level(lvl);
+    log_trace("Set API log level: %d", lvl);
   }
   else {
-    log_warn("Cannot change API to log level %d (min=%d max=%d)\n", __func__, new_level, LOG_TRACE, LOG_FATAL);
+    log_warn("Cannot change API to log level %d (min=%d max=%d)\n", __func__, lvl, LOG_TRACE, LOG_FATAL);
   }
 }
 
@@ -427,10 +429,9 @@ void xdc_log_level(int new_level) {
 /* XXX: must be called at least once so locks are inited */
 void xdc_register(codec_func_ptr encode, codec_func_ptr decode, int typ) {
   int   i;
-  char *ll;
   static int do_once = 1;
 
-  if ((ll = getenv("XDCLOGLEVEL")) != NULL) { xdc_log_level(atoi(ll)); } else { xdc_log_level(LOG_INFO); }
+  xdc_log_level(LOG_TRACE);
   
   if (do_once == 1) {
     do_once = 0;
