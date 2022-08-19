@@ -12,20 +12,14 @@
 #include "dma-proxy.h"
 #include "crc.h"
 
-#define DATA_TYP_MAX        200
+#define DATA_TYP_MAX        50
+#define GAPS_TAG_MAX        50
 #define CTAG_MOD            256
 #define PKT_G1_ADU_SIZE_MAX 65528            /* Max size with 16-bit data_laen = 2^16 - 8 (see bw header) */
 
 #define TX_CHANNEL_COUNT    1
 #define RX_CHANNEL_COUNT    1
 #define MAX_BUFS_PER_TAG    RX_BUFFER_COUNT  /* RX_BUFFER_COUNT from dma-proxy.h */
-
-/* Closure tag structure */
-typedef struct _tag {
-  uint32_t    mux;      /* APP ID */
-  uint32_t    sec;      /* Security tag */
-  uint32_t    typ;      /* data type */
-} gaps_tag;
 
 /* Table of codec per data types (Max of DATA_TYP_MAX types) */
 typedef void (*codec_func_ptr)(void *, void *, size_t *);
@@ -36,7 +30,14 @@ typedef struct _codec_map {
   codec_func_ptr  decode;
 } codec_map;
 
-/* GAPS MIND Packet Format */
+/* CLOSURE tag structure */
+typedef struct _tag {
+  uint32_t    mux;      /* APP ID */
+  uint32_t    sec;      /* Security tag */
+  uint32_t    typ;      /* data type */
+} gaps_tag;
+
+/* MIND packet format */
 typedef struct _sdh_bw {
   uint32_t  message_tag_ID;             /* Compressed Application Mux, Sec, Typ */
   uint16_t  data_len;                   /* Length (in bytes) */
@@ -44,26 +45,26 @@ typedef struct _sdh_bw {
   uint8_t   data[PKT_G1_ADU_SIZE_MAX];  /* Application data unit */
 } bw;
 
-/* DMA structures */
+/* DMA channel structure */
 typedef struct channel {
   struct channel_buffer *buf_ptr;
   int fd;
 } chan;
 
-/* node storing packet pointers to DMA rx buffer for a tag (in circular linked list) */
-typedef struct _dmamap {
-  gaps_tag               tag;
-  pthread_mutex_t        lock;
-  int                    index_r;
-  int                    index_w;
-  struct channel_buffer *cbuf_ptr[MAX_BUFS_PER_TAG];
-  struct _dmamap        *next;
-} dmamap;
-
+/* Receiver thread arguments */
 typedef struct _thread_args {
   chan    *c;
   int      buffer_id;
 } thread_args;
+
+/* Per-tag buffer node */
+typedef struct _tagbuf {
+  uint32_t          ctag;
+  uint32_t          plen;
+  pthread_mutex_t   lock;
+  char              newd;
+  bw                p;
+} tagbuf;
 
 extern void tag_print     (gaps_tag *, FILE *);
 extern void tag_write     (gaps_tag *, uint32_t,   uint32_t,   uint32_t);
