@@ -33,9 +33,8 @@ codec_map  cmap[DATA_TYP_MAX];    /* maps data type to its data encode + decode 
 pthread_mutex_t txlock;
 pthread_mutex_t rxlock;
 
-void put_rx_packet(gaps_tag *tag);
+void put_rx_packet(bw *p, gaps_tag *tag);
 struct channel_buffer *get_rx_packet(gaps_tag *tag);
-dmamap *dma_map_root = NULL;
 
 /**********************************************************************/
 /* Codec map table to store encoding and decoding function pointers   */
@@ -220,7 +219,7 @@ void dma_send(void *adu, gaps_tag *tag) {
     dma_open_channel(tx_channels, tx_channel_names, TX_CHANNEL_COUNT, TX_BUFFER_COUNT);
   }
   send_channel_buffer(&tx_channels[i], packet_len, buffer_id);
-  log_debug("XDCOMMS tx packet fmt=%s len=%ld, id=%d, buf_ptr=%p tag=<%d,%d,%d>", fmt, packet_len, buffer_id, p, tag.mux, tag.sec, tag.typ);
+  log_debug("XDCOMMS tx packet fmt=%s len=%ld, id=%d, buf_ptr=%p tag=<%d,%d,%d>", fmt, packet_len, buffer_id, p, tag->mux, tag->sec, tag->typ);
   pthread_mutex_unlock(&txlock);
 }
 
@@ -244,7 +243,7 @@ void *rcvr_thread_function(thread_args *vargs) {
     p = (bw *) &(vargs->c->buf_ptr[vargs->buffer_id]);
     bw_ctag_decode(&(p->message_tag_ID), &tag);
     log_debug("THREAD rx packet len=%ld, id=%d, tag=<%d,%d,%d>", packet_len, buffer_id, tag.mux, tag.sec, tag.typ);
-    put_rx_packet(&tag);
+    put_rx_packet(p, &tag);
   }
 }
 
@@ -415,7 +414,8 @@ void xdc_blocking_recv(void *socket, void *adu, gaps_tag *tag) {
 }
 
 /* ######################### DANGER ZONE BEGINS ####################### */
-void put_rx_packet(gaps_tag *tag) {
+void put_rx_packet(bw *p, gaps_tag *tag) {
+ 
   /* 
    * get the BW compressed tag 
    * get a lock of buffer pool, allocating one for tag if has none, release lock
@@ -437,6 +437,7 @@ struct channel_buffer *get_rx_packet(gaps_tag *tag) {
 }
 
 #ifdef BORROW_IF_NEEDED_THEN_DELETE
+dmamap *dma_map_root = NULL;
 /**********************************************************************/
 /* Linked list with packet pointers to DMA rx buffers for all registered tags   */
 /**********************************************************************/
