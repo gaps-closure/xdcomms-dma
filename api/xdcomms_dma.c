@@ -34,7 +34,7 @@ pthread_mutex_t txlock;
 pthread_mutex_t rxlock;
 
 void put_rx_packet(bw *p, gaps_tag *tag);
-struct channel_buffer *get_rx_packet(gaps_tag *tag);
+bw *get_rx_packet(gaps_tag *tag, size_t *packet_len);
 
 /**********************************************************************/
 /* Codec map table to store encoding and decoding function pointers   */
@@ -199,6 +199,7 @@ int send_channel_buffer(chan *c, size_t packet_len, int buffer_id) {
 
 /* Send ADU to DMA driver in 'bw' packet */
 void dma_send(void *adu, gaps_tag *tag) {
+  int ret;
   const int    i=0;                                      /* Assume single DMA channel */
   size_t       packet_len, adu_len;                      /* Note; encoder calculates lengiha */
   static int   once=1;                                   /* Open tx_channels only once */
@@ -220,8 +221,10 @@ void dma_send(void *adu, gaps_tag *tag) {
     once = 0;
     dma_open_channel(tx_channels, tx_channel_names, TX_CHANNEL_COUNT, TX_BUFFER_COUNT);
   }
-  send_channel_buffer(&tx_channels[i], packet_len, buffer_id);
-  log_debug("XDCOMMS tx packet fmt=%s len=%ld, id=%d, buf_ptr=%p tag=<%d,%d,%d>", fmt, packet_len, buffer_id, p, tag->mux, tag->sec, tag->typ);
+  ret = send_channel_buffer(&tx_channels[i], packet_len, buffer_id);
+  if (ret == 0) {
+    log_debug("XDCOMMS tx packet fmt=%s len=%ld, id=%d, buf_ptr=%p tag=<%d,%d,%d>", fmt, packet_len, buffer_id, p, tag->mux, tag->sec, tag->typ);
+  }
   pthread_mutex_unlock(&txlock);
 }
 
@@ -283,21 +286,19 @@ void rcvr_thread_start(void) {
 
 /* Receive 'bw' packet from DMA driver, storing data and length in ADU */
 int dma_recv(void *adu, gaps_tag *tag) {
-  size_t packet_len=0, adu_len=0;        /* packet length is read from dma buffer */
-  struct channel_buffer *cbuf_ptr;
+  bw *p;
+  size_t packet_len=0, adu_len=0;
 
   log_trace("Start of %s", __func__);
   rcvr_thread_start();
 
   log_debug("%s: Waiting for received packet on tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
-  cbuf_ptr = get_rx_packet(tag);
+  p = get_rx_packet(tag, &packet_len);
 
-  if (cbuf_ptr == NULL) return (-1);
+  if ((p == NULL) || (packet_len <= 0)) return (-1);
 
   /* Decode packet */
-  packet_len = cbuf_ptr->length;
   char fmt[] = "bw";
-  bw  *p = (bw *) cbuf_ptr;                                 /* Packet pointer in DMA channel buffer */
   bw_gaps_data_decode(p, packet_len, adu, &adu_len, tag);   /* Put packet into ADU */
   size_t len_out;
   bw_len_decode(&len_out, p->data_len);
@@ -429,7 +430,7 @@ void put_rx_packet(bw *p, gaps_tag *tag) {
    */
 }
 
-struct channel_buffer *get_rx_packet(gaps_tag *tag) {
+bw *get_rx_packet(gaps_tag *tag, size_t *packet_len) {
   /* 
    * get the BW compressed tag 
    * get a lock of buffer pool, allocating one for tag if has none, release lock
