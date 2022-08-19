@@ -34,8 +34,6 @@ tagbuf     tbuf[GAPS_TAG_MAX];    /* buffer per tag */
 pthread_mutex_t txlock;
 pthread_mutex_t rxlock;
 
-bw *get_rx_packet(gaps_tag *tag, size_t *packet_len);
-
 /**********************************************************************/
 /* Codec map table to store encoding and decoding function pointers   */
 /**********************************************************************/
@@ -147,6 +145,7 @@ tagbuf *get_tbuf(gaps_tag *tag) {
   uint32_t ctag;
   int i;
 
+  log_trace("%s: initalize tagbuf array and allocate/get entry for tag", __func__);
   bw_ctag_encode(&ctag, tag);
 
   pthread_mutex_lock(&rxlock);
@@ -182,6 +181,7 @@ int dma_open_channel(chan *c, const char **channel_name, int channel_count, int 
   int i;
   char* ll;
 
+  log_trace("%s: open DMA channel", __func__);
   if ((ll = getenv("XDCLOGLEVEL")) != NULL) xdc_log_level(atoi(ll));
   if(channel_count != 1) {
       log_fatal("xdcomms_dma handles only one DMA channel currently");
@@ -236,8 +236,10 @@ int send_channel_buffer(chan *c, size_t packet_len, int buffer_id) {
 /* Send ADU to DMA driver in 'bw' packet */
 void dma_send(void *adu, gaps_tag *tag) {
   int ret;
+  char fmt[] = "bw";
+  bw          *p;                                        /* Packet pointer */
   const int    i=0;                                      /* Assume single DMA channel */
-  size_t       packet_len, adu_len;                      /* Note; encoder calculates lengiha */
+  size_t       packet_len, adu_len;                      /* Note: encoder calculates length */
   static int   once=1;                                   /* Open tx_channels only once */
   static chan  tx_channels[TX_CHANNEL_COUNT];            /* DMA channels */
   const int    buffer_id=0;                              /* Use only a single buffer */
@@ -245,18 +247,16 @@ void dma_send(void *adu, gaps_tag *tag) {
     
   log_trace("Start of %s", __func__);
 
-  /* Encode */
-  char fmt[] = "bw";
-  bw  *p;                                                   /* Packet pointer */
-  p = (bw *) &(tx_channels[i].buf_ptr[buffer_id]);  /* DMA channel buffer holds created packet */
-  bw_gaps_data_encode(p, &packet_len, adu, &adu_len, tag);  /* Put packet into channel buffer */
-  
-  /* Open channel if needed, then send Packet */
+  /* Open channel if needed, encode packet into DMA buffer, and send */
   pthread_mutex_lock(&txlock);
   if (once == 1) {
     once = 0;
     dma_open_channel(tx_channels, tx_channel_names, TX_CHANNEL_COUNT, TX_BUFFER_COUNT);
   }
+
+  p = (bw *) &(tx_channels[i].buf_ptr[buffer_id]);          /* DMA channel buffer holds created packet */
+  bw_gaps_data_encode(p, &packet_len, adu, &adu_len, tag);  /* Put packet into channel buffer */
+
   ret = send_channel_buffer(&tx_channels[i], packet_len, buffer_id);
   if (ret == 0) {
     log_debug("XDCOMMS tx packet fmt=%s len=%ld, id=%d, buf_ptr=%p tag=<%d,%d,%d>", fmt, packet_len, buffer_id, p, tag->mux, tag->sec, tag->typ);
@@ -269,13 +269,12 @@ int receive_channel_buffer(chan *c, size_t *packet_len, int buffer_id) {
   int ret;
   log_trace("THREAD %s: Ready to read packet from fd=%d (unset len=%d, unset id=%d) ", __func__, c->fd, c->buf_ptr[buffer_id].length, buffer_id);
   ret = dma_start_to_finish(c->fd, &buffer_id, &(c->buf_ptr[buffer_id]));
-  *packet_len = (ret == 0) ?  c->buf_ptr[buffer_id].length : 0;
+  *packet_len = (ret == 0) ? c->buf_ptr[buffer_id].length : 0;
   return ret;
 }
 
 /* Receive packets via DMA in a loop */
 void *rcvr_thread_function(thread_args *vargs) {
-  const int buffer_id = 0;
   size_t    packet_len = 0;
   gaps_tag  tag;
   bw       *p;
@@ -283,19 +282,20 @@ void *rcvr_thread_function(thread_args *vargs) {
 
   log_trace("THREAD %s: fd=%d (ptr: a=%p, b=%p, c=%p", __func__, vargs->c->fd, vargs, vargs->c->buf_ptr, vargs->c);
   while (1) {
-    receive_channel_buffer(vargs->c, &packet_len, vargs->buffer_id);  
+    receive_channel_buffer(vargs->c, &packet_len, vargs->buffer_id);  /* XXX: Only one thread per buffer_id */
     if (packet_len > 0) {
-      p = (bw *) &(vargs->c->buf_ptr[vargs->buffer_id]);
+      p = (bw *) &(vargs->c->buf_ptr[vargs->buffer_id]); /* XXX: DMA buffer must be larger than size of BW */
       bw_ctag_decode(&(p->message_tag_ID), &tag);
-      log_debug("THREAD rx packet len=%ld, id=%d, tag=<%d,%d,%d>", packet_len, buffer_id, tag.mux, tag.sec, tag.typ);
+      log_debug("THREAD rx packet len=%ld, id=%d, tag=<%d,%d,%d>", packet_len, vargs->buffer_id, tag.mux, tag.sec, tag.typ);
 
       /* get buffer for tag, lock buffer, copy packet to buffer, mark newdata, release lock */
       t = get_tbuf(&tag); 
       pthread_mutex_lock(&(t->lock));
-      memcpy(&(t->p), p, sizeof(bw));
+      memcpy(&(t->p), p, sizeof(bw)); /* XXX: optimize, copy only length of actual packet received */
       t->newd = 1;
-      t->plen = packet_len;
+      t->plen = packet_len;           /* XXX: should we decode first and use correct decoded len? */
       pthread_mutex_unlock(&(t->lock));
+      log_debug("THREAD rx saved packet");
     }
   }
 }
@@ -306,10 +306,11 @@ void rcvr_thread_start(void) {
   static chan  rx_channels[RX_CHANNEL_COUNT];  /* DMA channels */
   const char  *rx_channel_names[] = { "dma_proxy_rx"};
   static thread_args rxargs[RX_BUFFER_COUNT];
-  pthread_t tid[RX_BUFFER_COUNT];
+  static pthread_t tid[RX_BUFFER_COUNT];
   int nthreads = 1;
 
   /* nthreads = RX_BUFFER_COUNT; */
+  log_trace("%s: open rx channel and start receiver thread(s): %d", __func__, nthreads);
 
   /* Open rx channel and receive threads (only once) */
   pthread_mutex_lock(&rxlock);
@@ -467,7 +468,8 @@ void *xdc_pub_socket(void) { return NULL; }
 void *xdc_sub_socket(gaps_tag tag) { return NULL; }
 void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout) { return NULL; } /* XXX: ought to use this timeout */
 void xdc_asyn_send(void *socket, void *adu, gaps_tag *tag) { dma_send(adu, tag); }
-int  xdc_recv(void *socket, void *adu, gaps_tag *tag) { return dma_recv(adu, tag); }
+
+int  xdc_recv(void *socket, void *adu, gaps_tag *tag) { return dma_recv(adu, tag); } /* XXX: implement loop with timeout */
 
 /* Receive ADU from HAL - retry until a valid ADU */
 void xdc_blocking_recv(void *socket, void *adu, gaps_tag *tag) {
