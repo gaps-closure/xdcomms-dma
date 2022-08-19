@@ -177,14 +177,18 @@ int dma_open_channel(chan *c, const char **channel_name, int channel_count, int 
 }
 
 /* Perform DMA ioctl operations to tx or rx data */
-void dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *cbuf_ptr) {
+int dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *cbuf_ptr) {
   log_trace("START_XFER (fd=%d, id=%d buf_ptr=%p unset-status=%d)", fd, *buffer_id_ptr, cbuf_ptr, cbuf_ptr->status);
   ioctl(fd, START_XFER,  buffer_id_ptr);
   ioctl(fd, FINISH_XFER, buffer_id_ptr);
+  log_trace("FINISH_XFER");
   if (cbuf_ptr->status != PROXY_NO_ERROR) {
     log_warn("Proxy transfer error (fd=%d, id=%d): status=%d (BUSY=1, TIMEOUT=2, ERROR=3)", fd, *buffer_id_ptr, cbuf_ptr->status);
+    return -1;
   }
-  log_trace("FINISH_XFER");
+  else {
+    return 0;
+  }
 }
 
 /* Send Packet to DMA driver */
@@ -225,9 +229,15 @@ void dma_send(void *adu, gaps_tag *tag) {
 
 /* Receive packet from DMA driver */
 void receive_channel_buffer(chan *c, size_t *packet_len, int buffer_id) {
+  int ret;
   log_trace("THREAD %s: Ready to read packet from fd=%d (unset len=%d, unset id=%d) ", __func__, c->fd, c->buf_ptr[buffer_id].length, buffer_id);
-  dma_start_to_finish(c->fd, &buffer_id, &(c->buf_ptr[buffer_id]));
-  *packet_len = c->buf_ptr[buffer_id].length;
+  ret = dma_start_to_finish(c->fd, &buffer_id, &(c->buf_ptr[buffer_id]));
+  if (ret == 0) {
+    *packet_len = c->buf_ptr[buffer_id].length;
+  }
+  else {
+    *packet_len = 0;
+  }
 }
 
 /* Receive packets via DMA in a loop */
@@ -240,10 +250,12 @@ void *rcvr_thread_function(thread_args *vargs) {
   log_trace("THREAD %s: fd=%d (ptr: a=%p, b=%p, c=%p", __func__, vargs->c->fd, vargs, vargs->c->buf_ptr, vargs->c);
   while (1) {
     receive_channel_buffer(vargs->c, &packet_len, vargs->buffer_id);  
-    p = (bw *) &(vargs->c->buf_ptr[vargs->buffer_id]);
-    bw_ctag_decode(&(p->message_tag_ID), &tag);
-    log_debug("THREAD rx packet len=%ld, id=%d, tag=<%d,%d,%d>", packet_len, buffer_id, tag.mux, tag.sec, tag.typ);
-    put_rx_packet(p, &tag);
+    if (packet_len > 0) {
+      p = (bw *) &(vargs->c->buf_ptr[vargs->buffer_id]);
+      bw_ctag_decode(&(p->message_tag_ID), &tag);
+      log_debug("THREAD rx packet len=%ld, id=%d, tag=<%d,%d,%d>", packet_len, buffer_id, tag.mux, tag.sec, tag.typ);
+      put_rx_packet(p, &tag);
+    }
   }
 }
 
@@ -415,7 +427,6 @@ void xdc_blocking_recv(void *socket, void *adu, gaps_tag *tag) {
 
 /* ######################### DANGER ZONE BEGINS ####################### */
 void put_rx_packet(bw *p, gaps_tag *tag) {
- 
   /* 
    * get the BW compressed tag 
    * get a lock of buffer pool, allocating one for tag if has none, release lock
