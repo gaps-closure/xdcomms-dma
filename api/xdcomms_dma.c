@@ -352,6 +352,7 @@ int dma_recv(void *adu, gaps_tag *tag) {
     bw_len_decode(&len_out, p->data_len);
     log_debug("XDCOMMS reads  (format=%s) from DMA channel (buf_ptr=%p) len=%d dlen=%d", fmt, p, packet_len, len_out);
     if (packet_len < 543) log_buf_trace("API recv packet", (uint8_t *) p, packet_len);
+    t->newd = 0;
   } 
 
   pthread_mutex_unlock(&(t->lock));
