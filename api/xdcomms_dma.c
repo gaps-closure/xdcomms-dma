@@ -111,7 +111,6 @@ void bw_ctag_decode(uint32_t *ctag, gaps_tag *tag) {
 void bw_gaps_data_encode(bw *p, size_t *p_len, uint8_t *buff_in, size_t *buff_len, gaps_tag *tag) {
   codec_map  *cm = cmap_find(tag->typ);
   
-  xdc_log_level(-1);            /* set logging level to default (if not set) */
   /* a) serialize data into packet */
   cm->encode (p->data, buff_in, buff_len);
   log_buf_trace("API <- raw app data:", buff_in, *buff_len);
@@ -128,7 +127,6 @@ void bw_gaps_data_encode(bw *p, size_t *p_len, uint8_t *buff_in, size_t *buff_le
 void bw_gaps_data_decode(bw *p, size_t p_len, uint8_t *buff_out, size_t *len_out, gaps_tag *tag) {
   codec_map  *cm = cmap_find(tag->typ);
   
-  xdc_log_level(-1);            /* set logging level to default (if not set) */
   bw_ctag_decode(&(p->message_tag_ID), tag);
   bw_len_decode(len_out, p->data_len);
   cm->decode (buff_out, p->data, &p_len);
@@ -179,10 +177,8 @@ tagbuf *get_tbuf(gaps_tag *tag) {
 /* Open channel and save virtual address of buffer pointer */
 int dma_open_channel(chan *c, const char **channel_name, int channel_count, int buffer_count) {
   int i;
-  char* ll;
 
   log_trace("%s: open DMA channel", __func__);
-  if ((ll = getenv("XDCLOGLEVEL")) != NULL) xdc_log_level(atoi(ll));
   if(channel_count != 1) {
       log_fatal("xdcomms_dma handles only one DMA channel currently");
       exit(EXIT_FAILURE);
@@ -414,7 +410,6 @@ void len_decode (size_t *out, uint32_t in) {
 /* Set API Logging to a new level */
 void xdc_log_level(int new_level) {
   static int do_once = 1;
-  if (new_level == -1) new_level = LOG_INFO; 
   if ((new_level >= LOG_TRACE) && (new_level <= LOG_FATAL)) {
     if (do_once == 1) {
       log_set_quiet(0);
@@ -431,12 +426,14 @@ void xdc_log_level(int new_level) {
 /* Load Codec Table with ADU encode and decode functions */
 /* XXX: must be called at least once so locks are inited */
 void xdc_register(codec_func_ptr encode, codec_func_ptr decode, int typ) {
-  int i;
-  static int  do_once = 1;
+  int   i;
+  char *ll;
+  static int do_once = 1;
 
+  if ((ll = getenv("XDCLOGLEVEL")) != NULL) { xdc_log_level(atoi(ll)); } else { xdc_log_level(LOG_INFO); }
+  
   if (do_once == 1) {
     do_once = 0;
-    xdc_log_level(-1);                                  /* set log level to default if not set */
     for (i=0; i < DATA_TYP_MAX; i++) cmap[i].valid=0;   /* mark all cmap entries invalid */
     if ((pthread_mutex_init(&txlock, NULL) != 0) || 
         (pthread_mutex_init(&rxlock, NULL) != 0)) {      /* init lock for tx and rx channel use */
@@ -469,7 +466,16 @@ void *xdc_sub_socket(gaps_tag tag) { return NULL; }
 void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout) { return NULL; } /* XXX: ought to use this timeout */
 void xdc_asyn_send(void *socket, void *adu, gaps_tag *tag) { dma_send(adu, tag); }
 
-int  xdc_recv(void *socket, void *adu, gaps_tag *tag) { return dma_recv(adu, tag); } /* XXX: implement loop with timeout */
+int  xdc_recv(void *socket, void *adu, gaps_tag *tag) { 
+  struct timespec request = {0, 1000000}; /* XXX: hardcoded -- 1ms */
+  int ntries = 100;                       /* XXX: harcoded  -- 100ms max per DMA */
+                                          /* XXX: set using xdc_sub_socket_non_blocking instead */
+  while ((ntries--) > 0)  {
+    if (dma_recv(adu, tag) == 0) return 0; 
+    nanosleep(&request, NULL);
+  }
+  return -1;
+}
 
 /* Receive ADU from HAL - retry until a valid ADU */
 void xdc_blocking_recv(void *socket, void *adu, gaps_tag *tag) {
