@@ -186,17 +186,15 @@ int dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *cbuf_
     log_warn("Proxy transfer error (fd=%d, id=%d): status=%d (BUSY=1, TIMEOUT=2, ERROR=3)", fd, *buffer_id_ptr, cbuf_ptr->status);
     return -1;
   }
-  else {
-    return 0;
-  }
+  return 0;
 }
 
 /* Send Packet to DMA driver */
-void send_channel_buffer(chan *c, size_t packet_len, int buffer_id) {
+int send_channel_buffer(chan *c, size_t packet_len, int buffer_id) {
   log_trace("Start of %s: Ready to Write packet (len=%d) to fd=%d (id=%d) ", __func__, packet_len, c->fd, buffer_id);
   c->buf_ptr[buffer_id].length = packet_len;
   if (packet_len < 543) log_buf_trace("API sends Packet", (uint8_t *) &(c->buf_ptr[buffer_id]), packet_len);
-  dma_start_to_finish(c->fd, &buffer_id, &(c->buf_ptr[buffer_id]));
+  return dma_start_to_finish(c->fd, &buffer_id, &(c->buf_ptr[buffer_id]));
 }
 
 /* Send ADU to DMA driver in 'bw' packet */
@@ -228,16 +226,12 @@ void dma_send(void *adu, gaps_tag *tag) {
 }
 
 /* Receive packet from DMA driver */
-void receive_channel_buffer(chan *c, size_t *packet_len, int buffer_id) {
+int receive_channel_buffer(chan *c, size_t *packet_len, int buffer_id) {
   int ret;
   log_trace("THREAD %s: Ready to read packet from fd=%d (unset len=%d, unset id=%d) ", __func__, c->fd, c->buf_ptr[buffer_id].length, buffer_id);
   ret = dma_start_to_finish(c->fd, &buffer_id, &(c->buf_ptr[buffer_id]));
-  if (ret == 0) {
-    *packet_len = c->buf_ptr[buffer_id].length;
-  }
-  else {
-    *packet_len = 0;
-  }
+  *packet_len = (ret == 0) ?  c->buf_ptr[buffer_id].length : 0;
+  return ret;
 }
 
 /* Receive packets via DMA in a loop */
