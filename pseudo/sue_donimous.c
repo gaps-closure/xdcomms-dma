@@ -9,18 +9,25 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Rajesh Krishnan");
 MODULE_DESCRIPTION("sue_donimous: Linux Kernel Module for pseudo dma-proxy device driver");
 MODULE_VERSION("0.01");
-MODULE_SUPPORTED_DEVICE("sue_donimous_rx0");
 
-static int major;
+static int rxmajor;
+static int txmajor;
 static int busy; /* is the device already opened?   */
 static int done; /* has the file already been read? */
 
+static ssize_t sue_donimous_write(struct file *, const char *, size_t, loff_t *);
 static ssize_t sue_donimous_read(struct file *, char *, size_t, loff_t *);
 static int     sue_donimous_open(struct inode *, struct file *);
 static int     sue_donimous_release(struct inode *, struct file *);
 
-static struct file_operations fops = { /* callbacks for file operations */
+static struct file_operations rfops = { /* callbacks for file operations */
   .read = sue_donimous_read,
+  .open = sue_donimous_open,
+  .release = sue_donimous_release
+};
+
+static struct file_operations wfops = { /* callbacks for file operations */
+  .write = sue_donimous_write,
   .open = sue_donimous_open,
   .release = sue_donimous_release
 };
@@ -37,20 +44,23 @@ static char dcat[] =
   "  __─-''        `/       ''-─__\n"
   "    ,-'\" ,▗     ▁▁      K\"'-.\n"
   "            =_   \033[38;5;203mU\033[38;5;238m _ # '\"\n"
-  "              ' ' \"\033[0m\n";
+  "              ' ' \"\033[0m\n\0";
 
 
 static int __init sue_donimous_init(void) {
   printk(KERN_INFO "sue_donimous: installing module and registering character device\n");
-  major = register_chrdev(0, "sue_donimous_rx", &fops); /* register as a character device */
+  rxmajor = register_chrdev(0, "sue_donimous_rx", &rfops); /* register rx character device */
+  if (rxmajor < 0) printk(KERN_ALERT "register_chrdev %d", rxmajor);
+  txmajor = register_chrdev(0, "sue_donimous_tx", &wfops); /* register tx character device */
+  if (txmajor < 0) printk(KERN_ALERT "register_chrdev %d", txmajor);
   done = busy = 0;
-  if (major < 0) printk(KERN_ALERT "register_chrdev %d", major);
   return 0;
 }
 
 static void __exit sue_donimous_exit(void) {
   printk(KERN_INFO "sue_donimous: unregistering character device and removing module\n");
-  unregister_chrdev(major, "sue_donimous_rx");
+  unregister_chrdev(rxmajor, "sue_donimous_rx");
+  unregister_chrdev(txmajor, "sue_donimous_tx");
   return;
 }
 
@@ -67,9 +77,19 @@ static int sue_donimous_open(struct inode *ino, struct file *fp) {
   return 0;
 }
 
+static ssize_t sue_donimous_write(struct file *fp, const char *buf, size_t n, loff_t *of) {
+  ssize_t len = sizeof(dcat);
+  memset(dcat, 0, len);
+  len = len > n ? n : len;
+  memcpy(dcat, buf, len);
+  printk(KERN_INFO "sue_donimous: received %zu chars, copied %zu chars\n", n, len);
+  return len;
+}
+
 static ssize_t sue_donimous_read(struct file *fp, char *buf, size_t n, loff_t *of) {
   ssize_t len = sizeof(dcat)/sizeof(dcat[0]); /* get length of dcat */
   char rand;
+  char *end;
 
   get_random_bytes(&rand, sizeof(rand));
   if (rand > 0) {
@@ -83,6 +103,9 @@ static ssize_t sue_donimous_read(struct file *fp, char *buf, size_t n, loff_t *o
   }
 
   if (done) return 0;
+
+  end = memchr(dcat, 0, len);
+  len = (end == NULL) ? len : (end - dcat);
 
   /* Use copy_to_user() and put_user() when moving memory from kernel to userspace */
   if (copy_to_user(buf, dcat, len)) printk(KERN_ALERT "copy_on_user");

@@ -21,12 +21,19 @@ make
 
 sudo insmod ../sue_donimous.ko
 lsmod | grep sue_donimous
-grep sue_donimous </proc/devices
+cat /proc/devices | grep sue_donimous
+# 235 sue_donimous_tx
 # 236 sue_donimous_rx
-# make the device node with the assigned major number, e.g., 236
+# make the device nodes with the assigned major number, e.g., 236
 sudo mknod /dev/sue_donimous_rx c 236 0
+sudo mknod /dev/sue_donimous_rx c 235 0
+sudo chmod ugo+r /dev/sue_donimous_rx
+sudo chmod ugo+w /dev/sue_donimous_tx
 cat /dev/sue_donimous_rx
-cat /dev/sue_donimous_rx # cat changes
+cat /dev/sue_donimous_rx 
+# cat changes randomly each time
+cat /dev/sue_donimous_rx
+echo "All your cats are belong to me." > /dev/sue_donimous_tx
 cat /dev/sue_donimous_rx
 sudo rmmod sue_donimous
 lsmod | grep sue_donimous
