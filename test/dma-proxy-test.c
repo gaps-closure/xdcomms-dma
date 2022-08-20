@@ -42,6 +42,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <sys/mman.h>
 #include <fcntl.h>
@@ -56,7 +57,7 @@
 #include <errno.h>
 #include <sys/param.h>
 
-#include "dma-proxy.h"
+#include "../api/dma-proxy.h"
 
 /* The user must tune the application number of channels to match the proxy driver device tree
  * and the names of each channel must match the dma-names in the device tree for the proxy
@@ -112,8 +113,9 @@ static uint64_t get_posix_clock_time_usec ()
  * The following function is the transmit thread to allow the transmit and the receive channels to be
  * operating simultaneously. Some of the ioctl calls are blocking so that multiple threads are required.
  */
-void tx_thread(struct channel *channel_ptr)
+void *tx_thread(void *pp)
 {
+        struct channel *channel_ptr = (struct channel *) pp;
 	int i, counter = 0, buffer_id, in_progress_count = 0;
 	int stop_in_progress = 0;
 
@@ -206,8 +208,9 @@ end_tx_loop0:
 	}
 }
 
-void rx_thread(struct channel *channel_ptr)
+void *rx_thread(void * pp)
 {
+        struct channel *channel_ptr = (struct channel *)pp;
 	int in_progress_count = 0, buffer_id = 0;
 	int rx_counter = 0;
 
@@ -248,7 +251,7 @@ void rx_thread(struct channel *channel_ptr)
 		 * A unique value in the buffers is used across all transfers
 		 */
 		if (verify) {
-			unsigned int *buffer = &channel_ptr->buf_ptr[buffer_id].buffer;
+			unsigned int *buffer = (unsigned int *)&channel_ptr->buf_ptr[buffer_id].buffer;
 			int i;
 			for (i = 0; i < 1; i++) // test_size / sizeof(unsigned int); i++) this is slow
 				if (buffer[i] != i + rx_counter) {
@@ -368,7 +371,7 @@ int main(int argc, char *argv[])
 		strcat(channel_name, tx_channel_names[i]);
 		tx_channels[i].fd = open(channel_name, O_RDWR);
 		if (tx_channels[i].fd < 1) {
-			printf("Unable to open DMA proxy device file: %s\r", channel_name);
+			printf("Unable to open DMA proxy device file: %s\n", channel_name);
 			exit(EXIT_FAILURE);
 		}
 		tx_channels[i].buf_ptr = (struct channel_buffer *)mmap(NULL, sizeof(struct channel_buffer) * TX_BUFFER_COUNT,
@@ -413,8 +416,8 @@ int main(int argc, char *argv[])
 	time_diff = end_time - start_time;
 	mb_sec = ((1000000 / (double)time_diff) * (num_transfers * max_channel_count * (double)test_size)) / 1000000;
 
-	printf("Time: %d microseconds\n", time_diff);
-	printf("Transfer size: %d KB\n", (long long)(num_transfers) * (test_size / 1024) * max_channel_count);
+	printf("Time: %ld microseconds\n", time_diff);
+	printf("Transfer size: %lld KB\n", (long long)(num_transfers) * (test_size / 1024) * max_channel_count);
 	printf("Throughput: %d MB / sec \n", mb_sec);
 
 	/* Clean up all the channels before leaving */
