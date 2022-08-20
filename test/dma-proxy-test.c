@@ -67,8 +67,8 @@
 #define TX_CHANNEL_COUNT 1
 #define RX_CHANNEL_COUNT 1
 
-const char *tx_channel_names[] = { "dma_proxy_tx", /* add unique channel names here */ };
-const char *rx_channel_names[] = { "dma_proxy_rx", /* add unique channel names here */ };
+const char *tx_channel_names[1];
+const char *rx_channel_names[1];
 
 /* Internal data which should work without tuning */
 
@@ -344,6 +344,11 @@ int main(int argc, char *argv[])
 		printf("Usage: dma-proxy-test <# of DMA transfers to perform> <# of bytes in each transfer in KB (< 1MB)> <optional verify, 0 or 1>\n");
 		exit(EXIT_FAILURE);
 	}
+
+        char *rx;
+        char *tx;
+        rx_channel_names[0] = ((rx = getenv("DMARXDEV")) == NULL) ? "dma_proxy_rx" : rx;
+        tx_channel_names[0] = ((tx = getenv("DMATXDEV")) == NULL) ? "dma_proxy_tx" : tx;
 
 	/* Get the number of transfers to perform */
 
