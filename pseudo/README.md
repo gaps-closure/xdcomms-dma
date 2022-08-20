@@ -44,17 +44,25 @@ dmesg
 
 ## References
 
+** Simple module that logs on intall/remove **
+Robert W. Oliver II,  Writing a simple linux kernel module. 
+[URL](https://blog.sourcerer.io/writing-a-simple-linux-kernel-module-d9dc3762c234)
+
+** Simple read-only character device that returns ASCII art for a random live/dead cat"
+Ole Andreas W. Lyngvær, Writing a pseudo-device driver on Linux.
+[URL](https://lyngvaer.no/log/writing-pseudo-device-driver)
+
+** Simple character device with ioctl support **
+Ole Andreas W. Lyngvær, Writing a pseudo-device driver on Linux.
+Tristan, Linux driver ioctl example.
+[URL](https://github.com/Tristaan/linux-driver-ioctl-example)
+
+** The dma-proxy AXI-DMA module that we want to emulate **
 Xilinx, Linux DMA from User Space 2.0.
 [URL](https://xilinx-wiki.atlassian.net/wiki/spaces/A/pages/1027702787/Linux+DMA+From+User+Space+2.0)
 
+** A text book on writing Linux device drivers **
 Jonathan Corbet, Alessandro Rubini, and Greg Kroah-Hartman, Linux Device Drivers, Third edition.
 [URL](https://lwn.net/Kernel/LDD3/)
 
-Robert W. Oliver II,  Writing a simple linux kernel module.
-[URL](https://blog.sourcerer.io/writing-a-simple-linux-kernel-module-d9dc3762c234)
 
-Ole Andreas W. Lyngvær, Writing  apseudo-device driver on Linux.
-[URL](https://lyngvaer.no/log/writing-pseudo-device-driver)
-
-Tristan, Linux driver ioctl example.
-[URL](https://github.com/Tristaan/linux-driver-ioctl-example)
