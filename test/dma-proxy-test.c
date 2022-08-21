@@ -253,8 +253,7 @@ void *rx_thread(void * pp)
 		if (verify) {
 			unsigned int *buffer = (unsigned int *)&channel_ptr->buf_ptr[buffer_id].buffer;
 			int i;
-			// for (i = 0; i < 1; i++) // test_size / sizeof(unsigned int); i++) this is slow
-			for (i = 0; i < test_size / sizeof(unsigned int); i++) 
+			for (i = 0; i < 1; i++) // test_size / sizeof(unsigned int); i++) this is slow
 				if (buffer[i] != i + rx_counter) {
 					printf("buffer not equal, index = %d, data = %d expected data = %d\n", i,
 						buffer[i], i + rx_counter);
@@ -411,13 +410,28 @@ int main(int argc, char *argv[])
                 printf("rx buf %d at %p\n", i, rx_channels[i].buf_ptr);
 	}
         printf("Opened and mapped\n");
+
+// XXX: begin exit early for now during testing
+        unsigned int *tbuf = tx_channels[0].buf_ptr[0].buffer;
+        unsigned int *rbuf = rx_channels[0].buf_ptr[0].buffer;
+
+        printf("tbuf %p, rbuf %p, tbuf[100] %d\n", tbuf, rbuf, tbuf[100]);
+        for (int i = 0; i < test_size / sizeof(unsigned int); i++) tbuf[i] = i;
+        printf("tbuf %p, rbuf %p, tbuf[100] %d\n", tbuf, rbuf, tbuf[100]);
+        for (int i = 0; i < test_size / sizeof(unsigned int); i++) rbuf[i] = 0;
+        printf("tbuf %p, rbuf %p, tbuf[100] %d\n", tbuf, rbuf, tbuf[100]);
 	ioctl(tx_channels[0].fd, START_XFER,  &buffer_id);
 	ioctl(tx_channels[0].fd, FINISH_XFER, &buffer_id);
 	ioctl(rx_channels[0].fd, START_XFER,  &buffer_id);
 	ioctl(rx_channels[0].fd, FINISH_XFER, &buffer_id);
+        printf("tbuf %p, rbuf %p, tbuf[100] %d\n", tbuf, rbuf, tbuf[100]);
+        for (int i = 0; i < test_size / sizeof(unsigned int); i++) {
+          if (tbuf[i] != rbuf[i]) 
+            printf("At item %d, expected %d, got %d\n", i, tbuf[i], rbuf[i]);
+        }
         printf("Tried ioctl, exiting\n");
-
         return 0;
+// XXX: end exit early for now during testing
 
 	/* Grab the start time to calculate performance then start the threads & transfers on all channels */
 

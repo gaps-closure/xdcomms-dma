@@ -41,7 +41,6 @@ static ssize_t    sue_donimous_write(struct file *, const char *, size_t, loff_t
 static ssize_t    sue_donimous_read(struct file *, char *, size_t, loff_t *);
 void              sue_donimous_vma_open(struct vm_area_struct *);
 void              sue_donimous_vma_close(struct vm_area_struct *);
-static vm_fault_t sue_donimous_vma_nopage(struct vm_fault *);
 
 static struct file_operations f_ops = {
   .owner          = THIS_MODULE,
@@ -73,7 +72,6 @@ static struct vm_operations_struct vm_ops = {
   .open =  sue_donimous_vma_open,
   .close = sue_donimous_vma_close,
 };
-  //.fault = sue_donimous_vma_nopage
 
 static char dcat[] =
   "\033[38;5;238m ,                          ,,\"'\n"
@@ -126,28 +124,6 @@ void sue_donimous_vma_close(struct vm_area_struct *vma) {
   printk(KERN_NOTICE "VMA close\n");
 }
 
-static vm_fault_t sue_donimous_vma_nopage(struct vm_fault *vmf) {
-  struct page *pageptr;
-  struct vm_area_struct *vma = vmf->vma;
-  unsigned long offset = vma->vm_pgoff << PAGE_SHIFT;
-  unsigned long physaddr = (unsigned long) vmf->address - vma->vm_start + offset;
-  unsigned long pageframe = physaddr >> PAGE_SHIFT;
-
-  printk (KERN_NOTICE "---- nopage, off %lx phy %lx\n", offset, physaddr);
-  printk (KERN_NOTICE "VA is %p\n", __va (physaddr));
-  printk (KERN_NOTICE "Page at %p\n", virt_to_page (__va (physaddr)));
-
-  if (!pfn_valid(pageframe)) return VM_FAULT_SIGBUS;
-  pageptr = pfn_to_page(pageframe);
-
-  printk (KERN_NOTICE "page->index = %ld mapping %p\n", pageptr->index, pageptr->mapping);
-  printk (KERN_NOTICE "Page frame %ld\n", pageframe);
-
-  get_page(pageptr);
-  vmf->page = pageptr;
-  return 0;
-}
-
 static ssize_t sue_donimous_read(struct file *fp, char *buf, size_t n, loff_t *of) {
   ssize_t len = sizeof(dcat)/sizeof(dcat[0]); /* get length of dcat */
   char rand;
@@ -189,25 +165,29 @@ static int sue_donimous_release(struct inode *ino, struct file *fp) {
 }
 
 static int sue_donimous_open(struct inode *ino, struct file *fp) {
+  fp->private_data = container_of(ino->i_cdev, struct dma_proxy_channel, cdev);
   done = 0;
   try_module_get(THIS_MODULE); /* tell the system that we're live */
   return 0;
 }
 
 static int sue_donimous_mmap(struct file *fp, struct vm_area_struct *vma) {
-  /*
   struct dma_proxy_channel *pchannel_p = (struct dma_proxy_channel *)fp->private_data;
+
+/*
   return dma_mmap_coherent(pchannel_p->dma_device_p, vma, pchannel_p->buffer_table_p, 
                            pchannel_p->buffer_phys_addr, vma->vm_end - vma->vm_start);
   */
-  /* update pchannel_p fields */
 
   if (remap_pfn_range(vma, vma->vm_start, vma->vm_pgoff,
                       vma->vm_end - vma->vm_start,
                       vma->vm_page_prot))
     return -EAGAIN;
   vma->vm_ops = &vm_ops;
+  vma->vm_private_data = fp->private_data;
   sue_donimous_vma_open(vma);
+  pchannel_p->buffer_table_p = (struct channel_buffer *)vma->vm_start;
+  pchannel_p->buffer_phys_addr = vma->vm_pgoff << PAGE_SHIFT;
   return 0;
 }
 
@@ -217,15 +197,15 @@ static void wait_for_transfer(struct dma_proxy_channel *pchannel_p) {
   /* XXX: do actual transfer -- read or write to backing device here */
   /* XXX: use direction to determine */
   /* XXX: use bdindex to determine where to copy from */
+
   return;
 }
 
 static long sue_donimous_ioctl(struct file *fp, unsigned int cmd, unsigned long arg) {
-  /* struct dma_proxy_channel *pchannel_p = (struct dma_proxy_channel *)fp->private_data; */
-  struct dma_proxy_channel *pchannel_p = NULL;
+  struct dma_proxy_channel *pchannel_p = (struct dma_proxy_channel *)fp->private_data; 
 
   /* Get the bd index from the input argument as all commands require it */
-  /* copy_from_user(&pchannel_p->bdindex, (int *)arg, sizeof(pchannel_p->bdindex)); */
+  copy_from_user(&pchannel_p->bdindex, (int *)arg, sizeof(pchannel_p->bdindex));
 
   switch(cmd) {
     case START_XFER:
@@ -242,13 +222,28 @@ static long sue_donimous_ioctl(struct file *fp, unsigned int cmd, unsigned long 
   return 0;
 }
 
-static void mkchan(struct dma_proxy_channel *dp, int maj, int min, struct file_operations *fops) {
-  int err, devno;
-  devno = MKDEV(maj, min);
+static void mkchan(struct dma_proxy_channel *dp, int maj, int min, 
+                   struct file_operations *fops, u32 direction) {
+  int err;
+
+  dp->buffer_table_p = NULL;    /* filled by mmap */
+  dp->buffer_phys_addr = 0;     /* filled by mmap */
+  dp->proxy_device_p = NULL;
+  dp->dma_device_p = NULL;
+  dp->dev_node = MKDEV(maj, min);
+
+  // XXX: alloc_pages here?
+
   cdev_init(&(dp->cdev), fops);
   dp->cdev.owner = THIS_MODULE;
-  err = cdev_add(&(dp->cdev), devno, 1);
+  err = cdev_add(&(dp->cdev), dp->dev_node, 1);
   if (err) printk (KERN_NOTICE "Error %d adding sue_donimous%d", err, min);
+
+  // ignore dp->bdtable;
+  dp->class_p = NULL;
+  dp->channel_p = NULL;
+  dp->direction = direction;
+  dp->bdindex = 0;
 }
 
 static int __init sue_donimous_init(void) {
@@ -266,13 +261,11 @@ static int __init sue_donimous_init(void) {
     printk(KERN_WARNING "sue_donimous: unable to get major %d\n", xmajor);
     return result;
   }
-
   if (xmajor == 0) xmajor = result;
-  mkchan(&sue_donimous_rx0, xmajor, 0, &fr_ops);
-  mkchan(&sue_donimous_tx0, xmajor, 1, &fw_ops);
-  mkchan(&sue_donimous_rx1, xmajor, 2, &f_ops);
-  mkchan(&sue_donimous_tx1, xmajor, 3, &f_ops);
-
+  mkchan(&sue_donimous_rx0, xmajor, 0, &fr_ops, DMA_DEV_TO_MEM);
+  mkchan(&sue_donimous_tx0, xmajor, 1, &fw_ops, DMA_MEM_TO_DEV);
+  mkchan(&sue_donimous_rx1, xmajor, 2, &f_ops,  DMA_DEV_TO_MEM);
+  mkchan(&sue_donimous_tx1, xmajor, 3, &f_ops,  DMA_MEM_TO_DEV);
   return 0;
 }
 
