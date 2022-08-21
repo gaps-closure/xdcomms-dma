@@ -1,14 +1,17 @@
 # The Sue Donimous driver
 
-This directory is a placehodler for a pseudo device driver for testing applications 
-relying on dma-proxy kernel module without requiring the hardware device.
+This directory is a placehodler for a pseudo device driver for testing
+applications relying on dma-proxy kernel module without requiring the hardware
+device.
 
-This is developed for easing testing of the CLOSURE xdcomms-dma without the hassle
-of having to repeatedly building the firware using cross-compilers based on Petalinux,  
-flashing it onto the ZCU102+ board, booting, testing, and copying over the logs.
+This is developed for easing testing of the CLOSURE xdcomms-dma without the
+hassle of having to repeatedly building the firware using cross-compilers
+based on Petalinux,  flashing it onto the ZCU102+ board, booting, testing, and
+copying over the logs.
 
-Each test can now be doen in seconds and in paralle on multiple general-purpose machines,
-thereby speeding up development, testing, and debugging.
+Each test can now be doen in seconds and in paralle on multiple
+general-purpose machines, thereby speeding up development, testing, and
+debugging.
 
 ## Building and Installing Module on Ubuntu Linux 
 
@@ -19,24 +22,13 @@ cd xdcomms-dma/pseudo
 git checkout rk
 make
 
-sudo insmod ../sue_donimous.ko
-lsmod | grep sue_donimous
-cat /proc/devices | grep sue_donimous
-# 235 sue_donimous_tx
-# 236 sue_donimous_rx
-# make the device nodes with the assigned major number, e.g., 236
-sudo mknod /dev/sue_donimous_rx c 236 0
-sudo mknod /dev/sue_donimous_rx c 235 0
-sudo chmod ugo+r /dev/sue_donimous_rx
-sudo chmod ugo+w /dev/sue_donimous_tx
-cat /dev/sue_donimous_rx
-cat /dev/sue_donimous_rx 
-# cat changes randomly each time
-cat /dev/sue_donimous_rx
-echo "All your cats are belong to me." > /dev/sue_donimous_tx
-cat /dev/sue_donimous_rx
-sudo rmmod sue_donimous
-lsmod | grep sue_donimous
+sudo ./sue_donimous_load
+
+cat /dev/sue_donimous_rx0 # cat changes randomly each time
+echo "All your cats are belong to me." > /dev/sue_donimous_rx0
+cat /dev/sue_donimous_rx0
+
+sudo ./sue_donimous_unload
 dmesg
 ```
 
@@ -56,6 +48,11 @@ Ole Andreas W. Lyngvær, Writing a pseudo-device driver on Linux.
 Ole Andreas W. Lyngvær, Writing a pseudo-device driver on Linux.
 Tristan, Linux driver ioctl example.
 [URL](https://github.com/Tristaan/linux-driver-ioctl-example)
+
+** Simple module with mmap support **
+Alessandro Rubini, and Jonathan Corbet, REALLY simple memory mapping demonstration.
+The mmap device operation, from Linux Device Drivers book (see book reference further below).
+[URL](https://github.com/martinezjavier/ldd3/blob/master/simple/simple.c)
 
 ** The dma-proxy AXI-DMA module that we want to emulate **
 Xilinx, Linux DMA from User Space 2.0.
