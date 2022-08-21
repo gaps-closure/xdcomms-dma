@@ -174,20 +174,13 @@ static int sue_donimous_open(struct inode *ino, struct file *fp) {
 static int sue_donimous_mmap(struct file *fp, struct vm_area_struct *vma) {
   struct dma_proxy_channel *pchannel_p = (struct dma_proxy_channel *)fp->private_data;
 
-/*
-  return dma_mmap_coherent(pchannel_p->dma_device_p, vma, pchannel_p->buffer_table_p, 
-                           pchannel_p->buffer_phys_addr, vma->vm_end - vma->vm_start);
-  */
-
-  if (remap_pfn_range(vma, vma->vm_start, vma->vm_pgoff,
+  if (remap_pfn_range(vma, vma->vm_start, 
+                      pchannel_p->buffer_phys_addr >> PAGE_SHIFT,
                       vma->vm_end - vma->vm_start,
                       vma->vm_page_prot))
     return -EAGAIN;
   vma->vm_ops = &vm_ops;
-  vma->vm_private_data = fp->private_data;
   sue_donimous_vma_open(vma);
-  pchannel_p->buffer_table_p = (struct channel_buffer *)vma->vm_start;
-  pchannel_p->buffer_phys_addr = vma->vm_pgoff << PAGE_SHIFT;
   return 0;
 }
 
@@ -232,7 +225,14 @@ static void mkchan(struct dma_proxy_channel *dp, int maj, int min,
   dp->dma_device_p = NULL;
   dp->dev_node = MKDEV(maj, min);
 
-  // XXX: alloc_pages here?
+  dp->buffer_table_p = (struct channel_buffer *) 
+    vmalloc(sizeof(struct channel_buffer) * BUFFER_COUNT);
+  
+  if(!dp->buffer_table_p) 
+    printk (KERN_NOTICE "Failed to allocate memory\n");
+  dp->buffer_phys_addr = vmalloc_to_pfn(dp->buffer_table_p) << PAGE_SHIFT;
+  printk (KERN_NOTICE "Alloc vir: %p phy: %llx\n",
+          (void *)dp->buffer_table_p, dp->buffer_phys_addr);
 
   cdev_init(&(dp->cdev), fops);
   dp->cdev.owner = THIS_MODULE;
@@ -271,6 +271,10 @@ static int __init sue_donimous_init(void) {
 
 static void __exit sue_donimous_exit(void) {
   printk(KERN_INFO "sue_donimous: unregistering devices and removing module\n");
+  vfree(sue_donimous_rx0.buffer_table_p);
+  vfree(sue_donimous_tx0.buffer_table_p);
+  vfree(sue_donimous_rx1.buffer_table_p);
+  vfree(sue_donimous_tx1.buffer_table_p);
   cdev_del(&sue_donimous_rx0.cdev);
   cdev_del(&sue_donimous_tx0.cdev);
   cdev_del(&sue_donimous_rx1.cdev);
