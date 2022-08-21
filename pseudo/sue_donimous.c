@@ -116,8 +116,13 @@ struct dma_proxy_channel sue_donimous_tx0;
 struct dma_proxy_channel sue_donimous_rx1;
 struct dma_proxy_channel sue_donimous_tx1;
 
+static struct channel_buffer buf_rx0[BUFFER_COUNT];
+static struct channel_buffer buf_tx0[BUFFER_COUNT];
+static struct channel_buffer buf_rx1[BUFFER_COUNT];
+static struct channel_buffer buf_tx1[BUFFER_COUNT];
+
 void sue_donimous_vma_open(struct vm_area_struct *vma) {
-  printk(KERN_NOTICE "VMA open, vir %lx, phy %lx\n", vma->vm_start, vma->vm_pgoff << PAGE_SHIFT);
+  printk(KERN_NOTICE "VMA open, vir %lx, len %lx\n", vma->vm_start, vma->vm_end - vma->vm_start);
 }
 
 void sue_donimous_vma_close(struct vm_area_struct *vma) {
@@ -220,7 +225,8 @@ static long sue_donimous_ioctl(struct file *fp, unsigned int cmd, unsigned long 
   struct dma_proxy_channel *pchannel_p = (struct dma_proxy_channel *)fp->private_data; 
 
   /* Get the bd index from the input argument as all commands require it */
-  copy_from_user(&pchannel_p->bdindex, (int *)arg, sizeof(pchannel_p->bdindex));
+  if (copy_from_user(&pchannel_p->bdindex, (int *)arg, sizeof(pchannel_p->bdindex))) 
+    printk(KERN_ALERT "copy_from_user");
 
   switch(cmd) {
     case START_XFER:
@@ -237,24 +243,22 @@ static long sue_donimous_ioctl(struct file *fp, unsigned int cmd, unsigned long 
   return 0;
 }
 
+inline static unsigned long mceil(unsigned long a, unsigned long b) {
+  return (a + b - 1)/b;
+}
+
 static void mkchan(struct dma_proxy_channel *dp, int maj, int min, 
-                   struct file_operations *fops, u32 direction) {
+                   struct file_operations *fops, u32 direction, 
+                   struct channel_buffer *buf) {
   int err;
-
-  dp->buffer_table_p = NULL;    /* filled by mmap */
-  dp->buffer_phys_addr = 0;     /* filled by mmap */
-  dp->proxy_device_p = NULL;
-  dp->dma_device_p = NULL;
-  dp->dev_node = MKDEV(maj, min);
-
-  dp->buffer_table_p = (struct channel_buffer *) 
-    vmalloc(sizeof(struct channel_buffer) * BUFFER_COUNT);
-  
-  if(!dp->buffer_table_p) 
-    printk (KERN_NOTICE "Failed to allocate memory\n");
+  dp->buffer_table_p = buf;
   dp->buffer_phys_addr = vmalloc_to_pfn(dp->buffer_table_p) << PAGE_SHIFT;
   printk (KERN_NOTICE "Alloc vir: %p phy: %llx\n",
           (void *)dp->buffer_table_p, dp->buffer_phys_addr);
+
+  dp->proxy_device_p = NULL;
+  dp->dma_device_p = NULL;
+  dp->dev_node = MKDEV(maj, min);
 
   cdev_init(&(dp->cdev), fops);
   dp->cdev.owner = THIS_MODULE;
@@ -284,19 +288,15 @@ static int __init sue_donimous_init(void) {
     return result;
   }
   if (xmajor == 0) xmajor = result;
-  mkchan(&sue_donimous_rx0, xmajor, 0, &fr_ops, DMA_DEV_TO_MEM);
-  mkchan(&sue_donimous_tx0, xmajor, 1, &fw_ops, DMA_MEM_TO_DEV);
-  mkchan(&sue_donimous_rx1, xmajor, 2, &f_ops,  DMA_DEV_TO_MEM);
-  mkchan(&sue_donimous_tx1, xmajor, 3, &f_ops,  DMA_MEM_TO_DEV);
+  mkchan(&sue_donimous_rx0, xmajor, 0, &fr_ops, DMA_DEV_TO_MEM, buf_rx0);
+  mkchan(&sue_donimous_tx0, xmajor, 1, &fw_ops, DMA_MEM_TO_DEV, buf_tx0);
+  mkchan(&sue_donimous_rx1, xmajor, 2, &f_ops,  DMA_DEV_TO_MEM, buf_rx1);
+  mkchan(&sue_donimous_tx1, xmajor, 3, &f_ops,  DMA_MEM_TO_DEV, buf_tx1);
   return 0;
 }
 
 static void __exit sue_donimous_exit(void) {
   printk(KERN_INFO "sue_donimous: unregistering devices and removing module\n");
-  vfree(sue_donimous_rx0.buffer_table_p);
-  vfree(sue_donimous_tx0.buffer_table_p);
-  vfree(sue_donimous_rx1.buffer_table_p);
-  vfree(sue_donimous_tx1.buffer_table_p);
   cdev_del(&sue_donimous_rx0.cdev);
   cdev_del(&sue_donimous_tx0.cdev);
   cdev_del(&sue_donimous_rx1.cdev);
