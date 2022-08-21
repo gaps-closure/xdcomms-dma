@@ -24,8 +24,9 @@ make
 
 sudo ./sue_donimous_load
 
-cat /dev/sue_donimous_rx0 # cat changes randomly each time
-echo "All your cats are belong to me." > /dev/sue_donimous_rx0
+# rx0 and tx0 have an easter egg
+cat /dev/sue_donimous_rx0 
+echo "All your cats are belong to me." > /dev/sue_donimous_tx0
 cat /dev/sue_donimous_rx0
 
 sudo ./sue_donimous_unload

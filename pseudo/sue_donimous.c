@@ -47,7 +47,23 @@ static struct file_operations f_ops = {
   .owner          = THIS_MODULE,
   .open           = sue_donimous_open,
   .release        = sue_donimous_release,
+  .mmap           = sue_donimous_mmap,
+  .unlocked_ioctl = sue_donimous_ioctl
+};
+
+static struct file_operations fr_ops = {
+  .owner          = THIS_MODULE,
+  .open           = sue_donimous_open,
+  .release        = sue_donimous_release,
   .read           = sue_donimous_read,
+  .mmap           = sue_donimous_mmap,
+  .unlocked_ioctl = sue_donimous_ioctl
+};
+
+static struct file_operations fw_ops = {
+  .owner          = THIS_MODULE,
+  .open           = sue_donimous_open,
+  .release        = sue_donimous_release,
   .write          = sue_donimous_write,
   .mmap           = sue_donimous_mmap,
   .unlocked_ioctl = sue_donimous_ioctl
@@ -252,8 +268,8 @@ static int __init sue_donimous_init(void) {
   }
 
   if (xmajor == 0) xmajor = result;
-  mkchan(&sue_donimous_rx0, xmajor, 0, &f_ops);
-  mkchan(&sue_donimous_tx0, xmajor, 1, &f_ops);
+  mkchan(&sue_donimous_rx0, xmajor, 0, &fr_ops);
+  mkchan(&sue_donimous_tx0, xmajor, 1, &fw_ops);
   mkchan(&sue_donimous_rx1, xmajor, 2, &f_ops);
   mkchan(&sue_donimous_tx1, xmajor, 3, &f_ops);
 
