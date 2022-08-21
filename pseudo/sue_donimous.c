@@ -189,19 +189,37 @@ static int sue_donimous_mmap(struct file *fp, struct vm_area_struct *vma) {
   return 0;
 }
 
-static void start_transfer(struct dma_proxy_channel *pchannel_p) { return; }
+static void start_transfer(struct dma_proxy_channel *pchannel_p) { 
+  return; 
+}
 
 static void wait_for_transfer(struct dma_proxy_channel *pchannel_p) {
-  // if (pchannel_p->direction == DEV_TO_MEM) {
-  //   transfer from pchannel_p->buffer_table_p[pchannel_p->bdindex] to device
-  // else
-  //   transfer from device to pchannel_p->buffer_table_p[pchannel_p->bdindex] 
-
   unsigned long timeout = msecs_to_jiffies(3000);
   enum dma_status status;
   int bdindex = pchannel_p->bdindex;
 
   pchannel_p->buffer_table_p[bdindex].status = PROXY_BUSY;
+
+  // if (pchannel_p->direction == DEV_TO_MEM) {
+  //   transfer from pchannel_p->buffer_table_p[pchannel_p->bdindex] to device
+  // else
+  //   transfer from device to pchannel_p->buffer_table_p[pchannel_p->bdindex] 
+
+  printk(KERN_NOTICE "direction: %d, buffer index: %d\n", 
+         pchannel_p->direction, pchannel_p->bdindex);
+  printk(KERN_NOTICE "item: %d, value %d\n", 100,
+         pchannel_p->buffer_table_p[pchannel_p->bdindex].buffer[100]);
+
+  if (pchannel_p->buffer_table_p == buf_rx0) 
+    printk(KERN_NOTICE "On dev: %s\n", "sue_donimous_rx0");
+  else if (pchannel_p->buffer_table_p == buf_tx0) 
+    printk(KERN_NOTICE "On dev: %s\n", "sue_donimous_tx0");
+  else if (pchannel_p->buffer_table_p == buf_rx1) 
+    printk(KERN_NOTICE "On dev: %s\n", "sue_donimous_rx1");
+  else if (pchannel_p->buffer_table_p == buf_tx1) 
+    printk(KERN_NOTICE "On dev: %s\n", "sue_donimous_tx1");
+  else
+    printk(KERN_ERR "Unknown buffer table\n");
 
   /* Wait for transaction to complete, timeout, or get an error */
   // timeout = wait_for_completion_timeout(&pchannel_p->bdtable[bdindex].cmp, timeout);
