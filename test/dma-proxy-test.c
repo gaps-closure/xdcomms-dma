@@ -253,12 +253,14 @@ void *rx_thread(void * pp)
 		if (verify) {
 			unsigned int *buffer = (unsigned int *)&channel_ptr->buf_ptr[buffer_id].buffer;
 			int i;
-			for (i = 0; i < 1; i++) // test_size / sizeof(unsigned int); i++) this is slow
+			// for (i = 0; i < 1; i++) // test_size / sizeof(unsigned int); i++) this is slow
+			for (i = 0; i < test_size / sizeof(unsigned int); i++) 
 				if (buffer[i] != i + rx_counter) {
 					printf("buffer not equal, index = %d, data = %d expected data = %d\n", i,
 						buffer[i], i + rx_counter);
 					break;
 				}
+
 		}
 
 		/* Keep track how many transfers are in progress so that only the specified number
@@ -376,6 +378,7 @@ int main(int argc, char *argv[])
 		strcat(channel_name, tx_channel_names[i]);
 		tx_channels[i].fd = open(channel_name, O_RDWR);
 		if (tx_channels[i].fd < 1) {
+                        printf("error: %s\n", strerror(errno));
 			printf("Unable to open DMA proxy device file: %s\n", channel_name);
 			exit(EXIT_FAILURE);
 		}
@@ -385,6 +388,7 @@ int main(int argc, char *argv[])
 			printf("Failed to mmap tx channel\n");
 			exit(EXIT_FAILURE);
 		}
+                printf("tx buf %d at %p\n", i, tx_channels[i].buf_ptr);
 	}
 
 	/* Open the file descriptors for each rx channel and map the kernel driver memory into user space */
@@ -394,7 +398,8 @@ int main(int argc, char *argv[])
 		strcat(channel_name, rx_channel_names[i]);
 		rx_channels[i].fd = open(channel_name, O_RDWR);
 		if (rx_channels[i].fd < 1) {
-			printf("Unable to open DMA proxy device file: %s\r", channel_name);
+                        printf("error: %s\n", strerror(errno));
+			printf("Unable to open DMA proxy device file: %s\n", channel_name);
 			exit(EXIT_FAILURE);
 		}
 		rx_channels[i].buf_ptr = (struct channel_buffer *)mmap(NULL, sizeof(struct channel_buffer) * RX_BUFFER_COUNT,
@@ -403,7 +408,16 @@ int main(int argc, char *argv[])
 			printf("Failed to mmap rx channel\n");
 			exit(EXIT_FAILURE);
 		}
+                printf("rx buf %d at %p\n", i, rx_channels[i].buf_ptr);
 	}
+        printf("Opened and mapped\n");
+	ioctl(tx_channels[0].fd, START_XFER,  &buffer_id);
+	ioctl(tx_channels[0].fd, FINISH_XFER, &buffer_id);
+	ioctl(rx_channels[0].fd, START_XFER,  &buffer_id);
+	ioctl(rx_channels[0].fd, FINISH_XFER, &buffer_id);
+        printf("Tried ioctl, exiting\n");
+
+        return 0;
 
 	/* Grab the start time to calculate performance then start the threads & transfers on all channels */
 
