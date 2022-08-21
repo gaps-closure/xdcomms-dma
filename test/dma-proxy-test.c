@@ -415,19 +415,17 @@ int main(int argc, char *argv[])
         unsigned int *tbuf = tx_channels[0].buf_ptr[0].buffer;
         unsigned int *rbuf = rx_channels[0].buf_ptr[0].buffer;
 
-        printf("tbuf %p, rbuf %p, tbuf[100] %d\n", tbuf, rbuf, tbuf[100]);
         for (int i = 0; i < test_size / sizeof(unsigned int); i++) tbuf[i] = i;
-        printf("tbuf %p, rbuf %p, tbuf[100] %d\n", tbuf, rbuf, tbuf[100]);
         for (int i = 0; i < test_size / sizeof(unsigned int); i++) rbuf[i] = 0;
-        printf("tbuf %p, rbuf %p, tbuf[100] %d\n", tbuf, rbuf, tbuf[100]);
 	ioctl(tx_channels[0].fd, START_XFER,  &buffer_id);
 	ioctl(tx_channels[0].fd, FINISH_XFER, &buffer_id);
 	ioctl(rx_channels[0].fd, START_XFER,  &buffer_id);
 	ioctl(rx_channels[0].fd, FINISH_XFER, &buffer_id);
-        printf("tbuf %p, rbuf %p, tbuf[100] %d\n", tbuf, rbuf, tbuf[100]);
         for (int i = 0; i < test_size / sizeof(unsigned int); i++) {
-          if (tbuf[i] != rbuf[i]) 
-            printf("At item %d, expected %d, got %d\n", i, tbuf[i], rbuf[i]);
+          if (tbuf[i] != rbuf[i]) {
+            printf("Failed on item %d, expected %d, got %d\n", i, tbuf[i], rbuf[i]);
+            break;
+          }
         }
         printf("Tried ioctl, exiting\n");
         return 0;
