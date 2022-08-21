@@ -179,6 +179,8 @@ static int sue_donimous_open(struct inode *ino, struct file *fp) {
 static int sue_donimous_mmap(struct file *fp, struct vm_area_struct *vma) {
   struct dma_proxy_channel *pchannel_p = (struct dma_proxy_channel *)fp->private_data;
 
+  vma->vm_flags |= VM_IO;
+  vma->vm_flags |= VM_DONTEXPAND;
   if (remap_pfn_range(vma, vma->vm_start, 
                       pchannel_p->buffer_phys_addr >> PAGE_SHIFT,
                       vma->vm_end - vma->vm_start,
