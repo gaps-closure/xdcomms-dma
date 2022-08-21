@@ -416,11 +416,13 @@ int main(int argc, char *argv[])
         unsigned int *rbuf = rx_channels[0].buf_ptr[0].buffer;
 
         for (int i = 0; i < test_size / sizeof(unsigned int); i++) tbuf[i] = i;
-        for (int i = 0; i < test_size / sizeof(unsigned int); i++) rbuf[i] = 0;
+        for (int i = 0; i < test_size / sizeof(unsigned int); i++) rbuf[i] = 1;
+        printf("Before ioctl item: %d, tbuf[item] %d, rbuf[item] %d\n", 100, tbuf[100], rbuf[100]);
 	ioctl(tx_channels[0].fd, START_XFER,  &buffer_id);
 	ioctl(tx_channels[0].fd, FINISH_XFER, &buffer_id);
 	ioctl(rx_channels[0].fd, START_XFER,  &buffer_id);
 	ioctl(rx_channels[0].fd, FINISH_XFER, &buffer_id);
+        printf("After ioctl item: %d, tbuf[item] %d, rbuf[item] %d\n", 100, tbuf[100], rbuf[100]);
         for (int i = 0; i < test_size / sizeof(unsigned int); i++) {
           if (tbuf[i] != rbuf[i]) {
             printf("Failed on item %d, expected %d, got %d\n", i, tbuf[i], rbuf[i]);

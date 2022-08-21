@@ -187,10 +187,32 @@ static int sue_donimous_mmap(struct file *fp, struct vm_area_struct *vma) {
 static void start_transfer(struct dma_proxy_channel *pchannel_p) { return; }
 
 static void wait_for_transfer(struct dma_proxy_channel *pchannel_p) {
-  /* XXX: do actual transfer -- read or write to backing device here */
-  /* XXX: use direction to determine */
-  /* XXX: use bdindex to determine where to copy from */
+  // if (pchannel_p->direction == DEV_TO_MEM) {
+  //   transfer from pchannel_p->buffer_table_p[pchannel_p->bdindex] to device
+  // else
+  //   transfer from device to pchannel_p->buffer_table_p[pchannel_p->bdindex] 
 
+  unsigned long timeout = msecs_to_jiffies(3000);
+  enum dma_status status;
+  int bdindex = pchannel_p->bdindex;
+
+  pchannel_p->buffer_table_p[bdindex].status = PROXY_BUSY;
+
+  /* Wait for transaction to complete, timeout, or get an error */
+  // timeout = wait_for_completion_timeout(&pchannel_p->bdtable[bdindex].cmp, timeout);
+  // status = dma_async_is_tx_complete(pchannel_p->channel_p, pchannel_p->bdtable[bdindex].cookie, NULL, NULL);
+  timeout = 0;
+
+  if (timeout == 0)  {
+    pchannel_p->buffer_table_p[bdindex].status  = PROXY_TIMEOUT;
+    printk(KERN_ERR "DMA timed out\n");
+  } else if (status != DMA_COMPLETE) {
+    pchannel_p->buffer_table_p[bdindex].status = PROXY_ERROR;
+    printk(KERN_ERR "DMA returned completion callback status of: %s\n",
+                     status == DMA_ERROR ? "error" : "in progress");
+  } else {
+    pchannel_p->buffer_table_p[bdindex].status = PROXY_NO_ERROR;
+  }
   return;
 }
 
