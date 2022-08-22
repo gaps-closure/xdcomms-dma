@@ -152,7 +152,7 @@ tagbuf *get_tbuf(gaps_tag *tag) {
     for(i=0; i < GAPS_TAG_MAX; i++) {
       tbuf[i].ctag = 0;
       tbuf[i].newd = 0;
-      tbuf[i].plen = 0;
+      tbuf[i].rv   = 0;
       if (pthread_mutex_init(&(tbuf[i].lock), NULL) != 0) {
         pthread_mutex_unlock(&rxlock);
         log_fatal("tagbuf mutex init has failed failed");
@@ -261,35 +261,30 @@ void dma_send(void *adu, gaps_tag *tag) {
 }
 
 /* Receive packet from DMA driver */
-int receive_channel_buffer(chan *c, size_t *packet_len, int buffer_id) {
-  int ret;
+int receive_channel_buffer(chan *c, int buffer_id) {
   log_trace("THREAD %s: Ready to read packet from fd=%d (unset len=%d, unset id=%d) ", __func__, c->fd, c->buf_ptr[buffer_id].length, buffer_id);
-  ret = dma_start_to_finish(c->fd, &buffer_id, &(c->buf_ptr[buffer_id]));
-  *packet_len = (ret == 0) ? c->buf_ptr[buffer_id].length : 0;
-  return ret;
+  return (dma_start_to_finish(c->fd, &buffer_id, &(c->buf_ptr[buffer_id])));
 }
 
 /* Receive packets via DMA in a loop */
 void *rcvr_thread_function(thread_args *vargs) {
-  size_t    packet_len = 0;
   gaps_tag  tag;
   bw       *p;
   tagbuf   *t;
 
   log_trace("THREAD %s: fd=%d (ptr: a=%p, b=%p, c=%p", __func__, vargs->c->fd, vargs, vargs->c->buf_ptr, vargs->c);
   while (1) {
-    receive_channel_buffer(vargs->c, &packet_len, vargs->buffer_id);  /* XXX: Only one thread per buffer_id */
-    if (packet_len > 0) {
+    if (receive_channel_buffer(vargs->c, vargs->buffer_id) == 0) {    /* XXX: Only one thread per buffer_id */
       p = (bw *) &(vargs->c->buf_ptr[vargs->buffer_id]); /* XXX: DMA buffer must be larger than size of BW */
       bw_ctag_decode(&(p->message_tag_ID), &tag);
-      log_debug("THREAD rx packet len=%ld, id=%d, tag=<%d,%d,%d>", packet_len, vargs->buffer_id, tag.mux, tag.sec, tag.typ);
+      log_debug("THREAD rx packet id=%d, tag=<%d,%d,%d>", vargs->buffer_id, tag.mux, tag.sec, tag.typ);
 
       /* get buffer for tag, lock buffer, copy packet to buffer, mark newdata, release lock */
       t = get_tbuf(&tag); 
       pthread_mutex_lock(&(t->lock));
       memcpy(&(t->p), p, sizeof(bw)); /* XXX: optimize, copy only length of actual packet received */
       t->newd = 1;
-      t->plen = packet_len;           /* XXX: should we decode first and use correct decoded len? */
+      t->rv   = vargs->c->buf_ptr[vargs->buffer_id].status;
       pthread_mutex_unlock(&(t->lock));
       log_debug("THREAD rx saved packet");
     }
@@ -328,7 +323,7 @@ void rcvr_thread_start(void) {
 /* Receive 'bw' packet from DMA driver, storing data and length in ADU */
 int dma_recv(void *adu, gaps_tag *tag) {
   bw *p;
-  size_t packet_len=0, adu_len=0;
+  size_t packet_len, adu_len=0;
   tagbuf *t;
 
   log_trace("Start of %s", __func__);
@@ -339,20 +334,19 @@ int dma_recv(void *adu, gaps_tag *tag) {
   /* get buffer for tag, lock buffer, get packet from buffer, unmark newdata, release lock */
   t = get_tbuf(tag);
   pthread_mutex_lock(&(t->lock));
-  if ((t->newd != 0) && (t->plen > 0)) {
+  if ((t->newd != 0) && (t->rv == 0)) {
     p = &(t->p);
-    packet_len = t->plen;
     /* Decode packet */
     char fmt[] = "bw";
     bw_gaps_data_decode(p, packet_len, adu, &adu_len, tag);   /* Put packet into ADU */
-    size_t len_out;
-    bw_len_decode(&len_out, p->data_len);
-    log_debug("XDCOMMS reads  (format=%s) from DMA channel (buf_ptr=%p) len=%d dlen=%d", fmt, p, packet_len, len_out);
+    bw_len_decode(&packet_len, p->data_len);
+    log_debug("XDCOMMS reads  (format=%s) from DMA channel (buf_ptr=%p) len=%d rv=%d", fmt, p, packet_len, t->rv);
     if (packet_len < 543) log_buf_trace("API recv packet", (uint8_t *) p, packet_len);
     t->newd = 0;
-  } 
-
+  }
   pthread_mutex_unlock(&(t->lock));
+  
+  log_trace("%s DONE --------> LENGTH=%d rv=%d", __func__, packet_len, t->rv);
   return (packet_len > 0) ? packet_len : -1;
 }
 
@@ -472,7 +466,7 @@ int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   int ntries = 100;                       /* XXX: harcoded  -- 100ms max per DMA */
                                           /* XXX: set using xdc_sub_socket_non_blocking instead */
   while ((ntries--) > 0)  {
-    if (dma_recv(adu, tag) == 0) return 0; 
+    if (dma_recv(adu, tag) > 0) return 0;
     nanosleep(&request, NULL);
   }
   return -1;
