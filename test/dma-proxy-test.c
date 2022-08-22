@@ -189,7 +189,7 @@ void *tx_thread(void *pp)
 		 */
 		if (verify) {
 			unsigned int *buffer = (unsigned int *)&channel_ptr->buf_ptr[buffer_id].buffer;
-			for (i = 0; i < 1; i++) // test_size / sizeof(unsigned int); i++)
+			for (i = 0; i < test_size / sizeof(unsigned int); i++)
 				buffer[i] = i + ((TX_BUFFER_COUNT / BUFFER_INCREMENT) - 1) + counter;
 		}
 
@@ -254,13 +254,12 @@ void *rx_thread(void * pp)
 		if (verify) {
 			unsigned int *buffer = (unsigned int *)&channel_ptr->buf_ptr[buffer_id].buffer;
 			int i;
-			for (i = 0; i < 1; i++) // test_size / sizeof(unsigned int); i++)
+			for (i = 0; i < 1; i++) // test_size / sizeof(unsigned int); i++) this is slow
 				if (buffer[i] != i + rx_counter) {
 					printf("buffer not equal, index = %d, data = %d expected data = %d\n", i,
 						buffer[i], i + rx_counter);
 					break;
 				}
-
 		}
 
 		/* Keep track how many transfers are in progress so that only the specified number
@@ -412,7 +411,7 @@ int main(int argc, char *argv[])
 	}
         printf("Opened and mapped\n");
 
-#define _QUICK_TEST_
+// #define _QUICK_TEST_
 #ifdef _QUICK_TEST_
 // XXX: begin exit early for now during testing
         unsigned int *rbuf = rx_channels[0].buf_ptr[0].buffer;
