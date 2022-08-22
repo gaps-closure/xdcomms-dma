@@ -60,7 +60,7 @@ typedef struct _thread_args {
 /* Per-tag buffer node */
 typedef struct _tagbuf {
   uint32_t          ctag;
-  uint32_t          plen;
+  int               rv;
   pthread_mutex_t   lock;
   char              newd;
   bw                p;
