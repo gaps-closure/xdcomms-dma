@@ -30,7 +30,7 @@ MODULE_DESCRIPTION("sue_donimous: Linux Kernel Module for pseudo dma-proxy devic
 MODULE_VERSION("0.01");
 
 static int       done;
-static int       xmajor;  
+static int       xmajor = 0;
 module_param(xmajor, int, 0);
 
 static int        sue_donimous_open(struct inode *, struct file *);
@@ -87,37 +87,52 @@ static char dcat[] =
   "            =_   \033[38;5;203mU\033[38;5;238m _ # '\"\n"
   "              ' ' \"\033[0m\n\0";
 
-
-/* Following structs represent a single channel of DMA, tx or rx. */
-/* replace with backing device */
 struct proxy_bd {
-  struct completion cmp;
-  dma_cookie_t cookie;
-  dma_addr_t dma_handle;
-  struct scatterlist sglist;
+  struct completion cmp;                  /* ignored */
+  dma_cookie_t cookie;                    /* ignored */
+  dma_addr_t dma_handle;                  /* ignored */
+  struct scatterlist sglist;              /* ignored */
 };
 
 struct dma_proxy_channel {
-  struct channel_buffer *buffer_table_p;    /* user to kernel space interface */
-  dma_addr_t buffer_phys_addr;
-  struct device *proxy_device_p;            /* character device support */
-  struct device *dma_device_p;
-  dev_t dev_node;
-  struct cdev cdev;
-  struct class *class_p;
-  struct proxy_bd bdtable[BUFFER_COUNT];
-  struct dma_chan *channel_p;              /* dma support */
-  u32 direction;                           /* DMA_MEM_TO_DEV or DMA_DEV_TO_MEM */
-  int bdindex;
+  struct channel_buffer *buffer_table_p;  /* vir kernel buf - mmap to user */
+  dma_addr_t buffer_phys_addr;            /* phy addr of above */
+  struct device *proxy_device_p;          /* ignored */
+  struct device *dma_device_p;            /* ignored */
+  dev_t dev_node;                         /* maj,min for sue_donimous_* */
+  struct cdev cdev;                       /* allocated cdev for channel */
+  struct class *class_p;                  /* ignored */
+  struct proxy_bd bdtable[BUFFER_COUNT];  /* ignored */
+  struct dma_chan *channel_p;             /* ignored */
+  u32 direction;                          /* DMA_MEM_TO_DEV or  DMA_DEV_TO_MEM */
+  int bdindex;                            /* index into the channel_buffer */
 };
 
-struct dma_proxy_channel sue_donimous_rx0;
-struct dma_proxy_channel sue_donimous_tx0;
-struct dma_proxy_channel sue_donimous_rx1;
-struct dma_proxy_channel sue_donimous_tx1;
+struct trans_buffer {         /* internal transfer buffer to mimic device DMA */
+  struct channel_buffer cb;
+  char pipenum;
+  char full;
+};
+
+/* global memory for channels, chaninel buffers, and transfer buffers */
+struct dma_proxy_channel     sue_donimous_rx0;
+struct dma_proxy_channel     sue_donimous_tx0;
+struct dma_proxy_channel     sue_donimous_rx1;
+struct dma_proxy_channel     sue_donimous_tx1;
+static struct channel_buffer buf_rx0[BUFFER_COUNT];
+static struct channel_buffer buf_tx0[BUFFER_COUNT];
+static struct channel_buffer buf_rx1[BUFFER_COUNT];
+static struct channel_buffer buf_tx1[BUFFER_COUNT];
+static struct trans_buffer   xbuf[BUFFER_COUNT];
+
+/* connect TX1 -> RX0 and RX1 -> TX0 */
+#define BUF_RX0_PIPENUM      1
+#define BUF_TX0_PIPENUM      2
+#define BUF_RX1_PIPENUM      2
+#define BUF_TX1_PIPENUM      1
 
 void sue_donimous_vma_open(struct vm_area_struct *vma) {
-  printk(KERN_NOTICE "VMA open, vir %lx, phy %lx\n", vma->vm_start, vma->vm_pgoff << PAGE_SHIFT);
+  printk(KERN_NOTICE "VMA open, vir %lx, len %lx\n", vma->vm_start, vma->vm_end - vma->vm_start);
 }
 
 void sue_donimous_vma_close(struct vm_area_struct *vma) {
@@ -174,7 +189,9 @@ static int sue_donimous_open(struct inode *ino, struct file *fp) {
 static int sue_donimous_mmap(struct file *fp, struct vm_area_struct *vma) {
   struct dma_proxy_channel *pchannel_p = (struct dma_proxy_channel *)fp->private_data;
 
-  if (remap_pfn_range(vma, vma->vm_start, 
+  vma->vm_flags |= VM_IO;
+  vma->vm_flags |= VM_DONTEXPAND;
+  if (remap_pfn_range(vma, vma->vm_start,
                       pchannel_p->buffer_phys_addr >> PAGE_SHIFT,
                       vma->vm_end - vma->vm_start,
                       vma->vm_page_prot))
@@ -186,48 +203,121 @@ static int sue_donimous_mmap(struct file *fp, struct vm_area_struct *vma) {
 
 static void start_transfer(struct dma_proxy_channel *pchannel_p) { return; }
 
+/* returns 0 on success, -1 on no free buffer, -2 on error */
+static int fake_transfer(void *buf, int lbytes, char pipenum, u32 direction) {
+  int i;
+  if(direction == DMA_MEM_TO_DEV) {
+    /* find empty wait buffer */
+    for (i=0; i < BUFFER_COUNT; i++) 
+      if (xbuf[i].full == 0) break;
+    /* if not found return timeout */
+    printk(KERN_NOTICE "found buffer %d len:%d\n", i, lbytes);
+    if (i >= BUFFER_COUNT) return -1;
+    /* set pipenum to match channel, copy from channel, and mark wait buffer full */
+    xbuf[i].pipenum = pipenum;
+    if (memcpy(xbuf[i].cb.buffer, buf, lbytes) != xbuf[i].cb.buffer) return -2;
+    xbuf[i].full = 1;
+    return 0;
+  } else if (direction == DMA_DEV_TO_MEM) {
+    /* find full wait buffer with matching pipenum */
+    for (i=0; i < BUFFER_COUNT; i++) 
+      if ((xbuf[i].full != 0) && (xbuf[i].pipenum == pipenum)) break;
+    /* if not found return timeout */
+    printk(KERN_NOTICE "found buffer %d len:%d\n", i, lbytes);
+    if (i >= BUFFER_COUNT) return -1;
+    /* do memcpy to buf, and mark wait buffer empty */
+    if (memcpy(buf, xbuf[i].cb.buffer, lbytes) != buf) return -2;
+    xbuf[i].full = 0;
+    return 0;
+  } else return -2;
+}
+
 static void wait_for_transfer(struct dma_proxy_channel *pchannel_p) {
-  // if (pchannel_p->direction == DEV_TO_MEM) {
-  //   transfer from pchannel_p->buffer_table_p[pchannel_p->bdindex] to device
-  // else
-  //   transfer from device to pchannel_p->buffer_table_p[pchannel_p->bdindex] 
+  struct channel_buffer *cbuf = pchannel_p->buffer_table_p;
+  int                    bdindex = pchannel_p->bdindex;
+  u32                    direction = pchannel_p->direction;
+  char                  *devname;
+  char                   pipenum;
+  int                    ret = 0;
+  unsigned long          timeout = msecs_to_jiffies(3000);
+  enum dma_status        status;
 
-  unsigned long timeout = msecs_to_jiffies(3000);
-  enum dma_status status;
-  int bdindex = pchannel_p->bdindex;
+  if((bdindex < 0) || (bdindex >= BUFFER_COUNT)) goto err_return;
 
-  pchannel_p->buffer_table_p[bdindex].status = PROXY_BUSY;
+  if (cbuf == buf_rx0) {
+    devname = "sue_donimous_rx0";
+    pipenum = BUF_RX0_PIPENUM;
+    if(direction != DMA_DEV_TO_MEM) goto err_return;
+  } else if (cbuf == buf_tx0) {
+    devname = "sue_donimous_tx0";
+    pipenum = BUF_TX0_PIPENUM;
+    if(direction != DMA_MEM_TO_DEV) goto err_return;
+  } else if (cbuf == buf_rx1) {
+    devname = "sue_donimous_rx1";
+    pipenum = BUF_RX1_PIPENUM;
+    if(direction != DMA_DEV_TO_MEM) goto err_return;
+  } else if (cbuf == buf_tx1) {
+    devname = "sue_donimous_tx1";
+    pipenum = BUF_TX1_PIPENUM;
+    if(direction != DMA_MEM_TO_DEV) goto err_return;
+  } else goto err_return;
 
-  /* Wait for transaction to complete, timeout, or get an error */
+  printk(KERN_NOTICE "devname: %s, pipe: %d, direction: %d, bdindex: %d\n",
+           devname, pipenum, direction, bdindex);
+
+  printk(KERN_NOTICE "len = %d, buf[100] = %d\n",
+    cbuf[bdindex].length, cbuf[bdindex].buffer[100]);
+
+  cbuf[bdindex].status = PROXY_BUSY;
+
+  /* What was in the original driver */
   // timeout = wait_for_completion_timeout(&pchannel_p->bdtable[bdindex].cmp, timeout);
   // status = dma_async_is_tx_complete(pchannel_p->channel_p, pchannel_p->bdtable[bdindex].cookie, NULL, NULL);
-  timeout = 0;
+
+  /* fake transfer returns 0 on success, -1 on no free buffer, -2 on error */
+  ret = fake_transfer((void *)cbuf[bdindex].buffer, cbuf[bdindex].length, pipenum, direction);
+
+  if (ret == 0) {
+    timeout = 1;
+    status = DMA_COMPLETE;
+  } else if (ret == -1) {
+    timeout = 0;
+  } else {
+    status = DMA_ERROR; /* there is no in progress as we memcpy entire buffer */
+  }
 
   if (timeout == 0)  {
-    pchannel_p->buffer_table_p[bdindex].status  = PROXY_TIMEOUT;
+   cbuf[bdindex].status  = PROXY_TIMEOUT;
     printk(KERN_ERR "DMA timed out\n");
   } else if (status != DMA_COMPLETE) {
-    pchannel_p->buffer_table_p[bdindex].status = PROXY_ERROR;
+    cbuf[bdindex].status = PROXY_ERROR;
     printk(KERN_ERR "DMA returned completion callback status of: %s\n",
                      status == DMA_ERROR ? "error" : "in progress");
   } else {
-    pchannel_p->buffer_table_p[bdindex].status = PROXY_NO_ERROR;
+    cbuf[bdindex].status = PROXY_NO_ERROR;
   }
+
+  return;
+
+err_return:
+  if((bdindex > 0) && (bdindex < BUFFER_COUNT)) cbuf[bdindex].status = PROXY_ERROR;
+  printk(KERN_ERR "invalid settings for transfer\n");
   return;
 }
 
 static long sue_donimous_ioctl(struct file *fp, unsigned int cmd, unsigned long arg) {
-  struct dma_proxy_channel *pchannel_p = (struct dma_proxy_channel *)fp->private_data; 
+  struct dma_proxy_channel *pchannel_p = (struct dma_proxy_channel *)fp->private_data;
 
   /* Get the bd index from the input argument as all commands require it */
-  copy_from_user(&pchannel_p->bdindex, (int *)arg, sizeof(pchannel_p->bdindex));
+  if (copy_from_user(&pchannel_p->bdindex, (int *)arg, sizeof(pchannel_p->bdindex)))
+    printk(KERN_ALERT "copy_from_user");
 
   switch(cmd) {
     case START_XFER:
       start_transfer(pchannel_p);
       break;
     case FINISH_XFER:
-      wait_for_transfer(pchannel_p); 
+      wait_for_transfer(pchannel_p);
       break;
     case XFER:
       start_transfer(pchannel_p);
@@ -237,41 +327,44 @@ static long sue_donimous_ioctl(struct file *fp, unsigned int cmd, unsigned long 
   return 0;
 }
 
-static void mkchan(struct dma_proxy_channel *dp, int maj, int min, 
-                   struct file_operations *fops, u32 direction) {
+inline static unsigned long mceil(unsigned long a, unsigned long b) {
+  return (a + b - 1)/b;
+}
+
+static void mkchan(struct dma_proxy_channel *pchannel_p, int maj, int min,
+                   struct file_operations *fops, u32 direction,
+                   struct channel_buffer *buf) {
   int err;
-
-  dp->buffer_table_p = NULL;    /* filled by mmap */
-  dp->buffer_phys_addr = 0;     /* filled by mmap */
-  dp->proxy_device_p = NULL;
-  dp->dma_device_p = NULL;
-  dp->dev_node = MKDEV(maj, min);
-
-  dp->buffer_table_p = (struct channel_buffer *) 
-    vmalloc(sizeof(struct channel_buffer) * BUFFER_COUNT);
-  
-  if(!dp->buffer_table_p) 
-    printk (KERN_NOTICE "Failed to allocate memory\n");
-  dp->buffer_phys_addr = vmalloc_to_pfn(dp->buffer_table_p) << PAGE_SHIFT;
+  pchannel_p->buffer_table_p = buf;
+  // pchannel_p->buffer_phys_addr = vmalloc_to_pfn(pchannel_p->buffer_table_p) << PAGE_SHIFT;
+  pchannel_p->buffer_phys_addr = virt_to_phys(pchannel_p->buffer_table_p);
   printk (KERN_NOTICE "Alloc vir: %p phy: %llx\n",
-          (void *)dp->buffer_table_p, dp->buffer_phys_addr);
+          (void *)pchannel_p->buffer_table_p, pchannel_p->buffer_phys_addr);
 
-  cdev_init(&(dp->cdev), fops);
-  dp->cdev.owner = THIS_MODULE;
-  err = cdev_add(&(dp->cdev), dp->dev_node, 1);
+  pchannel_p->proxy_device_p = NULL;
+  pchannel_p->dma_device_p = NULL;
+  pchannel_p->dev_node = MKDEV(maj, min);
+
+  cdev_init(&(pchannel_p->cdev), fops);
+  pchannel_p->cdev.owner = THIS_MODULE;
+  err = cdev_add(&(pchannel_p->cdev), pchannel_p->dev_node, 1);
   if (err) printk (KERN_NOTICE "Error %d adding sue_donimous%d", err, min);
 
-  // ignore dp->bdtable;
-  dp->class_p = NULL;
-  dp->channel_p = NULL;
-  dp->direction = direction;
-  dp->bdindex = 0;
+  // ignore pchannel_p->bdtable;
+  pchannel_p->class_p = NULL;
+  pchannel_p->channel_p = NULL;
+  pchannel_p->direction = direction;
+  pchannel_p->bdindex = 0;
 }
 
 static int __init sue_donimous_init(void) {
-  int result;
   dev_t dev;
+  int result;
+  int i;
   printk(KERN_INFO "sue_donimous: installing module and registering device\n");
+
+  for (i=0; i < BUFFER_COUNT; i++) xbuf[i].full = 0;
+
   if (xmajor) {
     dev = MKDEV(xmajor, 0);
     result = register_chrdev_region(dev, 4, "sue_donimous");
@@ -284,19 +377,16 @@ static int __init sue_donimous_init(void) {
     return result;
   }
   if (xmajor == 0) xmajor = result;
-  mkchan(&sue_donimous_rx0, xmajor, 0, &fr_ops, DMA_DEV_TO_MEM);
-  mkchan(&sue_donimous_tx0, xmajor, 1, &fw_ops, DMA_MEM_TO_DEV);
-  mkchan(&sue_donimous_rx1, xmajor, 2, &f_ops,  DMA_DEV_TO_MEM);
-  mkchan(&sue_donimous_tx1, xmajor, 3, &f_ops,  DMA_MEM_TO_DEV);
+
+  mkchan(&sue_donimous_rx0, xmajor, 0, &fr_ops, DMA_DEV_TO_MEM, buf_rx0);
+  mkchan(&sue_donimous_tx0, xmajor, 1, &fw_ops, DMA_MEM_TO_DEV, buf_tx0);
+  mkchan(&sue_donimous_rx1, xmajor, 2, &f_ops,  DMA_DEV_TO_MEM, buf_rx1);
+  mkchan(&sue_donimous_tx1, xmajor, 3, &f_ops,  DMA_MEM_TO_DEV, buf_tx1);
   return 0;
 }
 
 static void __exit sue_donimous_exit(void) {
   printk(KERN_INFO "sue_donimous: unregistering devices and removing module\n");
-  vfree(sue_donimous_rx0.buffer_table_p);
-  vfree(sue_donimous_tx0.buffer_table_p);
-  vfree(sue_donimous_rx1.buffer_table_p);
-  vfree(sue_donimous_tx1.buffer_table_p);
   cdev_del(&sue_donimous_rx0.cdev);
   cdev_del(&sue_donimous_tx0.cdev);
   cdev_del(&sue_donimous_rx1.cdev);

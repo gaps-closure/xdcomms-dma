@@ -35,6 +35,13 @@ dmesg
 
 ## Testing
 
+```
+cd  ..\test
+make
+./run.sh
+dmesg
+```
+
 ## References
 
 ** Simple module that logs on intall/remove **
@@ -49,6 +56,10 @@ Ole Andreas W. Lyngvær, Writing a pseudo-device driver on Linux.
 Ole Andreas W. Lyngvær, Writing a pseudo-device driver on Linux.
 Tristan, Linux driver ioctl example.
 [URL](https://github.com/Tristaan/linux-driver-ioctl-example)
+
+** Linux kernel labs mmap documentation */
+Linux kernel labs, Memory mapping.
+[URL] (https://linux-kernel-labs.github.io/refs/heads/master/labs/memory_mapping.html)
 
 ** Simple module with mmap support **
 Alessandro Rubini, and Jonathan Corbet, REALLY simple memory mapping demonstration.
