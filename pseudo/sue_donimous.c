@@ -30,7 +30,7 @@ MODULE_DESCRIPTION("sue_donimous: Linux Kernel Module for pseudo dma-proxy devic
 MODULE_VERSION("0.01");
 
 static int       done;
-static int       xmajor;
+static int       xmajor = 0;
 module_param(xmajor, int, 0);
 
 static int        sue_donimous_open(struct inode *, struct file *);
@@ -105,7 +105,7 @@ struct dma_proxy_channel {
   struct proxy_bd bdtable[BUFFER_COUNT];  /* ignored */
   struct dma_chan *channel_p;             /* ignored */
   u32 direction;                          /* DMA_MEM_TO_DEV or  DMA_DEV_TO_MEM */
-  int bdindex;
+  int bdindex;                            /* index into the channel_buffer */
 };
 
 struct trans_buffer {         /* internal transfer buffer to mimic device DMA */
@@ -336,7 +336,8 @@ static void mkchan(struct dma_proxy_channel *pchannel_p, int maj, int min,
                    struct channel_buffer *buf) {
   int err;
   pchannel_p->buffer_table_p = buf;
-  pchannel_p->buffer_phys_addr = vmalloc_to_pfn(pchannel_p->buffer_table_p) << PAGE_SHIFT;
+  // pchannel_p->buffer_phys_addr = vmalloc_to_pfn(pchannel_p->buffer_table_p) << PAGE_SHIFT;
+  pchannel_p->buffer_phys_addr = virt_to_phys(pchannel_p->buffer_table_p);
   printk (KERN_NOTICE "Alloc vir: %p phy: %llx\n",
           (void *)pchannel_p->buffer_table_p, pchannel_p->buffer_phys_addr);
 
