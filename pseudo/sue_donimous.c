@@ -22,6 +22,7 @@
 #include <linux/mm.h>
 #include <asm/page.h>
 
+#define SUE_DONIMOUS 1        // BUFFER_COUNT = 16 
 #include "../api/dma-proxy.h"
 
 MODULE_LICENSE("GPL");
@@ -119,10 +120,10 @@ struct dma_proxy_channel     sue_donimous_rx0;
 struct dma_proxy_channel     sue_donimous_tx0;
 struct dma_proxy_channel     sue_donimous_rx1;
 struct dma_proxy_channel     sue_donimous_tx1;
-static struct channel_buffer buf_rx0[BUFFER_COUNT];
-static struct channel_buffer buf_tx0[BUFFER_COUNT];
-static struct channel_buffer buf_rx1[BUFFER_COUNT];
-static struct channel_buffer buf_tx1[BUFFER_COUNT];
+static struct channel_buffer *buf_rx0;
+static struct channel_buffer *buf_tx0;
+static struct channel_buffer *buf_rx1;
+static struct channel_buffer *buf_tx1;
 static struct trans_buffer   xbuf[BUFFER_COUNT];
 
 /* connect TX1 -> RX0 and RX1 -> TX0 */
@@ -132,7 +133,9 @@ static struct trans_buffer   xbuf[BUFFER_COUNT];
 #define BUF_TX1_PIPENUM      1
 
 void sue_donimous_vma_open(struct vm_area_struct *vma) {
-  printk(KERN_NOTICE "VMA open, vir %lx, len %lx\n", vma->vm_start, vma->vm_end - vma->vm_start);
+  struct dma_proxy_channel *pchannel_p = (struct dma_proxy_channel *)vma->vm_private_data;
+  printk(KERN_NOTICE "VMA open: vir %lx, len %lx, off %lx, phy %llx\n", 
+          vma->vm_start, (vma->vm_end - vma->vm_start), vma->vm_pgoff, pchannel_p->buffer_phys_addr);
 }
 
 void sue_donimous_vma_close(struct vm_area_struct *vma) {
@@ -189,14 +192,14 @@ static int sue_donimous_open(struct inode *ino, struct file *fp) {
 static int sue_donimous_mmap(struct file *fp, struct vm_area_struct *vma) {
   struct dma_proxy_channel *pchannel_p = (struct dma_proxy_channel *)fp->private_data;
 
-  vma->vm_flags |= VM_IO;
+  vma->vm_private_data = fp->private_data;
+  vma->vm_pgoff = (pchannel_p->buffer_phys_addr >> PAGE_SHIFT);
   vma->vm_flags |= VM_DONTEXPAND;
-  if (remap_pfn_range(vma, vma->vm_start,
-                      pchannel_p->buffer_phys_addr >> PAGE_SHIFT,
-                      vma->vm_end - vma->vm_start,
-                      vma->vm_page_prot))
-    return -EAGAIN;
   vma->vm_ops = &vm_ops;
+
+  if (remap_pfn_range(vma, vma->vm_start, vma->vm_pgoff, 
+                      vma->vm_end - vma->vm_start,
+                      vma->vm_page_prot)) return -EAGAIN;
   sue_donimous_vma_open(vma);
   return 0;
 }
@@ -211,7 +214,6 @@ static int fake_transfer(void *buf, int lbytes, char pipenum, u32 direction) {
     for (i=0; i < BUFFER_COUNT; i++) 
       if (xbuf[i].full == 0) break;
     /* if not found return timeout */
-    printk(KERN_NOTICE "found buffer %d len:%d\n", i, lbytes);
     if (i >= BUFFER_COUNT) return -1;
     /* set pipenum to match channel, copy from channel, and mark wait buffer full */
     xbuf[i].pipenum = pipenum;
@@ -223,7 +225,6 @@ static int fake_transfer(void *buf, int lbytes, char pipenum, u32 direction) {
     for (i=0; i < BUFFER_COUNT; i++) 
       if ((xbuf[i].full != 0) && (xbuf[i].pipenum == pipenum)) break;
     /* if not found return timeout */
-    printk(KERN_NOTICE "found buffer %d len:%d\n", i, lbytes);
     if (i >= BUFFER_COUNT) return -1;
     /* do memcpy to buf, and mark wait buffer empty */
     if (memcpy(buf, xbuf[i].cb.buffer, lbytes) != buf) return -2;
@@ -262,11 +263,7 @@ static void wait_for_transfer(struct dma_proxy_channel *pchannel_p) {
     if(direction != DMA_MEM_TO_DEV) goto err_return;
   } else goto err_return;
 
-  printk(KERN_NOTICE "devname: %s, pipe: %d, direction: %d, bdindex: %d\n",
-           devname, pipenum, direction, bdindex);
-
-  printk(KERN_NOTICE "len = %d, buf[100] = %d\n",
-    cbuf[bdindex].length, cbuf[bdindex].buffer[100]);
+  // printk(KERN_NOTICE "devname: %s, pipe: %d, direction: %d, bdindex: %d\n", devname, pipenum, direction, bdindex);
 
   cbuf[bdindex].status = PROXY_BUSY;
 
@@ -336,10 +333,9 @@ static void mkchan(struct dma_proxy_channel *pchannel_p, int maj, int min,
                    struct channel_buffer *buf) {
   int err;
   pchannel_p->buffer_table_p = buf;
-  // pchannel_p->buffer_phys_addr = vmalloc_to_pfn(pchannel_p->buffer_table_p) << PAGE_SHIFT;
   pchannel_p->buffer_phys_addr = virt_to_phys(pchannel_p->buffer_table_p);
   printk (KERN_NOTICE "Alloc vir: %p phy: %llx\n",
-          (void *)pchannel_p->buffer_table_p, pchannel_p->buffer_phys_addr);
+           pchannel_p->buffer_table_p, pchannel_p->buffer_phys_addr);
 
   pchannel_p->proxy_device_p = NULL;
   pchannel_p->dma_device_p = NULL;
@@ -357,10 +353,33 @@ static void mkchan(struct dma_proxy_channel *pchannel_p, int maj, int min,
   pchannel_p->bdindex = 0;
 }
 
+void *alloc_mmap_pages(unsigned int npages) {
+  int i;
+  void *mem = kmalloc(PAGE_SIZE * npages, GFP_KERNEL);
+  printk(KERN_INFO "sue_donimous: requesting %ld\n", PAGE_SIZE * npages);
+  if (!mem) printk(KERN_INFO "sue_donimous: could not alloc requested\n");
+  if (!mem) return mem;
+  for(i = 0; i < npages * PAGE_SIZE; i += PAGE_SIZE)
+    SetPageReserved(virt_to_page(((unsigned long)mem) + i));
+  return mem;
+}
+
+void free_mmap_pages(void *mem, unsigned int npages) {
+  int i;
+  if(!mem) return;
+  for(i = 0; i < npages * PAGE_SIZE; i += PAGE_SIZE)
+    ClearPageReserved(virt_to_page(((unsigned long)mem) + i));
+  kfree(mem);
+}
+
+static inline unsigned int myceil(unsigned int a, unsigned int b) { return (a + b - 1) / b; }
+
 static int __init sue_donimous_init(void) {
   dev_t dev;
   int result;
   int i;
+  unsigned int npages = myceil(sizeof(struct channel_buffer) * BUFFER_COUNT, PAGE_SIZE);
+
   printk(KERN_INFO "sue_donimous: installing module and registering device\n");
 
   for (i=0; i < BUFFER_COUNT; i++) xbuf[i].full = 0;
@@ -378,20 +397,34 @@ static int __init sue_donimous_init(void) {
   }
   if (xmajor == 0) xmajor = result;
 
+  buf_rx0 = (struct channel_buffer *) alloc_mmap_pages(npages);
+  buf_tx0 = (struct channel_buffer *) alloc_mmap_pages(npages);
+  buf_rx1 = (struct channel_buffer *) alloc_mmap_pages(npages);
+  buf_tx1 = (struct channel_buffer *) alloc_mmap_pages(npages);
+  
   mkchan(&sue_donimous_rx0, xmajor, 0, &fr_ops, DMA_DEV_TO_MEM, buf_rx0);
   mkchan(&sue_donimous_tx0, xmajor, 1, &fw_ops, DMA_MEM_TO_DEV, buf_tx0);
   mkchan(&sue_donimous_rx1, xmajor, 2, &f_ops,  DMA_DEV_TO_MEM, buf_rx1);
   mkchan(&sue_donimous_tx1, xmajor, 3, &f_ops,  DMA_MEM_TO_DEV, buf_tx1);
+
+  if (!buf_rx0 || !buf_tx0 || !buf_rx1 || !buf_tx1)
+    printk(KERN_ERR "Kernel memory allocation failed\n");
+
   return 0;
 }
 
 static void __exit sue_donimous_exit(void) {
+  unsigned int npages = myceil(sizeof(struct channel_buffer) * BUFFER_COUNT, PAGE_SIZE);
   printk(KERN_INFO "sue_donimous: unregistering devices and removing module\n");
   cdev_del(&sue_donimous_rx0.cdev);
   cdev_del(&sue_donimous_tx0.cdev);
   cdev_del(&sue_donimous_rx1.cdev);
   cdev_del(&sue_donimous_tx1.cdev);
   unregister_chrdev_region(MKDEV(xmajor, 0), 4);
+  free_mmap_pages(buf_rx0, npages);
+  free_mmap_pages(buf_tx0, npages);
+  free_mmap_pages(buf_rx1, npages);
+  free_mmap_pages(buf_tx1, npages);
   return;
 }
 
