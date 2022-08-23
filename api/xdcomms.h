@@ -17,10 +17,6 @@
 #define CTAG_MOD            256
 #define PKT_G1_ADU_SIZE_MAX 65528            /* Max size with 16-bit data_laen = 2^16 - 8 (see bw header) */
 
-#define TX_CHANNEL_COUNT    1
-#define RX_CHANNEL_COUNT    1
-#define MAX_BUFS_PER_TAG    RX_BUFFER_COUNT  /* RX_BUFFER_COUNT from dma-proxy.h */
-
 /* Table of codec per data types (Max of DATA_TYP_MAX types) */
 typedef void (*codec_func_ptr)(void *, void *, size_t *);
 typedef struct _codec_map {

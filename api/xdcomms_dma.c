@@ -175,7 +175,7 @@ tagbuf *get_tbuf(gaps_tag *tag) {
 }
 
 /* Open channel and save virtual address of buffer pointer */
-int dma_open_channel(chan *c, const char **channel_name, int channel_count, int buffer_count) {
+int dma_open_channel(chan *c, char **channel_name, int channel_count, int buffer_count) {
   int i;
 
   log_trace("%s: open DMA channel", __func__);
@@ -237,17 +237,19 @@ void dma_send(void *adu, gaps_tag *tag) {
   const int    i=0;                                      /* Assume single DMA channel */
   size_t       packet_len, adu_len;                      /* Note: encoder calculates length */
   static int   once=1;                                   /* Open tx_channels only once */
-  static chan  tx_channels[TX_CHANNEL_COUNT];            /* DMA channels */
+  static chan  tx_channels[1];                           /* Use only a single channel */
   const int    buffer_id=0;                              /* Use only a single buffer */
-  const char  *tx_channel_names[] = {"dma_proxy_tx"};
+  char        *tx_channel_names[1];
+  char        *tx;
     
   log_trace("Start of %s", __func__);
+  tx_channel_names[0] = ((tx = getenv("DMATXDEV")) == NULL) ? "dma_proxy_tx" : tx;
 
   /* Open channel if needed, encode packet into DMA buffer, and send */
   pthread_mutex_lock(&txlock);
   if (once == 1) {
     once = 0;
-    dma_open_channel(tx_channels, tx_channel_names, TX_CHANNEL_COUNT, TX_BUFFER_COUNT);
+    dma_open_channel(tx_channels, tx_channel_names, 1, TX_BUFFER_COUNT);
   }
 
   p = (bw *) &(tx_channels[i].buf_ptr[buffer_id]);          /* DMA channel buffer holds created packet */
@@ -294,8 +296,9 @@ void *rcvr_thread_function(thread_args *vargs) {
 /* Start a receiver thread */
 void rcvr_thread_start(void) {
   static int   once=1;
-  static chan  rx_channels[RX_CHANNEL_COUNT];  /* DMA channels */
-  const char  *rx_channel_names[] = { "dma_proxy_rx"};
+  static chan  rx_channels[1];                         /* Use only a single channel */
+  char        *rx_channel_names[1];
+  char        *rx;
   static thread_args rxargs[RX_BUFFER_COUNT];
   static pthread_t tid[RX_BUFFER_COUNT];
   int nthreads = 1;
@@ -303,11 +306,13 @@ void rcvr_thread_start(void) {
   /* nthreads = RX_BUFFER_COUNT; */
   log_trace("%s: open rx channel and start receiver thread(s): %d", __func__, nthreads);
 
+  rx_channel_names[0] = ((rx = getenv("DMARXDEV")) == NULL) ? "dma_proxy_rx" : rx;
+
   /* Open rx channel and receive threads (only once) */
   pthread_mutex_lock(&rxlock);
   if (once==1) {
     once = 0;
-    dma_open_channel(rx_channels, rx_channel_names, RX_CHANNEL_COUNT, RX_BUFFER_COUNT);
+    dma_open_channel(rx_channels, rx_channel_names, 1, RX_BUFFER_COUNT);
     for (int i=0; i < nthreads; i++) {
       rxargs[i].c = rx_channels;
       rxargs[i].buffer_id = i;
