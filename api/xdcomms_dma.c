@@ -152,7 +152,6 @@ tagbuf *get_tbuf(gaps_tag *tag) {
     for(i=0; i < GAPS_TAG_MAX; i++) {
       tbuf[i].ctag = 0;
       tbuf[i].newd = 0;
-      tbuf[i].rv   = 0;
       if (pthread_mutex_init(&(tbuf[i].lock), NULL) != 0) {
         pthread_mutex_unlock(&rxlock);
         log_fatal("tagbuf mutex init has failed failed");
@@ -213,7 +212,6 @@ int dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *cbuf_
   log_trace("START_XFER (fd=%d, id=%d buf_ptr=%p unset-status=%d)", fd, *buffer_id_ptr, cbuf_ptr, cbuf_ptr->status);
   ioctl(fd, START_XFER,  buffer_id_ptr);
   ioctl(fd, FINISH_XFER, buffer_id_ptr);
-  log_trace("FINISH_XFER");
   if (cbuf_ptr->status != PROXY_NO_ERROR) {
     log_trace("Proxy transfer error (fd=%d, id=%d): status=%d (BUSY=1, TIMEOUT=2, ERROR=3)", fd, *buffer_id_ptr, cbuf_ptr->status);
     return -1;
@@ -281,16 +279,14 @@ void *rcvr_thread_function(thread_args *vargs) {
     if (receive_channel_buffer(vargs->c, vargs->buffer_id) == 0) {    /* XXX: Only one thread per buffer_id */
       p = (bw *) &(vargs->c->buf_ptr[vargs->buffer_id]); /* XXX: DMA buffer must be larger than size of BW */
       bw_ctag_decode(&(p->message_tag_ID), &tag);
-      log_trace("THREAD rx packet id=%d, tag=<%d,%d,%d>", vargs->buffer_id, tag.mux, tag.sec, tag.typ);
+      log_debug("THREAD rx packet tag=<%d,%d,%d> id=%d", tag.mux, tag.sec, tag.typ, vargs->buffer_id);
 
       /* get buffer for tag, lock buffer, copy packet to buffer, mark newdata, release lock */
       t = get_tbuf(&tag); 
       pthread_mutex_lock(&(t->lock));
       memcpy(&(t->p), p, sizeof(bw)); /* XXX: optimize, copy only length of actual packet received */
       t->newd = 1;
-      t->rv   = vargs->c->buf_ptr[vargs->buffer_id].status;
       pthread_mutex_unlock(&(t->lock));
-      log_trace("THREAD rx saved packet");
     }
   }
 }
@@ -342,21 +338,19 @@ int dma_recv(void *adu, gaps_tag *tag) {
   /* get buffer for tag, lock buffer, get packet from buffer, unmark newdata, release lock */
   t = get_tbuf(tag);
   pthread_mutex_lock(&(t->lock));
-  if ((t->newd != 0) && (t->rv == 0)) { /* XXX: why do we need rv? */
+  if (t->newd != 0) { 
     p = &(t->p);
-    /* Decode packet */
     char fmt[] = "bw";
     bw_gaps_data_decode(p, packet_len, adu, &adu_len, tag);   /* Put packet into ADU */
     bw_len_decode(&packet_len, p->data_len);
-    log_trace("XDCOMMS reads  (format=%s) from DMA channel (buf_ptr=%p) len=%d rv=%d", fmt, p, packet_len, t->rv);
+    log_trace("XDCOMMS reads  (format=%s) from DMA channel (buf_ptr=%p) len=%d", fmt, p, packet_len);
     if (packet_len < 543) log_buf_trace("API recv packet", (uint8_t *) p, packet_len);
     t->newd = 0;
   }
   pthread_mutex_unlock(&(t->lock));
   
   if(packet_len > 0) 
-    log_debug("XDCOMMS rx packet tag=<%d,%d,%d> len=%d rv=%d", 
-               tag->mux, tag->sec, tag->typ, packet_len, t->rv);
+    log_debug("XDCOMMS rx packet tag=<%d,%d,%d> len=%d", tag->mux, tag->sec, tag->typ, packet_len);
 
   return (packet_len > 0) ? packet_len : -1;
 }
