@@ -230,7 +230,6 @@ int send_channel_buffer(chan *c, size_t packet_len, int buffer_id) {
 /* Send ADU to DMA driver in 'bw' packet */
 void dma_send(void *adu, gaps_tag *tag) {
   int ret;
-  char fmt[] = "bw";
   bw          *p;                                        /* Packet pointer */
   const int    i=0;                                      /* Assume single DMA channel */
   size_t       packet_len, adu_len;                      /* Note: encoder calculates length */
@@ -254,10 +253,8 @@ void dma_send(void *adu, gaps_tag *tag) {
   bw_gaps_data_encode(p, &packet_len, adu, &adu_len, tag);  /* Put packet into channel buffer */
 
   ret = send_channel_buffer(&tx_channels[i], packet_len, buffer_id);
-  if (ret == 0) {
-    log_debug("XDCOMMS tx packet tag=<%d,%d,%d> len=%ld, fmt=%s id=%d, buf_ptr=%p",
-              tag->mux, tag->sec, tag->typ, packet_len, fmt, buffer_id, p);
-  }
+  log_debug("XDCOMMS tx packet tag=<%d,%d,%d> len=%ld, ret=%d", tag->mux, tag->sec, tag->typ, packet_len, ret);
+  log_trace("%s: Buffer id = %d packet pointer=%p", buffer_id, p);
   pthread_mutex_unlock(&txlock);
 }
 
@@ -279,7 +276,7 @@ void *rcvr_thread_function(thread_args *vargs) {
     if (receive_channel_buffer(vargs->c, vargs->buffer_id) == 0) {    /* XXX: Only one thread per buffer_id */
       p = (bw *) &(vargs->c->buf_ptr[vargs->buffer_id]); /* XXX: DMA buffer must be larger than size of BW */
       bw_ctag_decode(&(p->message_tag_ID), &tag);
-      log_debug("THREAD rx packet tag=<%d,%d,%d> id=%d", tag.mux, tag.sec, tag.typ, vargs->buffer_id);
+      log_debug("THREAD rx packet tag=<%d,%d,%d> id=%d st=%d", tag.mux, tag.sec, tag.typ, vargs->buffer_id, vargs->c->buf_ptr->status);
 
       /* get buffer for tag, lock buffer, copy packet to buffer, mark newdata, release lock */
       t = get_tbuf(&tag); 
