@@ -15,7 +15,7 @@ lib$(NAME).so.$(VERSION): $(OBJS)
 	$(CC) $(LDFLAGS) $(OBJS) -shared -pthread -Wl,-soname,lib$(NAME).so.$(MAJOR) -o lib$(NAME).so.$(VERSION)
 
 lib$(NAME).so: lib$(NAME).so.$(VERSION)
-	rm -f lib$(NAME).so$(MAJOR) lib$(NAME).so.$(VERSION)
+	rm -f lib$(NAME).so.$(MAJOR) lib$(NAME).so
 	ln -s lib$(NAME).so.$(VERSION) lib$(NAME).so.$(MAJOR)
 	ln -s lib$(NAME).so.$(MAJOR) lib$(NAME).so
 
