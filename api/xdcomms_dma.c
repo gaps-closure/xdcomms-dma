@@ -215,7 +215,7 @@ int dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *cbuf_
   ioctl(fd, FINISH_XFER, buffer_id_ptr);
   log_trace("FINISH_XFER");
   if (cbuf_ptr->status != PROXY_NO_ERROR) {
-    log_warn("Proxy transfer error (fd=%d, id=%d): status=%d (BUSY=1, TIMEOUT=2, ERROR=3)", fd, *buffer_id_ptr, cbuf_ptr->status);
+    log_trace("Proxy transfer error (fd=%d, id=%d): status=%d (BUSY=1, TIMEOUT=2, ERROR=3)", fd, *buffer_id_ptr, cbuf_ptr->status);
     return -1;
   }
   return 0;
@@ -280,7 +280,7 @@ void *rcvr_thread_function(thread_args *vargs) {
     if (receive_channel_buffer(vargs->c, vargs->buffer_id) == 0) {    /* XXX: Only one thread per buffer_id */
       p = (bw *) &(vargs->c->buf_ptr[vargs->buffer_id]); /* XXX: DMA buffer must be larger than size of BW */
       bw_ctag_decode(&(p->message_tag_ID), &tag);
-      log_debug("THREAD rx packet id=%d, tag=<%d,%d,%d>", vargs->buffer_id, tag.mux, tag.sec, tag.typ);
+      log_trace("THREAD rx packet id=%d, tag=<%d,%d,%d>", vargs->buffer_id, tag.mux, tag.sec, tag.typ);
 
       /* get buffer for tag, lock buffer, copy packet to buffer, mark newdata, release lock */
       t = get_tbuf(&tag); 
@@ -289,7 +289,7 @@ void *rcvr_thread_function(thread_args *vargs) {
       t->newd = 1;
       t->rv   = vargs->c->buf_ptr[vargs->buffer_id].status;
       pthread_mutex_unlock(&(t->lock));
-      log_debug("THREAD rx saved packet");
+      log_trace("THREAD rx saved packet");
     }
   }
 }
@@ -336,7 +336,7 @@ int dma_recv(void *adu, gaps_tag *tag) {
   log_trace("Start of %s", __func__);
   rcvr_thread_start();
 
-  log_debug("%s: Waiting for received packet on tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
+  log_trace("%s: Waiting for received packet on tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
 
   /* get buffer for tag, lock buffer, get packet from buffer, unmark newdata, release lock */
   t = get_tbuf(tag);
@@ -347,7 +347,7 @@ int dma_recv(void *adu, gaps_tag *tag) {
     char fmt[] = "bw";
     bw_gaps_data_decode(p, packet_len, adu, &adu_len, tag);   /* Put packet into ADU */
     bw_len_decode(&packet_len, p->data_len);
-    log_debug("XDCOMMS reads  (format=%s) from DMA channel (buf_ptr=%p) len=%d rv=%d", fmt, p, packet_len, t->rv);
+    log_trace("XDCOMMS reads  (format=%s) from DMA channel (buf_ptr=%p) len=%d rv=%d", fmt, p, packet_len, t->rv);
     if (packet_len < 543) log_buf_trace("API recv packet", (uint8_t *) p, packet_len);
     t->newd = 0;
   }
@@ -425,7 +425,7 @@ void xdc_log_level(int new_level) {
     log_trace("Set API log level: %d", lvl);
   }
   else {
-    log_warn("Cannot change API to log level %d (min=%d max=%d)\n", __func__, lvl, LOG_TRACE, LOG_FATAL);
+    log_trace("Cannot change API to log level %d (min=%d max=%d)\n", __func__, lvl, LOG_TRACE, LOG_FATAL);
   }
 }
 
