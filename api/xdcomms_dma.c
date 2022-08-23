@@ -257,7 +257,8 @@ void dma_send(void *adu, gaps_tag *tag) {
 
   ret = send_channel_buffer(&tx_channels[i], packet_len, buffer_id);
   if (ret == 0) {
-    log_debug("XDCOMMS tx packet fmt=%s len=%ld, id=%d, buf_ptr=%p tag=<%d,%d,%d>", fmt, packet_len, buffer_id, p, tag->mux, tag->sec, tag->typ);
+    log_debug("XDCOMMS tx packet tag=<%d,%d,%d> fmt=%s len=%ld, id=%d, buf_ptr=%p",
+              tag->mux, tag->sec, tag->typ, fmt, packet_len, buffer_id, p);
   }
   pthread_mutex_unlock(&txlock);
 }
@@ -354,7 +355,7 @@ int dma_recv(void *adu, gaps_tag *tag) {
   pthread_mutex_unlock(&(t->lock));
   
   if(packet_len > 0) 
-    log_debug("XDCOMMS rx packet tag=<%d,%d,%d> LENGTH=%d rv=%d\n", 
+    log_debug("XDCOMMS rx packet tag=<%d,%d,%d> length=%d rv=%d", 
                tag->mux, tag->sec, tag->typ, packet_len, t->rv);
 
   return (packet_len > 0) ? packet_len : -1;
