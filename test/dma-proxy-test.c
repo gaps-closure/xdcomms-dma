@@ -350,6 +350,7 @@ int main(int argc, char *argv[])
         char *tx;
         rx_channel_names[0] = ((rx = getenv("DMARXDEV")) == NULL) ? "dma_proxy_rx" : rx;
         tx_channel_names[0] = ((tx = getenv("DMATXDEV")) == NULL) ? "dma_proxy_tx" : tx;
+        printf("from: %s to: %s\n", tx_channel_names[0], rx_channel_names[0]);
 
 	/* Get the number of transfers to perform */
 
