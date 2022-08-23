@@ -329,7 +329,8 @@ void rcvr_thread_start(void) {
 /* Receive 'bw' packet from DMA driver, storing data and length in ADU */
 int dma_recv(void *adu, gaps_tag *tag) {
   bw *p;
-  size_t packet_len, adu_len=0;
+  size_t packet_len=0;  /* initialize to check at return */
+  size_t adu_len=0;
   tagbuf *t;
 
   log_trace("Start of %s", __func__);
@@ -340,7 +341,7 @@ int dma_recv(void *adu, gaps_tag *tag) {
   /* get buffer for tag, lock buffer, get packet from buffer, unmark newdata, release lock */
   t = get_tbuf(tag);
   pthread_mutex_lock(&(t->lock));
-  if ((t->newd != 0) && (t->rv == 0)) {
+  if ((t->newd != 0) && (t->rv == 0)) { /* XXX: why do we need rv? */
     p = &(t->p);
     /* Decode packet */
     char fmt[] = "bw";
@@ -352,7 +353,10 @@ int dma_recv(void *adu, gaps_tag *tag) {
   }
   pthread_mutex_unlock(&(t->lock));
   
-  log_trace("%s DONE --------> LENGTH=%d rv=%d", __func__, packet_len, t->rv);
+  if(packet_len > 0) 
+    log_debug("XDCOMMS rx packet tag=<%d,%d,%d> LENGTH=%d rv=%d\n", 
+               tag->mux, tag->sec, tag->typ, packet_len, t->rv);
+
   return (packet_len > 0) ? packet_len : -1;
 }
 
