@@ -264,8 +264,8 @@ void dma_send(void *adu, gaps_tag *tag) {
 
 /* Receive packet from DMA driver */
 int receive_channel_buffer(chan *c, int buffer_id) {
-  log_trace("THREAD %s: Ready to read packet from fd=%d (unset len=%d, unset id=%d) ", __func__, c->fd, c->buf_ptr[buffer_id].length, buffer_id);
   c->buf_ptr[buffer_id].length = sizeof(bw);
+  log_trace("THREAD %s: Ready to read packet from fd=%d (unset len=%d, unset id=%d) ", __func__, c->fd, c->buf_ptr[buffer_id].length, buffer_id);
   return (dma_start_to_finish(c->fd, &buffer_id, &(c->buf_ptr[buffer_id])));
 }
 
