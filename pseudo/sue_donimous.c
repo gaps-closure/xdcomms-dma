@@ -356,8 +356,6 @@ static void mkchan(struct dma_proxy_channel *pchannel_p, int maj, int min,
 void *alloc_mmap_pages(unsigned int npages) {
   int i;
   void *mem = kmalloc(PAGE_SIZE * npages, GFP_KERNEL);
-  printk(KERN_INFO "sue_donimous: requesting %ld\n", PAGE_SIZE * npages);
-  if (!mem) printk(KERN_INFO "sue_donimous: could not alloc requested\n");
   if (!mem) return mem;
   for(i = 0; i < npages * PAGE_SIZE; i += PAGE_SIZE)
     SetPageReserved(virt_to_page(((unsigned long)mem) + i));
