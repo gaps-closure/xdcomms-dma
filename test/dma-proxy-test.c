@@ -237,6 +237,9 @@ void *rx_thread(void * pp)
 
 	buffer_id = 0;
 
+	/* XXX: wait for peer to start */
+	sleep(1);
+
 	/* Finish each queued up receive buffer and keep starting the buffer over again
 	 * until all the transfers are done
 	 */
