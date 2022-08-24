@@ -206,6 +206,10 @@ static int sue_donimous_mmap(struct file *fp, struct vm_area_struct *vma) {
 
 static void start_transfer(struct dma_proxy_channel *pchannel_p) { return; }
 
+/* XXX: ought to use use queue, does not preserve ordering */
+/* XXX: init 3 queues of bufptrs: free, pipe1, pipe2       */
+/* XXX: on tx, dequeue from free, fill, enqueue in pipeN   */
+/* XXX: on rx, dequeue from pipeN, copy, enqueue in free   */
 /* returns 0 on success, -1 on no free buffer, -2 on error */
 static int fake_transfer(void *buf, int lbytes, char pipenum, u32 direction) {
   int i;
