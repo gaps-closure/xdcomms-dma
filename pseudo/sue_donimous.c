@@ -285,10 +285,10 @@ static void wait_for_transfer(struct dma_proxy_channel *pchannel_p) {
 
   if (timeout == 0)  {
    cbuf[bdindex].status  = PROXY_TIMEOUT;
-    printk(KERN_ERR "DMA timed out\n");
+    printk(KERN_DEBUG "DMA timed out\n");
   } else if (status != DMA_COMPLETE) {
     cbuf[bdindex].status = PROXY_ERROR;
-    printk(KERN_ERR "DMA returned completion callback status of: %s\n",
+    printk(KERN_DEBUG "DMA returned completion callback status of: %s\n",
                      status == DMA_ERROR ? "error" : "in progress");
   } else {
     cbuf[bdindex].status = PROXY_NO_ERROR;
