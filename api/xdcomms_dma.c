@@ -129,7 +129,7 @@ void bw_gaps_data_decode(bw *p, size_t p_len, uint8_t *buff_out, size_t *len_out
   
   bw_ctag_decode(&(p->message_tag_ID), tag);
   bw_len_decode(len_out, p->data_len);
-  cm->decode (buff_out, p->data, &p_len);
+  cm->decode (buff_out, p->data, len_out);
   log_buf_trace("API -> raw app data:", p->data,  *len_out);
   log_buf_trace("    <- decoded data:", buff_out, *len_out);
 }
@@ -209,7 +209,7 @@ int dma_open_channel(chan *c, char **channel_name, int channel_count, int buffer
 
 /* Perform DMA ioctl operations to tx or rx data */
 int dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *cbuf_ptr) {
-  log_trace("START_XFER (fd=%d, id=%d buf_ptr=%p unset-status=%d)", fd, *buffer_id_ptr, cbuf_ptr, cbuf_ptr->status);
+//  log_trace("START_XFER (fd=%d, id=%d buf_ptr=%p unset-status=%d)", fd, *buffer_id_ptr, cbuf_ptr, cbuf_ptr->status);
   ioctl(fd, START_XFER,  buffer_id_ptr);
   ioctl(fd, FINISH_XFER, buffer_id_ptr);
   if (cbuf_ptr->status != PROXY_NO_ERROR) {
@@ -223,7 +223,7 @@ int dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *cbuf_
 int send_channel_buffer(chan *c, size_t packet_len, int buffer_id) {
   log_trace("Start of %s: Ready to Write packet (len=%d) to fd=%d (id=%d) ", __func__, packet_len, c->fd, buffer_id);
   c->buf_ptr[buffer_id].length = packet_len;
-  if (packet_len < 543) log_buf_trace("API sends Packet", (uint8_t *) &(c->buf_ptr[buffer_id]), packet_len);
+  if (packet_len <= sizeof(bw)) log_buf_trace("TX_PKT", (uint8_t *) &(c->buf_ptr[buffer_id]), packet_len);
   return dma_start_to_finish(c->fd, &buffer_id, &(c->buf_ptr[buffer_id]));
 }
 
@@ -261,7 +261,7 @@ void dma_send(void *adu, gaps_tag *tag) {
 /* Receive packet from DMA driver */
 int receive_channel_buffer(chan *c, int buffer_id) {
   c->buf_ptr[buffer_id].length = sizeof(bw);
-  log_trace("THREAD %s: Ready to read packet from fd=%d (unset len=%d, unset id=%d) ", __func__, c->fd, c->buf_ptr[buffer_id].length, buffer_id);
+//  log_trace("THREAD %s: Ready to read packet from fd=%d (unset len=%d, unset id=%d) ", __func__, c->fd, c->buf_ptr[buffer_id].length, buffer_id);
   return (dma_start_to_finish(c->fd, &buffer_id, &(c->buf_ptr[buffer_id])));
 }
 
@@ -271,12 +271,12 @@ void *rcvr_thread_function(thread_args *vargs) {
   bw       *p;
   tagbuf   *t;
 
-  log_trace("THREAD %s: fd=%d (ptr: a=%p, b=%p, c=%p", __func__, vargs->c->fd, vargs, vargs->c->buf_ptr, vargs->c);
+  log_trace("THREAD %s starting: fd=%d (ptr: a=%p, b=%p, c=%p", __func__, vargs->c->fd, vargs, vargs->c->buf_ptr, vargs->c);
   while (1) {
     if (receive_channel_buffer(vargs->c, vargs->buffer_id) == 0) {    /* XXX: Only one thread per buffer_id */
       p = (bw *) &(vargs->c->buf_ptr[vargs->buffer_id]); /* XXX: DMA buffer must be larger than size of BW */
       bw_ctag_decode(&(p->message_tag_ID), &tag);
-      log_debug("THREAD rx packet tag=<%d,%d,%d> id=%d st=%d", tag.mux, tag.sec, tag.typ, vargs->buffer_id, vargs->c->buf_ptr->status);
+      log_trace("THREAD rx packet tag=<%d,%d,%d> id=%d st=%d", tag.mux, tag.sec, tag.typ, vargs->buffer_id, vargs->c->buf_ptr->status);
 
       /* get buffer for tag, lock buffer, copy packet to buffer, mark newdata, release lock */
       t = get_tbuf(&tag); 
@@ -338,18 +338,19 @@ int dma_recv(void *adu, gaps_tag *tag) {
   if (t->newd != 0) { 
     p = &(t->p);
     char fmt[] = "bw";
+
     bw_gaps_data_decode(p, packet_len, adu, &adu_len, tag);   /* Put packet into ADU */
-    bw_len_decode(&packet_len, p->data_len);
-    log_trace("XDCOMMS reads  (format=%s) from DMA channel (buf_ptr=%p) len=%d", fmt, p, packet_len);
-    if (packet_len < 543) log_buf_trace("API recv packet", (uint8_t *) p, packet_len);
+    packet_len = bw_get_packet_length(p, adu_len);
+    log_trace("XDCOMMS reads  (format=%s) from DMA channel (buf_ptr=%p) len=(b=%d p=%d)", fmt, p, adu_len, packet_len);
+    if (packet_len <= sizeof(bw)) log_buf_trace("RX_PKT", (uint8_t *) p, packet_len);
     t->newd = 0;
   }
   pthread_mutex_unlock(&(t->lock));
   
-  if(packet_len > 0) 
+  if(packet_len > 0)
     log_debug("XDCOMMS rx packet tag=<%d,%d,%d> len=%d", tag->mux, tag->sec, tag->typ, packet_len);
 
-  return (packet_len > 0) ? packet_len : -1;
+  return (adu_len > 0) ? adu_len : -1;
 }
 
 /**********************************************************************/
