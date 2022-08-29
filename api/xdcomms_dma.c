@@ -219,11 +219,25 @@ int dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *cbuf_
   return 0;
 }
 
+/* Print packet contents in HEX (like log_buf_tracee, except not governed by LOGLEVEL */
+void data_print(void *data, size_t data_len) {
+  int       j;
+  uint8_t  *d = (uint8_t *) data;
+
+  fprintf(stderr, "Packet (len=%ld):", data_len);
+  for (j = 0; j < data_len; j++) {
+    if ((j%4)==0) fprintf(stderr, " ");
+    fprintf(stderr, "%02X", d[j]);
+  }
+  fprintf(stderr, "\n");
+}
+
 /* Send Packet to DMA driver */
 int send_channel_buffer(chan *c, size_t packet_len, int buffer_id) {
   log_trace("Start of %s: Ready to Write packet (len=%d) to fd=%d (id=%d) ", __func__, packet_len, c->fd, buffer_id);
   c->buf_ptr[buffer_id].length = packet_len;
   if (packet_len <= sizeof(bw)) log_buf_trace("TX_PKT", (uint8_t *) &(c->buf_ptr[buffer_id]), packet_len);
+//  data_print(c->buf_ptr[buffer_id].buffer, packet_len);
   return dma_start_to_finish(c->fd, &buffer_id, &(c->buf_ptr[buffer_id]));
 }
 
@@ -343,6 +357,7 @@ int dma_recv(void *adu, gaps_tag *tag) {
     packet_len = bw_get_packet_length(p, adu_len);
     log_trace("XDCOMMS reads  (format=%s) from DMA channel (buf_ptr=%p) len=(b=%d p=%d)", fmt, p, adu_len, packet_len);
     if (packet_len <= sizeof(bw)) log_buf_trace("RX_PKT", (uint8_t *) p, packet_len);
+//    data_print(p, packet_len);
     t->newd = 0;
   }
   pthread_mutex_unlock(&(t->lock));
