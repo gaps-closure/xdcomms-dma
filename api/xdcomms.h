@@ -12,10 +12,17 @@
 #include "dma-proxy.h"
 #include "crc.h"
 
-#define DATA_TYP_MAX        50
-#define GAPS_TAG_MAX        50
-#define CTAG_MOD            256
-#define PKT_G1_ADU_SIZE_MAX 65528            /* Max size with 16-bit data_laen = 2^16 - 8 (see bw header) */
+#define DATA_TYP_MAX              50
+#define GAPS_TAG_MAX              50
+#define CTAG_MOD                 256
+#define PKT_G1_ADU_SIZE_MAX    65528     /* Max packet size with 16-bit data_laen = 2^16 - 8 (see bw header) */
+#define NSEC_IN_MSEC         1000000
+#define RX_RETRY_NANO        1000000     /* Check for rx packet (in nano-seconds): e.g., 1000000 = 1ms */
+#define RX_RETRY_SECS              0     /* Retry interval in seconds */
+
+#define RX_THREADS                 1    // RX_THREADS * RX_BUFFS_PER_THREAD <= RX_BUFFER_COUNT
+//#define RX_BUFFS_PER_THREAD        1
+#define RX_BUFFS_PER_THREAD  RX_BUFFER_COUNT
 
 /* Table of codec per data types (Max of DATA_TYP_MAX types) */
 typedef void (*codec_func_ptr)(void *, void *, size_t *);
@@ -50,7 +57,7 @@ typedef struct channel {
 /* Receiver thread arguments */
 typedef struct _thread_args {
   chan    *c;
-  int      buffer_id;
+  int      buffer_id_start;
 } thread_args;
 
 /* Per-tag buffer node */
@@ -59,8 +66,16 @@ typedef struct _tagbuf {
   int               rv;
   pthread_mutex_t   lock;
   char              newd;
-  bw                p;
+//  bw                p;
+  bw               *p_ptr;
 } tagbuf;
+
+/* Map from tag  to timeout value (timeout is set in xdc_sub_socket_non_blocking() call) */
+typedef struct _tagmap {
+  gaps_tag         tag;
+  int              retries;   /* number of rx retries (based on timeout passed using xdc_sub_socket_non_blocking() */
+  struct _tagmap  *next;      /* linked list */
+} tagmap;
 
 extern void tag_print     (gaps_tag *, FILE *);
 extern void tag_write     (gaps_tag *, uint32_t,   uint32_t,   uint32_t);
