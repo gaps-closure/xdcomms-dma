@@ -12,17 +12,62 @@
 #include "dma-proxy.h"
 #include "crc.h"
 
-#define DATA_TYP_MAX              50
-#define GAPS_TAG_MAX              50
-#define CTAG_MOD                 256
-#define PKT_G1_ADU_SIZE_MAX    65528     /* Max packet size with 16-bit data_laen = 2^16 - 8 (see bw header) */
-#define NSEC_IN_MSEC         1000000
-#define RX_RETRY_NANO        1000000     /* Check for rx packet (in nano-seconds): e.g., 1000000 = 1ms */
-#define RX_RETRY_SECS              0     /* Retry interval in seconds */
+#define DATA_TYP_MAX                      50
+#define GAPS_TAG_MAX                      50
+#define CTAG_MOD                         256
+#define PKT_G1_ADU_SIZE_MAX            65528  // Max packet size with 16-bit data_laen = 2^16 - 8 (see bw header)
 
-#define RX_THREADS                 1    // RX_THREADS * RX_BUFFS_PER_THREAD <= RX_BUFFER_COUNT
-//#define RX_BUFFS_PER_THREAD        1
-#define RX_BUFFS_PER_THREAD  RX_BUFFER_COUNT
+// Buffer allocation to threads. NB: RX_THREADS * RX_BUFFS_PER_THREAD <= RX_BUFFER_COUNT
+#define RX_THREADS                         1  // Total number of receiver threads
+#define RX_BUFFS_PER_THREAD  RX_BUFFER_COUNT  // Use all DMA rx buffers in one rx channel thread
+
+// How often (interval) and how long (timout) to check for rx packet (check 'newd' flag in Per-tag buffer).
+//   Lower interval means lower delay, higher means less overhead
+//   Timout in milliseconds = RX_POLL_TIMEOUT_MSEC_DEFAULT * num_retries / NSEC_IN_MSEC
+//     - Default timeout value can be overridden by envionmental variable TIMEOUT_MS
+//    -  User can override deafult timout value per tag in xdc_sub_socket_non_blocking() call
+#define NSEC_IN_SEC               1000000000  // 10^9
+#define NSEC_IN_MSEC                 1000000  // 10^6
+#define RX_POLL_INTERVAL_NSEC        1000000  // Poll Interval in nanpseconds e.g. 1000000 = checks every 1ms
+#define RX_POLL_TIMEOUT_MSEC_DEFAULT    1000  // Default Total Poll time in milliseconds
+/* Per-tag Rx buffer stores retries (based on timeout) per tag value */
+
+/* MIND packet format */
+typedef struct _sdh_bw {
+  uint32_t  message_tag_ID;             /* Compressed Application Mux, Sec, Typ */
+  uint16_t  data_len;                   /* Length (in bytes) */
+  uint16_t  crc16;                      /* Error detection field */
+  uint8_t   data[PKT_G1_ADU_SIZE_MAX];  /* Application data unit */
+} bw;
+/* MIND DMA channel structure */
+typedef struct channel {
+  struct channel_buffer *buf_ptr;
+  int fd;
+} chan;
+
+/* CLOSURE tag structure */
+typedef struct _tag {
+  uint32_t    mux;      /* APP ID */
+  uint32_t    sec;      /* Security tag */
+  uint32_t    typ;      /* data type */
+} gaps_tag;
+/* CLOSURE tag to retry map linked list */
+typedef struct _tagmap {
+  gaps_tag         tag;
+  int              retries;   /* number of rx retries (based on timeout passed using xdc_sub_socket_non_blocking() */
+  struct _tagmap  *next;      /* linked list */
+} tagmap;
+/* CLOSURE Per-tag Rx buffer node array elements*/
+typedef struct _tagbuf {
+  uint32_t          ctag;
+  int               rv;
+  pthread_mutex_t   lock;
+  char              newd;
+//  bw                p;
+  bw               *p_ptr;
+} tagbuf;
+
+
 
 /* Table of codec per data types (Max of DATA_TYP_MAX types) */
 typedef void (*codec_func_ptr)(void *, void *, size_t *);
@@ -33,49 +78,11 @@ typedef struct _codec_map {
   codec_func_ptr  decode;
 } codec_map;
 
-/* CLOSURE tag structure */
-typedef struct _tag {
-  uint32_t    mux;      /* APP ID */
-  uint32_t    sec;      /* Security tag */
-  uint32_t    typ;      /* data type */
-} gaps_tag;
-
-/* MIND packet format */
-typedef struct _sdh_bw {
-  uint32_t  message_tag_ID;             /* Compressed Application Mux, Sec, Typ */
-  uint16_t  data_len;                   /* Length (in bytes) */
-  uint16_t  crc16;                      /* Error detection field */
-  uint8_t   data[PKT_G1_ADU_SIZE_MAX];  /* Application data unit */
-} bw;
-
-/* DMA channel structure */
-typedef struct channel {
-  struct channel_buffer *buf_ptr;
-  int fd;
-} chan;
-
 /* Receiver thread arguments */
 typedef struct _thread_args {
   chan    *c;
   int      buffer_id_start;
 } thread_args;
-
-/* Per-tag buffer node */
-typedef struct _tagbuf {
-  uint32_t          ctag;
-  int               rv;
-  pthread_mutex_t   lock;
-  char              newd;
-//  bw                p;
-  bw               *p_ptr;
-} tagbuf;
-
-/* Map from tag  to timeout value (timeout is set in xdc_sub_socket_non_blocking() call) */
-typedef struct _tagmap {
-  gaps_tag         tag;
-  int              retries;   /* number of rx retries (based on timeout passed using xdc_sub_socket_non_blocking() */
-  struct _tagmap  *next;      /* linked list */
-} tagmap;
 
 extern void tag_print     (gaps_tag *, FILE *);
 extern void tag_write     (gaps_tag *, uint32_t,   uint32_t,   uint32_t);

@@ -143,7 +143,7 @@ void log_log(int level, const char *file, int line, const char *fmt, ...) {
 }
 
 /*
- * Below here added to support GAPS HAL - AJM, April, 2020
+ * Below here added to support GAPS HAL: 2020-2022
  */
 
 /* Get fd for stderr and logfile. Set to NULL If not enabled */
@@ -154,7 +154,6 @@ void log_get_fds(int level, FILE **fd_std, FILE **fd_file) {
     *fd_file = L.fp;
   }
 }
-
 
 /* Log data of specified length to stderr/logfile (if enabled) */
 void log_log_buf(int level, char *str, void *data, size_t data_len) {
@@ -180,43 +179,33 @@ void log_log_buf(int level, char *str, void *data, size_t data_len) {
   }
 }
 
+/* Set time log leve; */
 void time_log_level(int level) {
     L.time_log_level = level;
 }
   
-  /* Mark place where Wall clock and CPU busy time are measured from and to (and calculate the deltas) */
+/* Print time down to micro-seconds (with file, function, line and optional added text info)  */
 void mark_time(int level, const char *file, const char *func, int line, const char *fmt, ...) {
-  static int      line_last=0;
-  static long     time_usec_last=0;
-  static clock_t  clk_last;
   struct timeval  t1;
-  long            time_usec;
-  clock_t         clk;
   struct tm      *gt;
   va_list         args;
   
   if (level < L.time_log_level) return;
   
+  lock();   /* Acquire lock */
   gettimeofday(&t1, NULL);
   gt = gmtime(&t1.tv_sec);
-  clk = clock();
-  time_usec = (t1.tv_sec * usec_in_sec) + t1.tv_usec;
+//  clock_t  clk = clock();   /* CPU usaga */
 
-  if ((line_last > 0) && (strlen(fmt) > 0)) {
-    fprintf(stderr, "%02i:%02i:%02i:%06li Lines %d-%d (%s %s): Delta t=%f c=%f secs ",
-      gt->tm_hour, gt->tm_min, gt->tm_sec, t1.tv_usec, line_last, line, file, func,
-      (double) (time_usec - time_usec_last)/usec_in_sec,
-      (double) (clk - clk_last)/CLOCKS_PER_SEC);
-    va_start(args, fmt);
-    vfprintf(stderr, fmt, args);
-    va_end(args);
-    fprintf(stderr, "\n");
-    fflush(stderr);
-  }
-  /* update static variables */
-  line_last = line;
-  time_usec_last = time_usec;
-  clk_last = clk;
+  fprintf(stderr, "%02i:%02i:%02i:%06li %s:%s:%d ",
+    gt->tm_hour, gt->tm_min, gt->tm_sec, t1.tv_usec, file, func, line);
+  /* add optional text */
+  va_start(args, fmt);
+  vfprintf(stderr, fmt, args);
+  va_end(args);
+  fprintf(stderr, "\n");
+  fflush(stderr);
+  unlock();   /* Release lock */
 }
 
 #ifdef _cplusplus
