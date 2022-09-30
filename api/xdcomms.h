@@ -15,7 +15,7 @@
 #define DATA_TYP_MAX                      50
 #define GAPS_TAG_MAX                      50
 #define CTAG_MOD                         256
-#define PKT_G1_ADU_SIZE_MAX            65528  // Max packet size with 16-bit data_laen = 2^16 - 8 (see bw header)
+#define PKT_G1_ADU_SIZE_MAX            65528  // Max packet size with 16-bit data_len = 2^16 - 8 (see bw header)
 
 // Buffer allocation to threads. NB: RX_THREADS * RX_BUFFS_PER_THREAD <= RX_BUFFER_COUNT
 #define RX_THREADS                         1  // Total number of receiver threads
@@ -29,7 +29,7 @@
 #define NSEC_IN_SEC               1000000000  // 10^9
 #define NSEC_IN_MSEC                 1000000  // 10^6
 #define RX_POLL_INTERVAL_NSEC        1000000  // Poll Interval in nanpseconds e.g. 1000000 = checks every 1ms
-#define RX_POLL_TIMEOUT_MSEC_DEFAULT    1000  // Default Total Poll time in milliseconds
+#define RX_POLL_TIMEOUT_MSEC_DEFAULT      40  // Default Total Poll time in milliseconds
 /* Per-tag Rx buffer stores retries (based on timeout) per tag value */
 
 /* MIND packet format */
