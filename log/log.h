@@ -16,6 +16,7 @@ extern "C" {
 #include <stdarg.h>
 #include <time.h>       // for time()
 #include <sys/time.h>   // for gettimeofday()
+#include <pthread.h>    // multithread lock */
 
 #define LOG_VERSION "0.1.0"
 
@@ -63,6 +64,7 @@ enum { LOG_TRACE, LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERROR, LOG_FATAL };
   #define time_trace(...)
 #endif
 #define usec_in_sec 1000000
+#define MAX_BUF_LEN_PRINT 40
 
 void log_set_udata(void *udata);
 void log_set_lock(log_LockFn fn);

@@ -42,6 +42,7 @@ static struct {
   int time_log_level;
 } L;
  
+pthread_mutex_t log_pthread_lock;
 
 
 static const char *level_names[] = {
@@ -101,6 +102,7 @@ void log_log(int level, const char *file, int line, const char *fmt, ...) {
 
   /* Acquire lock */
   lock();
+  pthread_mutex_lock(&log_pthread_lock);
 
   /* Get current time */
   time_t t = time(NULL);
@@ -139,6 +141,7 @@ void log_log(int level, const char *file, int line, const char *fmt, ...) {
   }
 
   /* Release lock */
+  pthread_mutex_unlock(&log_pthread_lock);
   unlock();
 }
 
@@ -158,25 +161,29 @@ void log_get_fds(int level, FILE **fd_std, FILE **fd_file) {
 /* Log data of specified length to stderr/logfile (if enabled) */
 void log_log_buf(int level, char *str, void *data, size_t data_len) {
   FILE      *fd[2];
-  int        i, j;
+  int        i, j, print_len=data_len;
   uint8_t   *d = (uint8_t *) data;
   
   log_get_fds(level, &fd[0], &fd[1]);
+  pthread_mutex_lock(&log_pthread_lock);
   for (i=0; i<2; i++) {
     if (fd[i] != NULL) {      /* if device is enabled */
                 
       if (i==1) fprintf(fd[i], "           ");
       fprintf(fd[i], "         ");
       fprintf(fd[i], "%-5s %s (len=%ld)", level_names[level], str, data_len);
+      if (data_len > MAX_BUF_LEN_PRINT)  print_len = MAX_BUF_LEN_PRINT;
       if (d != NULL) {        /* if data is valid */
-        for (j = 0; j < data_len; j++) {
+        for (j = 0; j < print_len; j++) {
           if ((j%4)==0) fprintf(fd[i], " ");
           fprintf(fd[i], "%02X", d[j]);
         }
       }
+      if (data_len > MAX_BUF_LEN_PRINT)  fprintf(fd[i], " ...");
       fprintf(fd[i], "\n");
     }
   }
+  pthread_mutex_unlock(&log_pthread_lock);
 }
 
 /* Set time log leve; */
@@ -197,6 +204,7 @@ void mark_time(int level, const char *file, const char *func, int line, const ch
   gt = gmtime(&t1.tv_sec);
 //  clock_t  clk = clock();   /* CPU usaga */
 
+  pthread_mutex_lock(&log_pthread_lock);
   fprintf(stderr, "%02i:%02i:%02i:%06li %s:%s:%d ",
     gt->tm_hour, gt->tm_min, gt->tm_sec, t1.tv_usec, file, func, line);
   /* add optional text */
@@ -205,6 +213,7 @@ void mark_time(int level, const char *file, const char *func, int line, const ch
   va_end(args);
   fprintf(stderr, "\n");
   fflush(stderr);
+  pthread_mutex_unlock(&log_pthread_lock);
   unlock();   /* Release lock */
 }
 
