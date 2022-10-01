@@ -4,12 +4,13 @@
  *   v0.3, October 2022
  *
  * This version of XD communication supports direct commicaiton between
- * the partitioned application and the CDG, without HAL. Based on the
- * MIND user-space test application (dma_proxy_test.c), it directly
- * connects to the GE MIND CDG using its DMA proxy driver to provide
- * kernel space DMA control to the XILINX AXI DMA / MCDMA driver on the
- * GE MIND ZCU102 FPGA board. It also support Pseudo driver emulation
- * of DMA proxy.
+ * the partitioned application and the CDG using a library, rather than
+ * as a separate daemon communicating with the application using ZMQ).
+ * Based on the MIND user-space test application (dma_proxy_test.c), it
+ * directly connects the application to a proxy driver that provides
+ * kernel space DMA control (to the XILINX AXI DMA / MCDMA driver) on
+ * the GE MIND ZCU102 FPGA board. It can also use a Pseudo driver
+ * emulation of DMA proxy on a linux system without the FPGA hardware.
  */
 
 #include <stdio.h>
@@ -32,8 +33,8 @@
 #include "xdcomms.h"
 
 codec_map  cmap[DATA_TYP_MAX];    /* maps data type to its data encode + decode functions */
-tagbuf     tbuf[GAPS_TAG_MAX];    /* buffer per tag */
-tagmap    *tagmap_root = NULL;
+tagbuf     tbuf[GAPS_TAG_MAX];    /* array of buffers to store a Rx packet per tag */
+tagmap    *tagmap_root = NULL;    /* linked list to save number of retires per tag */
 
 pthread_mutex_t txlock;
 pthread_mutex_t rxlock;
@@ -147,26 +148,33 @@ void tagmap_print(void) {
   pthread_mutex_lock(&rxlock);
   fprintf(stderr, "tagmap: ");
   for (m = tagmap_root; m != NULL; m = m->next) {
-    fprintf(stderr, "t=<%d,",  m->tag.mux);
+    fprintf(stderr, "[t=<%d,",  m->tag.mux);
     fprintf(stderr,  "%d,",    m->tag.sec);
-    fprintf(stderr,  "%d>,",   m->tag.typ);
-    fprintf(stderr,  "r=%d ",  m->retries);
+    fprintf(stderr,  "%d>, ",   m->tag.typ);
+    fprintf(stderr,  "r=%d] ",  m->retries);
 //    fprintf(stderr,  " next=%p\n",  m->next);
   }
   fprintf(stderr,  "\n");
   pthread_mutex_unlock(&rxlock);
 }
 
-/* Get number of attempts to get rx message based on timeout value (in millisecs) */
-/* For each tag, the Timeout is set only the first time this function is called */
-/* and can come from: a) env variable, else b) input parameter (t_in), else c) default */
-int get_retries(gaps_tag *tag, int t_in) {
+/* Return the number of retries for the specified input tag (from the value stored
+ * in the tagmap linked-list. If not set, then it will calculate the number of
+ * retries from one of three possible timeout values (specified in milli-seconds).
+ * In order of precedence (highest first) they are the:
+ *    a) Input parameter (t_in_ms) specified in a xdc_sub_socket_non_blocking() call
+ *       (this is the only way to specify a different value for each flow).
+ *    b) Environment variable (TIMEOUT_MS) speciied when the applicaiton is started.
+ *    c) Default (RX_POLL_TIMEOUT_MSEC_DEFAULT) specified in xdcomms.h
+ */
+int get_retries(gaps_tag *tag, int t_in_ms) {
   tagmap *m, *new;
   int     timeout;
   char   *t_env;
 
+  /* a) Find the number of retry values (by searching the linked list) */
   pthread_mutex_lock(&rxlock);
-//  log_debug("%s tag=<%d,%d,%d> t=%d", __func__, tag->mux, tag->sec, tag->typ, t_in);
+//  log_debug("%s tag=<%d,%d,%d> t=%d", __func__, tag->mux, tag->sec, tag->typ, t_in_ms);
   for (m = tagmap_root; m != NULL; m = m->next) {
     if ( (m->tag.mux == tag->mux)
       && (m->tag.sec == tag->sec)
@@ -175,11 +183,12 @@ int get_retries(gaps_tag *tag, int t_in) {
       return m->retries;   /* found */
     }
   }
-  /* Entry for this tag is not found (m==NULL), so create a new map entry */
-  timeout = t_in;     /* timeout value precedence: t_in > t_env > RX_POLL_TIMEOUT_MSEC_DEFAULT */
+  /* b) If not set, then set the value (see above description) and store in new linked list node */
+  timeout = t_in_ms;
   if (timeout < 0) timeout = ((t_env = getenv("TIMEOUT_MS")) == NULL) ? RX_POLL_TIMEOUT_MSEC_DEFAULT : atoi(t_env);
   new = (tagmap *) malloc(sizeof(tagmap));
   new->retries = (timeout*NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;
+  log_trace("Set retries = %d [timeout(%d ms) / interval(%d ms)] for tag=<%d,%d,%d>", new->retries, timeout, RX_POLL_INTERVAL_NSEC / NSEC_IN_MSEC, tag->mux, tag->sec, tag->typ);
   if (new->retries < 1) new->retries = 0;
   new->tag.mux = tag->mux;
   new->tag.sec = tag->sec;
@@ -189,15 +198,15 @@ int get_retries(gaps_tag *tag, int t_in) {
   pthread_mutex_unlock(&rxlock);
   return new->retries;
 }
-
            
+/* Return pointer to Rx packet buffer for specified tag */
 tagbuf *get_tbuf(gaps_tag *tag) {
   static int once=1;
   uint32_t ctag;
   int i;
 
-  bw_ctag_encode(&ctag, tag);
-
+  bw_ctag_encode(&ctag, tag);       /* Use encoded ctag as  */
+  /* a) Initilize all possible tag packet buffers (after locking from other application threads) */
   pthread_mutex_lock(&rxlock);
   if(once==1) {
     once = 0;
@@ -211,9 +220,13 @@ tagbuf *get_tbuf(gaps_tag *tag) {
       }
     }
   }
+  /* b) Find an the packet buffer for this tag (stored in en*/
   for(i=0; i < GAPS_TAG_MAX; i++) { /* Break on finding tag or empty whichever is first */
-    if (tbuf[i].ctag == ctag) break; /* found slot for tag */
-    if (tbuf[i].ctag == 0) break;    /* found empty slot before tag */
+    if (tbuf[i].ctag == ctag) break; /* found existing slot for tag */
+    if (tbuf[i].ctag == 0) {          /* found empty slot (before tag) */
+      tbuf[i].ctag = ctag;
+      break;
+    }
   }
   log_trace("%s: tbuf entry %d for ctag=%d (once=%d)", __func__, i, ctag, once);
   if (i >= GAPS_TAG_MAX) {
@@ -221,7 +234,7 @@ tagbuf *get_tbuf(gaps_tag *tag) {
     log_fatal("TagBuf table is full (GAPS_TAG_MAX=%d)\n", i);
     exit(EXIT_FAILURE);
   }
-  if(tbuf[i].ctag==0) tbuf[i].ctag = ctag;
+  /* c) Unlock and return tbuf pointer */
   pthread_mutex_unlock(&rxlock);
   return &tbuf[i];
 }
@@ -480,7 +493,7 @@ void xdc_register(codec_func_ptr encode, codec_func_ptr decode, int typ) {
   int   i;
   static int do_once = 1;
 
-  xdc_log_level(LOG_INFO);            /* Mostly Quiet (LOG_TRACE is the most verbose) */
+  xdc_log_level(LOG_TRACE);            /* Mostly Quiet (LOG_TRACE is the most verbose) */
   time_log_level(LOG_TRACE);          /* Print time with us duration (for tracing performance)  */
 
   if (do_once == 1) {
@@ -515,9 +528,9 @@ void *xdc_ctx(void) { return NULL; }
 void *xdc_pub_socket(void) { return NULL; }
 void *xdc_sub_socket(gaps_tag tag) { return NULL; }
 void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout) {
-  log_info("%s: Wants (not yet implemented) timeout = %d ms for tag=<%d,%d,%d> a", __func__, timeout, tag.mux, tag.sec, tag.typ);
-//  get_retries(&tag, timeout);    // APP overrides xdc_recv() timeout  (timeout in milliseconds)
-//  tagmap_print();
+  log_debug("%s: timeout = %d ms for tag=<%d,%d,%d> a", __func__, timeout, tag.mux, tag.sec, tag.typ);
+  get_retries(&tag, timeout);    // APP overrides xdc_recv() timeout  (timeout in milliseconds)
+  tagmap_print();
   return NULL;
 }
 void xdc_asyn_send(void *socket, void *adu, gaps_tag *tag) { dma_send(adu, tag); }
