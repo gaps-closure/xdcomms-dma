@@ -1,1 +1,3 @@
 sue_donimous.ko
+*.o
+*.so*
