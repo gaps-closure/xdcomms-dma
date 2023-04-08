@@ -1,16 +1,24 @@
 /*
  * Cross Domain (XD) Communication API between Partitioned Applicaitons
  * and a GAP's Cross Domain Guard (CDG)
- *   v0.3, October 2022
+ *   v0.4, April 2023
  *
  * This version of XD communication supports direct commicaiton between
- * the partitioned application and the CDG using a library, rather than
+ * the partitioned application and the CDG as a library, rather than
  * as a separate daemon communicating with the application using ZMQ).
- * Based on the MIND user-space test application (dma_proxy_test.c), it
- * directly connects the application to a proxy driver that provides
- * kernel space DMA control (to the XILINX AXI DMA / MCDMA driver) on
- * the GE MIND ZCU102 FPGA board. It can also use a Pseudo driver
- * emulation of DMA proxy on a linux system without the FPGA hardware.
+ *
+ * v0.4 APRIL 2023:   Supprts communication with MIND and/or ESCAPE CDGs.
+ * The MIND/DMA specific code is split into a separate file> it also adds
+ * a new ESCAPE/SHM file to support ESCAPE Shared Memory (SHM) links.
+ * The xdcomms file now abstracts the Hardware-specific communication
+ * based on the contents of the HAL configuration file.
+ *
+ * v0.3 OCTOBER 2022: Supprts transfers between CLOSURE and the MIND
+ * DMA CDG. It directly connects the app to the MIND proxy DMA driver,
+ * which provides kernel space DMA control to the XILINX AXI DMA /
+ * MCDMA driver on the GE MIND ZCU102 FPGA board. For testing, it can
+ * also communicate without the FPGA hardware using a DMA Pseudo driver
+ * emulation .
  */
 
 #include <stdio.h>
