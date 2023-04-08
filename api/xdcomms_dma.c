@@ -65,36 +65,9 @@ codec_map *cmap_find(int data_type) {
 }
 
 /**********************************************************************/
-/* BW Packet processing                                               */
+/* Tag Compression / Decompression                                    */
 /**********************************************************************/
-void bw_print(bw *p) {
-  fprintf(stderr, "%s: ", __func__);
-  fprintf(stderr, "ctag=%u ", ntohl(p->message_tag_ID));
-  fprintf(stderr, "crc=%02x ", ntohs(p->crc16));
-  log_buf_trace("Data", (uint8_t *) p->data, ntohs(p->data_len));
-  fprintf(stderr, "\n");
-}
-
-uint16_t bw_crc_calc(bw *pkt) {
-  return (crc16((uint8_t *) pkt, sizeof(pkt->message_tag_ID) + sizeof (pkt->data_len)));
-}
-
-/* Get size of packet (= header length + data length) */
-int bw_get_packet_length(bw *pkt, size_t data_len) {
-  return (sizeof(pkt->message_tag_ID) + sizeof(pkt->data_len) + sizeof(pkt->crc16) + data_len);
-}
-
-/* Convert tag to local host format */
-void bw_len_encode (uint16_t *out, size_t len) {
-  *out = ntohs((uint16_t) len);
-}
-
-/* Convert tag to local host format */
-void bw_len_decode (size_t *out, uint16_t len) {
-  *out = ntohs(len);
-}
-
-/* Encode compressed teg (tag -> ctag) */
+/* Compress teg (tag -> ctag) */
 void bw_ctag_encode(uint32_t *ctag, gaps_tag *tag) {
   uint32_t ctag_h;
   ctag_h = ((CTAG_MOD * (
@@ -112,93 +85,6 @@ void bw_ctag_decode(uint32_t *ctag, gaps_tag *tag) {
   tag->typ = (ctag_h &     0xff);
 }
 
-/* Create packet (serialize data and add header) */
-void bw_gaps_data_encode(bw *p, size_t *p_len, uint8_t *buff_in, size_t *buff_len, gaps_tag *tag) {
-  codec_map  *cm = cmap_find(tag->typ);
-  
-  /* a) serialize data into packet */
-  cm->encode (p->data, buff_in, buff_len);
-  log_buf_trace("API <- raw app data:", buff_in, *buff_len);
-  log_buf_trace("    -> encoded data:", p->data, *buff_len);
-  /* b) Create CLOSURE packet header */
-  bw_ctag_encode(&(p->message_tag_ID), tag);
-  bw_len_encode(&(p->data_len), *buff_len);
-  p->crc16 = htons(bw_crc_calc(p));
-  /* c) Return packet length */
-  *p_len = bw_get_packet_length(p, *buff_len);
-}
-
-/* Decode data from packet */
-void bw_gaps_data_decode(bw *p, size_t p_len, uint8_t *buff_out, size_t *len_out, gaps_tag *tag) {
-  codec_map  *cm = cmap_find(tag->typ);
-  
-  bw_ctag_decode(&(p->message_tag_ID), tag);
-  bw_len_decode(len_out, p->data_len);
-  cm->decode (buff_out, p->data, len_out);
-  log_buf_trace("API -> raw app data:", p->data,  *len_out);
-  log_buf_trace("    <- decoded data:", buff_out, *len_out);
-}
-
-/**********************************************************************/
-/* DMA-based open, send, and receive functions                        */
-/**********************************************************************/
-void tagmap_print(void) {
-  tagmap *m;
-  
-  pthread_mutex_lock(&rxlock);
-  fprintf(stderr, "tagmap: ");
-  for (m = tagmap_root; m != NULL; m = m->next) {
-    fprintf(stderr, "[t=<%d,",  m->tag.mux);
-    fprintf(stderr,  "%d,",    m->tag.sec);
-    fprintf(stderr,  "%d>, ",   m->tag.typ);
-    fprintf(stderr,  "r=%d] ",  m->retries);
-//    fprintf(stderr,  " next=%p\n",  m->next);
-  }
-  fprintf(stderr,  "\n");
-  pthread_mutex_unlock(&rxlock);
-}
-
-/* Return the number of retries for the specified input tag (from the value stored
- * in the tagmap linked-list. If not set, then it will calculate the number of
- * retries from one of three possible timeout values (specified in milli-seconds).
- * In order of precedence (highest first) they are the:
- *    a) Input parameter (t_in_ms) specified in a xdc_sub_socket_non_blocking() call
- *       (this is the only way to specify a different value for each flow).
- *    b) Environment variable (TIMEOUT_MS) speciied when the applicaiton is started.
- *    c) Default (RX_POLL_TIMEOUT_MSEC_DEFAULT) specified in xdcomms.h
- */
-int get_retries(gaps_tag *tag, int t_in_ms) {
-  tagmap *m, *new;
-  int     timeout;
-  char   *t_env;
-
-  /* a) Find the number of retry values (by searching the linked list) */
-  pthread_mutex_lock(&rxlock);
-//  log_debug("%s tag=<%d,%d,%d> t=%d", __func__, tag->mux, tag->sec, tag->typ, t_in_ms);
-  for (m = tagmap_root; m != NULL; m = m->next) {
-    if ( (m->tag.mux == tag->mux)
-      && (m->tag.sec == tag->sec)
-      && (m->tag.typ == tag->typ) ) {
-      pthread_mutex_unlock(&rxlock);
-      return m->retries;   /* found */
-    }
-  }
-  /* b) If not set, then set the value (see above description) and store in new linked list node */
-  timeout = t_in_ms;
-  if (timeout < 0) timeout = ((t_env = getenv("TIMEOUT_MS")) == NULL) ? RX_POLL_TIMEOUT_MSEC_DEFAULT : atoi(t_env);
-  new = (tagmap *) malloc(sizeof(tagmap));
-  new->retries = (timeout*NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;
-  log_trace("Set retries = %d [timeout(%d ms) / interval(%d ms)] for tag=<%d,%d,%d>", new->retries, timeout, RX_POLL_INTERVAL_NSEC / NSEC_IN_MSEC, tag->mux, tag->sec, tag->typ);
-  if (new->retries < 1) new->retries = 0;
-  new->tag.mux = tag->mux;
-  new->tag.sec = tag->sec;
-  new->tag.typ = tag->typ;
-  new->next    = tagmap_root;
-  tagmap_root  = new;
-  pthread_mutex_unlock(&rxlock);
-  return new->retries;
-}
-           
 /* Return pointer to Rx packet buffer for specified tag */
 tagbuf *get_tbuf(gaps_tag *tag) {
   static int once=1;
@@ -238,6 +124,125 @@ tagbuf *get_tbuf(gaps_tag *tag) {
   pthread_mutex_unlock(&rxlock);
   return &tbuf[i];
 }
+
+
+/**********************************************************************/
+/* BW Packet processing                                               */
+/**********************************************************************/
+void bw_print(bw *p) {
+  fprintf(stderr, "%s: ", __func__);
+  fprintf(stderr, "ctag=%u ", ntohl(p->message_tag_ID));
+  fprintf(stderr, "crc=%02x ", ntohs(p->crc16));
+  log_buf_trace("Data", (uint8_t *) p->data, ntohs(p->data_len));
+  fprintf(stderr, "\n");
+}
+
+uint16_t bw_crc_calc(bw *pkt) {
+  return (crc16((uint8_t *) pkt, sizeof(pkt->message_tag_ID) + sizeof (pkt->data_len)));
+}
+
+/* Get size of packet (= header length + data length) */
+int bw_get_packet_length(bw *pkt, size_t data_len) {
+  return (sizeof(pkt->message_tag_ID) + sizeof(pkt->data_len) + sizeof(pkt->crc16) + data_len);
+}
+
+/* Convert tag to local host format */
+void bw_len_encode (uint16_t *out, size_t len) {
+  *out = ntohs((uint16_t) len);
+}
+
+/* Convert tag to local host format */
+void bw_len_decode (size_t *out, uint16_t len) {
+  *out = ntohs(len);
+}
+
+/* Create packet (serialize data and add header) */
+void bw_gaps_data_encode(bw *p, size_t *p_len, uint8_t *buff_in, size_t *buff_len, gaps_tag *tag) {
+  codec_map  *cm = cmap_find(tag->typ);
+  
+  /* a) serialize data into packet */
+  cm->encode (p->data, buff_in, buff_len);
+  log_buf_trace("API <- raw app data:", buff_in, *buff_len);
+  log_buf_trace("    -> encoded data:", p->data, *buff_len);
+  /* b) Create CLOSURE packet header */
+  bw_ctag_encode(&(p->message_tag_ID), tag);
+  bw_len_encode(&(p->data_len), *buff_len);
+  p->crc16 = htons(bw_crc_calc(p));
+  /* c) Return packet length */
+  *p_len = bw_get_packet_length(p, *buff_len);
+}
+
+/* Decode data from packet */
+void bw_gaps_data_decode(bw *p, size_t p_len, uint8_t *buff_out, size_t *len_out, gaps_tag *tag) {
+  codec_map  *cm = cmap_find(tag->typ);
+  
+  bw_ctag_decode(&(p->message_tag_ID), tag);
+  bw_len_decode(len_out, p->data_len);
+  cm->decode (buff_out, p->data, len_out);
+  log_buf_trace("API -> raw app data:", p->data,  *len_out);
+  log_buf_trace("    <- decoded data:", buff_out, *len_out);
+}
+
+/**********************************************************************/
+/* DMA-based open, send, and receive functions                        */
+/**********************************************************************/
+void tagmap_print(void) {   // XYZ1 replace calls with print tagbuf
+  tagmap *m;
+  
+  pthread_mutex_lock(&rxlock);
+  fprintf(stderr, "tagmap: ");
+  for (m = tagmap_root; m != NULL; m = m->next) {
+    fprintf(stderr, "[t=<%d,",  m->tag.mux);
+    fprintf(stderr,  "%d,",    m->tag.sec);
+    fprintf(stderr,  "%d>, ",   m->tag.typ);
+    fprintf(stderr,  "r=%d] ",  m->retries);
+//    fprintf(stderr,  " next=%p\n",  m->next);
+  }
+  fprintf(stderr,  "\n");
+  pthread_mutex_unlock(&rxlock);
+}
+
+/* Return the number of retries for the specified input tag (from the value stored
+ * in the tagmap linked-list. If not set, then it will calculate the number of
+ * retries from one of three possible timeout values (specified in milli-seconds).
+ * In order of precedence (highest first) they are the:
+ *    a) Input parameter (t_in_ms) specified in a xdc_sub_socket_non_blocking() call
+ *       (this is the only way to specify a different value for each flow).
+ *    b) Environment variable (TIMEOUT_MS) speciied when the applicaiton is started.
+ *    c) Default (RX_POLL_TIMEOUT_MSEC_DEFAULT) specified in xdcomms.h
+ */
+int get_retries(gaps_tag *tag, int t_in_ms) {    // XYZ1 delete
+  tagmap *m, *new;   // XYZ1 replace with  tagbuf
+  int     timeout;
+  char   *t_env;
+
+  /* a) Find the number of retry values (by searching the linked list) */
+  pthread_mutex_lock(&rxlock);
+//  log_debug("%s tag=<%d,%d,%d> t=%d", __func__, tag->mux, tag->sec, tag->typ, t_in_ms);
+  for (m = tagmap_root; m != NULL; m = m->next) {
+    if ( (m->tag.mux == tag->mux)
+      && (m->tag.sec == tag->sec)
+      && (m->tag.typ == tag->typ) ) {
+      pthread_mutex_unlock(&rxlock);
+      return m->retries;   /* found */
+    }
+  }
+  /* b) If not set, then set the value (see above description) and store in new linked list node */
+  timeout = t_in_ms;
+  if (timeout < 0) timeout = ((t_env = getenv("TIMEOUT_MS")) == NULL) ? RX_POLL_TIMEOUT_MSEC_DEFAULT : atoi(t_env);
+  new = (tagmap *) malloc(sizeof(tagmap));
+  new->retries = (timeout*NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;
+  log_trace("Set retries = %d [timeout(%d ms) / interval(%d ms)] for tag=<%d,%d,%d>", new->retries, timeout, RX_POLL_INTERVAL_NSEC / NSEC_IN_MSEC, tag->mux, tag->sec, tag->typ);
+  if (new->retries < 1) new->retries = 0;
+  new->tag.mux = tag->mux;
+  new->tag.sec = tag->sec;
+  new->tag.typ = tag->typ;
+  new->next    = tagmap_root;
+  tagmap_root  = new;
+  pthread_mutex_unlock(&rxlock);
+  return new->retries;
+}
+
 
 /* Open channel and save virtual address of buffer pointer */
 int dma_open_channel(chan *c, char **channel_name, int channel_count, int buffer_count) {
@@ -339,7 +344,6 @@ void *rcvr_thread_function(thread_args *vargs) {
   int          buffer_id_index = 0;
   int          buffer_id;
   unsigned int pkt_length;
-  
 
   pkt_length = sizeof(bw);      /* XXX: ALl packets use buffer of Max size */
   log_debug("THREAD %s starting: fd=%d base_id=%d", __func__, c->fd, vargs->buffer_id_start);
@@ -529,8 +533,8 @@ void *xdc_pub_socket(void) { return NULL; }
 void *xdc_sub_socket(gaps_tag tag) { return NULL; }
 void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout) {
   log_debug("%s: timeout = %d ms for tag=<%d,%d,%d> a", __func__, timeout, tag.mux, tag.sec, tag.typ);
-  get_retries(&tag, timeout);    // APP overrides xdc_recv() timeout  (timeout in milliseconds)
-  tagmap_print();
+  get_retries(&tag, timeout);    // APP overrides xdc_recv() timeout  (timeout in milliseconds) XYZ1 use get_tbuf
+  tagmap_print();   // XYZ1 replace with get_tbuf
   return NULL;
 }
 void xdc_asyn_send(void *socket, void *adu, gaps_tag *tag) { dma_send(adu, tag); }

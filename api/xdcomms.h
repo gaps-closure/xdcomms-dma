@@ -51,7 +51,7 @@ typedef struct _tag {
   uint32_t    sec;      /* Security tag */
   uint32_t    typ;      /* data type */
 } gaps_tag;
-/* CLOSURE tag to retry map linked list */
+/* CLOSURE tag to retry map linked list XYZ1 put into tagbuf */
 typedef struct _tagmap {
   gaps_tag         tag;
   int              retries;   /* number of rx retries (based on timeout passed using xdc_sub_socket_non_blocking() */
@@ -63,8 +63,8 @@ typedef struct _tagbuf {
   int               rv;
   pthread_mutex_t   lock;
   char              newd;
-//  bw                p;
-  bw               *p_ptr;
+//  bw                p;     //  XYZ1 Replace with tagbuf retries
+  bw               *p_ptr;   //  XYZ2 Replace with void *
 } tagbuf;
 
 
