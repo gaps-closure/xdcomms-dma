@@ -5,7 +5,7 @@ OBJS         = $(wildcard *.o) $(wildcard ../api/*.o) $(wildcard ../log/*.o) $(w
 
 all: 	app_req_rep
 
-app_req_rep:	app_req_rep.c $(OBJS)
+app_req_rep:	$(OBJS)
 # HAL veriosn:
 #	$(CC) $(CFLAGS) -o $@ app_req_rep.o ../api/xdcomms.o ../appgen/6month-demo/gma.o ../log/log.o ../appgen/6month-demo/float.o  -l zmq
 # DMA version:
