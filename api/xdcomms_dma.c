@@ -105,9 +105,10 @@ rx_tag_info *get_rx_info(gaps_tag *tag) {
   if(once==1) {
     once = 0;
     for(i=0; i < GAPS_TAG_MAX; i++) {
-      rx_info[i].ctag = 0;
-      rx_info[i].newd = 0;
-      if (pthread_mutex_init(&(rx_info[i].lock), NULL) != 0) {
+      rx_tag_info[i].ctag = 0;
+      rx_tag_info[i].newd = 0;
+      if (pthread_mutex_init(&(rx_tag_info[i].lock), NULL) != 0) {
+      if (pthread_mutex_init(&(rx_tag_info[i].lock), NULL) != 0) {
         pthread_mutex_unlock(&rxlock);
         log_fatal("rx_tag_info mutex init has failed failed");
         exit(EXIT_FAILURE);
@@ -116,9 +117,9 @@ rx_tag_info *get_rx_info(gaps_tag *tag) {
   }
   /* b) Find an the packet buffer for this tag (stored in en*/
   for(i=0; i < GAPS_TAG_MAX; i++) { /* Break on finding tag or empty whichever is first */
-    if (rx_info[i].ctag == ctag) break; /* found existing slot for tag */
-    if (rx_info[i].ctag == 0) {          /* found empty slot (before tag) */
-      rx_info[i].ctag = ctag;
+    if (rx_tag_info[i].ctag == ctag) break; /* found existing slot for tag */
+    if (rx_tag_info[i].ctag == 0) {          /* found empty slot (before tag) */
+      rx_tag_info[i].ctag = ctag;
       break;
     }
   }
@@ -130,7 +131,7 @@ rx_tag_info *get_rx_info(gaps_tag *tag) {
   }
   /* c) Unlock and return rx_info pointer */
   pthread_mutex_unlock(&rxlock);
-  return &rx_info[i];
+  return &rx_tag_info[i];
 }
 
 
