@@ -1,5 +1,6 @@
 CC          ?= gcc
 CFLAGS      ?= -O2 -Wall -Wstrict-prototypes
+INCL         = -I ../log -I ../crc
 
 all: 	app_req_rep
 
@@ -10,7 +11,7 @@ app_req_rep:	app_req_rep.c app_req_rep.o
 	$(CC) $(CFLAGS) -o $@ app_req_rep.o ~/gaps/xdcomms-dma/api/xdcomms_dma.o ~/gaps/xdcomms-dma/log/log.o ~/gaps/xdcomms-dma/crc/crc.o ../appgen/6month-demo/gma.o ../appgen/6month-demo/float.o -pthread
 
 %.o:	%.c
-	$(CC) $(CFLAGS) -c $< -o $@ -I ../log 
+	$(CC) $(CFLAGS) $(INCL) -c $< -o $@
 
 clean:
 	rm -f *.o app_req_rep
