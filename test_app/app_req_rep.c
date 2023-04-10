@@ -73,7 +73,7 @@
  */
 
 #include "../api/xdcomms.h"
-#include "../appgen/6month-demo/gma.h"
+#include "./6month-demo/gma.h"
 #include <stdio.h>
 #include <sys/time.h>
 #include <stdbool.h>
