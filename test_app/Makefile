@@ -1,7 +1,8 @@
 CC          ?= gcc
 CFLAGS      ?= -O2 -Wall -Wstrict-prototypes
 INCL         = -I ../log -I ../crc
-OBJS         = $(wildcard *.o) $(wildcard ../api/*.o) $(wildcard ../log/*.o) $(wildcard ../crc/*.o) $(wildcard ./6month-demo/*.o)
+SRCS         = $(wildcard *.c) $(wildcard ../log/*.c) $(wildcard ../crc/*.c) $(wildcard ../api/*.c) $(wildcard ./6month-demo/*.o)
+OBJS        := $(SRCS:%.c=%.o)
 
 all: 	app_req_rep
 
