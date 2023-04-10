@@ -51,23 +51,19 @@ typedef struct _tag {
   uint32_t    sec;      /* Security tag */
   uint32_t    typ;      /* data type */
 } gaps_tag;
-/* CLOSURE tag to retry map linked list XYZ1 put into tagbuf */
-typedef struct _tagmap {
-  gaps_tag         tag;
-  int              retries;   /* number of rx retries (based on timeout passed using xdc_sub_socket_non_blocking() */
-  struct _tagmap  *next;      /* linked list */
-} tagmap;
-/* CLOSURE Per-tag Rx buffer node array elements*/
-typedef struct _tagbuf {
-  uint32_t          ctag;
-  int               rv;
-  pthread_mutex_t   lock;
-  char              newd;
-//  bw                p;     //  XYZ1 Replace with tagbuf retries
-  bw               *p_ptr;   //  XYZ2 Replace with void *
-} tagbuf;
-
-
+/* CLOSURE Per-tag Rx information (stroed as linked list) */
+typedef struct _tx_tag_info {
+  gaps_tag              tag;
+  int                   retries; // number of rx retries (passed using xdc_sub_socket_non_blocking())
+  struct _tx_tag_info  *next;    // linked list *
+} tx_tag_info;
+/* CLOSURE Per-tag Rx information (stored as array list) */
+typedef struct _rx_tag_info {
+  uint32_t              ctag;    // Compressed tag (unique index)
+  pthread_mutex_t       lock;    // Ensure thread does not write while xdcomms reads
+  char                  newd;    // set to indicate received new packet (reset after reading)
+  bw                   *p_ptr;   // XYZ2 Replace with void *
+} rx_tag_info;
 
 /* Table of codec per data types (Max of DATA_TYP_MAX types) */
 typedef void (*codec_func_ptr)(void *, void *, size_t *);
