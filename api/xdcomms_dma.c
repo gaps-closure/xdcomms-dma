@@ -41,7 +41,7 @@
 #include "xdcomms.h"
 
 codec_map    cmap[DATA_TYP_MAX];       /* maps data type to its data encode + decode functions */
-rx_tag_info  tbuf[GAPS_TAG_MAX];       /* array of buffers to store Rx packet info per tag */
+rx_tag_info  rx_info[GAPS_TAG_MAX];       /* array of buffers to store Rx packet info per tag */
 tx_tag_info *tx_tag_info_root = NULL;  /* linked list to save number of retires per tag */
 
 pthread_mutex_t txlock;
@@ -105,10 +105,9 @@ rx_tag_info *get_rx_info(gaps_tag *tag) {
   if(once==1) {
     once = 0;
     for(i=0; i < GAPS_TAG_MAX; i++) {
-      rx_tag_info[i].ctag = 0;
-      rx_tag_info[i].newd = 0;
-      if (pthread_mutex_init(&(rx_tag_info[i].lock), NULL) != 0) {
-      if (pthread_mutex_init(&(rx_tag_info[i].lock), NULL) != 0) {
+      rx_info[i].ctag = 0;
+      rx_info[i].newd = 0;
+      if (pthread_mutex_init(&(rx_info[i].lock), NULL) != 0) {
         pthread_mutex_unlock(&rxlock);
         log_fatal("rx_tag_info mutex init has failed failed");
         exit(EXIT_FAILURE);
@@ -117,9 +116,9 @@ rx_tag_info *get_rx_info(gaps_tag *tag) {
   }
   /* b) Find an the packet buffer for this tag (stored in en*/
   for(i=0; i < GAPS_TAG_MAX; i++) { /* Break on finding tag or empty whichever is first */
-    if (rx_tag_info[i].ctag == ctag) break; /* found existing slot for tag */
-    if (rx_tag_info[i].ctag == 0) {          /* found empty slot (before tag) */
-      rx_tag_info[i].ctag = ctag;
+    if (rx_info[i].ctag == ctag) break; /* found existing slot for tag */
+    if (rx_info[i].ctag == 0) {          /* found empty slot (before tag) */
+      rx_info[i].ctag = ctag;
       break;
     }
   }
@@ -131,7 +130,7 @@ rx_tag_info *get_rx_info(gaps_tag *tag) {
   }
   /* c) Unlock and return rx_info pointer */
   pthread_mutex_unlock(&rxlock);
-  return &rx_tag_info[i];
+  return &rx_info[i];
 }
 
 
