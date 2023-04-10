@@ -16,6 +16,7 @@
 #define GAPS_TAG_MAX                      50
 #define CTAG_MOD                         256
 #define PKT_G1_ADU_SIZE_MAX            65528  // Max packet size with 16-bit data_len = 2^16 - 8 (see bw header)
+#define ADU_SIZE_MAX_C               1000000     /* 1 MB - Increased for ILIP payload mode*/
 
 // Buffer allocation to threads. NB: RX_THREADS * RX_BUFFS_PER_THREAD <= RX_BUFFER_COUNT
 #define RX_THREADS                         1  // Total number of receiver threads
