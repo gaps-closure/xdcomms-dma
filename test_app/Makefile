@@ -15,4 +15,4 @@ app_req_rep:	app_req_rep.c $(OBJS)
 	$(CC) $(CFLAGS) $(INCL) -c $< -o $@
 
 clean:
-	rm -f *.o app_req_rep
+	rm -f $(OBJS) app_req_rep
