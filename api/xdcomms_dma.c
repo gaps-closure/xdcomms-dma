@@ -489,7 +489,7 @@ void len_decode (size_t *out, uint32_t in) {
 /* Set API Logging to a new level */
 void xdc_log_level(int new_level) {
   char *ll;
-  int lvl;
+  int   lvl;
 
   /* XXX: warn if new_level does not match XDCLOGLEVEL */
   if ((ll = getenv("XDCLOGLEVEL")) != NULL) { lvl = atoi(ll); } else { lvl = new_level; }
