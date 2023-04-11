@@ -94,7 +94,7 @@ void bw_ctag_decode(uint32_t *ctag, gaps_tag *tag) {
 }
 
 void rx_tag_info_print(rx_tag_info *t) {
-  log_trace("rx_tag_info: ctag=%x new=%d lock=%d buf_ptr=%x", t->ctag, t->newd, t->lock, t->p_ptr);
+  log_trace("rx_tag_info: ctag=%08x new=%d lock=%d buf_ptr=%x", t->ctag, t->newd, t->lock, t->p_ptr);
 }
 
 /* Return pointer to Rx packet buffer for specified tag */
@@ -510,7 +510,7 @@ void xdc_register(codec_func_ptr encode, codec_func_ptr decode, int typ) {
   int   i;
   static int do_once = 1;
 
-  xdc_log_level(LOG_TRACE);            /* Mostly Quiet (LOG_TRACE is the most verbose) */
+//  xdc_log_level(LOG_TRACE);            /* Mostly Quiet (LOG_TRACE is the most verbose) */
   time_log_level(LOG_TRACE);          /* Print time with us duration (for tracing performance)  */
 
   if (do_once == 1) {
