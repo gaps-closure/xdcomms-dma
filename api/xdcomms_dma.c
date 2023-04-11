@@ -133,7 +133,7 @@ rx_tag_info *get_rx_info(gaps_tag *tag) {
     exit(EXIT_FAILURE);
   }
   /* c) Unlock and return rx_info pointer */
-  rx_tag_info_print(&rx_info[i])
+  rx_tag_info_print(&rx_info[i]);
   pthread_mutex_unlock(&rxlock);
   return &rx_info[i];
 }
