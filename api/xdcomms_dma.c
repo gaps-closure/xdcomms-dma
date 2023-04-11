@@ -505,7 +505,7 @@ void xdc_log_level(int new_level) {
 }
 
 /* Load Codec Table with ADU encode and decode functions */
-/* XXX: must be called at least once so locks are inited and log level defaults set */
+/* XXX: must be called at least once so locks are inited and log level defaults set  */
 void xdc_register(codec_func_ptr encode, codec_func_ptr decode, int typ) {
   int   i;
   static int do_once = 1;
