@@ -93,6 +93,10 @@ void bw_ctag_decode(uint32_t *ctag, gaps_tag *tag) {
   tag->typ = (ctag_h &     0xff);
 }
 
+void rx_tag_info_print(rx_tag_info *t) {
+  log_trace("rx_tag_info: ctag=%x new=%d lock=%d buf_ptr=%x", t->ctag, t->newd, t->lock, t->p_ptr);
+}
+
 /* Return pointer to Rx packet buffer for specified tag */
 rx_tag_info *get_rx_info(gaps_tag *tag) {
   static int once=1;
@@ -122,13 +126,14 @@ rx_tag_info *get_rx_info(gaps_tag *tag) {
       break;
     }
   }
-  log_trace("%s: rx_info entry %d for ctag=%d (once=%d)", __func__, i, ctag, once);
+  log_trace("%s: rx_info entry %d for ctag=%x (once=%d)", __func__, i, ctag, once);
   if (i >= GAPS_TAG_MAX) {
     pthread_mutex_unlock(&rxlock);
     log_fatal("TagBuf table is full (GAPS_TAG_MAX=%d)\n", i);
     exit(EXIT_FAILURE);
   }
   /* c) Unlock and return rx_info pointer */
+  rx_tag_info_print(&rx_info[i])
   pthread_mutex_unlock(&rxlock);
   return &rx_info[i];
 }
@@ -197,7 +202,7 @@ void bw_gaps_data_decode(bw *p, size_t p_len, uint8_t *buff_out, size_t *len_out
 void tx_tag_info_print(void) {
   tx_tag_info *m;
   
-  pthread_mutex_lock(&rxlock);
+  pthread_mutex_lock(&txlock);
   fprintf(stderr, "tx_tag_info: ");
   for (m = tx_tag_info_root; m != NULL; m = m->next) {
     fprintf(stderr, "[t=<%d,",  m->tag.mux);
@@ -207,7 +212,7 @@ void tx_tag_info_print(void) {
 //    fprintf(stderr,  " next=%p\n",  m->next);
   }
   fprintf(stderr,  "\n");
-  pthread_mutex_unlock(&rxlock);
+  pthread_mutex_unlock(&txlock);
 }
 
 /* Return the number of retries for the specified input tag (from the value stored
@@ -225,13 +230,13 @@ int get_retries(gaps_tag *tag, int t_in_ms) {    // XYZ1 delete
   char        *t_env;
 
   /* a) Find the number of retry values (by searching the linked list) */
-  pthread_mutex_lock(&rxlock);
+  pthread_mutex_lock(&txlock);
 //  log_debug("%s tag=<%d,%d,%d> t=%d", __func__, tag->mux, tag->sec, tag->typ, t_in_ms);
   for (m = tx_tag_info_root; m != NULL; m = m->next) {
     if ( (m->tag.mux == tag->mux)
       && (m->tag.sec == tag->sec)
       && (m->tag.typ == tag->typ) ) {
-      pthread_mutex_unlock(&rxlock);
+      pthread_mutex_unlock(&txlock);
       return m->retries;   /* found */
     }
   }
@@ -247,7 +252,7 @@ int get_retries(gaps_tag *tag, int t_in_ms) {    // XYZ1 delete
   new->tag.typ = tag->typ;
   new->next    = tx_tag_info_root;
   tx_tag_info_root  = new;
-  pthread_mutex_unlock(&rxlock);
+  pthread_mutex_unlock(&txlock);
   return new->retries;
 }
 
@@ -371,6 +376,7 @@ void *rcvr_thread_function(thread_args *vargs) {
 //      memcpy(&(t->p), p, sizeof(bw)); /* XXX: optimize, copy only length of actual packet received */
       t->p_ptr = p;
       t->newd = 1;
+      rx_tag_info_print(t);
       pthread_mutex_unlock(&(t->lock));
       buffer_id_index = (buffer_id_index + 1) % RX_BUFFS_PER_THREAD;
     }
@@ -412,7 +418,8 @@ int dma_recv(void *adu, gaps_tag *tag, rx_tag_info *t) {
   size_t adu_len=0;
 
   pthread_mutex_lock(&(t->lock));
-//  log_trace("%s: Check for received packet on tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
+  log_trace("%s: Check for received packet on tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
+  rx_tag_info_print(t);
   if (t->newd != 0) {         // get packet from buffer if available)
     p = t->p_ptr;             // Point to device rx buffer
     time_trace("XDC_Rx2 start decode for tag=<%d,%d,%d>", tag->mux, tag->sec, tag->typ);
