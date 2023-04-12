@@ -232,7 +232,8 @@ int get_retries(gaps_tag *tag, int t_in_ms) {    // XYZ1 delete
   rx_tag_info *t = get_rx_info(tag);
   
   if (t_in_ms > 0)  t->retries = t_in_ms;
-    
+  return (t->retries);
+
   /* a) Find the number of retry values (by searching the linked list) */
   pthread_mutex_lock(&txlock);
 //  log_debug("%s tag=<%d,%d,%d> t=%d", __func__, tag->mux, tag->sec, tag->typ, t_in_ms);
