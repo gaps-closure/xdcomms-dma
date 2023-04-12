@@ -29,7 +29,7 @@
 //    -  User can override deafult timout value per tag in xdc_sub_socket_non_blocking() call
 #define NSEC_IN_SEC               1000000000  // 10^9
 #define NSEC_IN_MSEC                 1000000  // 10^6
-#define RX_POLL_INTERVAL_NSEC        1000000  // Poll Interval in nanpseconds e.g. 1000000 = checks every 1ms
+#define RX_POLL_INTERVAL_NSEC        2000000  // Poll Interval in nanpseconds e.g. 1000000 = checks every 1ms
 #define RX_POLL_TIMEOUT_MSEC_DEFAULT      40  // Default Total Poll time in milliseconds
 /* Per-tag Rx buffer stores retries (based on timeout) per tag value */
 
