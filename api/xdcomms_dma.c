@@ -157,7 +157,7 @@ int get_retries(gaps_tag *tag, int t_in_ms) {
   rx_tag_info *t = get_rx_info(tag);
   if (t_in_ms > 0) {
     t->retries = t_in_ms;     // Set value
-    fprintf(stderr, "Set number of RX retries = %d every %d ns (for ctag=%08x)\n", t->retries, t->ctag);
+    fprintf(stderr, "Set number of RX retries = %d every %d ns (for ctag=%08x)\n", t->retries, RX_POLL_INTERVAL_NSEC, t->ctag);
   }
   return (t->retries);
 }
