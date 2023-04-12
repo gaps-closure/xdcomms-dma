@@ -102,6 +102,7 @@ rx_tag_info *get_rx_info(gaps_tag *tag) {
   static int once=1;
   uint32_t ctag;
   int i;
+  char *t_env;
 
   bw_ctag_encode(&ctag, tag);       /* Use encoded ctag as  */
   /* a) Initilize all possible tag packet buffers (after locking from other application threads) */
@@ -111,7 +112,7 @@ rx_tag_info *get_rx_info(gaps_tag *tag) {
     for(i=0; i < GAPS_TAG_MAX; i++) {
       rx_info[i].ctag = 0;
       rx_info[i].newd = 0;
-      rx_info[i].retries = ((int t_env = getenv("TIMEOUT_MS")) == NULL) ? RX_POLL_TIMEOUT_MSEC_DEFAULT : atoi(t_env);
+      rx_info[i].retries = ((t_env = getenv("TIMEOUT_MS")) == NULL) ? RX_POLL_TIMEOUT_MSEC_DEFAULT : atoi(t_env);
       if (pthread_mutex_init(&(rx_info[i].lock), NULL) != 0) {
         pthread_mutex_unlock(&rxlock);
         log_fatal("rx_tag_info mutex init has failed failed");
