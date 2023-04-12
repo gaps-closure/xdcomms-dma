@@ -104,7 +104,7 @@ void rx_tag_info_print(rx_tag_info *t) {
 rx_tag_info *get_rx_info(gaps_tag *tag) {
   static int once=1;
   uint32_t ctag;
-  int i;
+  int i, t_in_ms;
   char *t_env;
 
   bw_ctag_encode(&ctag, tag);       /* Use encoded ctag as  */
@@ -115,7 +115,8 @@ rx_tag_info *get_rx_info(gaps_tag *tag) {
     for(i=0; i < GAPS_TAG_MAX; i++) {
       rx_info[i].ctag = 0;
       rx_info[i].newd = 0;
-      rx_info[i].retries = ((t_env = getenv("TIMEOUT_MS")) == NULL) ? RX_POLL_TIMEOUT_MSEC_DEFAULT : atoi(t_env);
+      t_in_ms = ((t_env = getenv("TIMEOUT_MS")) == NULL) ? RX_POLL_TIMEOUT_MSEC_DEFAULT : atoi(t_env);
+      rx_info[i].retries = (t_in_ms * NSEC_IN_SEC)/RX_POLL_INTERVAL_NSEC;
       if (pthread_mutex_init(&(rx_info[i].lock), NULL) != 0) {
         pthread_mutex_unlock(&rxlock);
         log_fatal("rx_tag_info mutex init has failed failed");
@@ -154,7 +155,10 @@ rx_tag_info *get_rx_info(gaps_tag *tag) {
  */
 int get_retries(gaps_tag *tag, int t_in_ms) {
   rx_tag_info *t = get_rx_info(tag);
-  if (t_in_ms > 0)  t->retries = t_in_ms;     // Set value
+  if (t_in_ms > 0) {
+    t->retries = t_in_ms;     // Set value
+    fprintf(stderr, "Set number of RX retries = %d every %d ns (for ctag=%08x)\n", t->retries, t->ctag);
+  }
   return (t->retries);
 }
 
@@ -509,8 +513,6 @@ void *xdc_sub_socket(gaps_tag tag) { return NULL; }
 void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout) {
   log_debug("%s: timeout = %d ms for tag=<%d,%d,%d> a", __func__, timeout, tag.mux, tag.sec, tag.typ);
   get_retries(&tag, timeout);    // APP overrides xdc_recv() timeout  (timeout in milliseconds)
-  rx_tag_info *t = get_rx_info(&tag);
-  fprintf(stderr, "rx_tag_info: ctag=%08x new=%d buf_ptr=%p ret=%d", t->ctag, t->newd, t->p_ptr, t->retries);
   return NULL;
 }
 void xdc_asyn_send(void *socket, void *adu, gaps_tag *tag) { dma_send(adu, tag); }
