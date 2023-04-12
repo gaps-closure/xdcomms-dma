@@ -160,7 +160,6 @@ int get_retries(gaps_tag *tag, int t_in_ms) {
     t->retries = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;;     // Set value
     fprintf(stderr, "Set number of RX retries = %d every %d ns (for ctag=%08x)\n", t->retries, RX_POLL_INTERVAL_NSEC, t->ctag);
   }
-//  fprintf(stderr, "t_in_ms=%d number of RX retries = %d every %d ns (for ctag=%08x)\n", t_in_ms, t->retries, RX_POLL_INTERVAL_NSEC, t->ctag);
   return (t->retries);
 }
 
@@ -514,7 +513,7 @@ void *xdc_pub_socket(void) { return NULL; }
 void *xdc_sub_socket(gaps_tag tag) { return NULL; }
 void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout) {
   log_debug("%s: timeout = %d ms for tag=<%d,%d,%d>\n", __func__, timeout, tag.mux, tag.sec, tag.typ);
-  fprintf(stderr, "timeout = %d ms for tag=<%d,%d,%d>\n", timeout, tag.mux, tag.sec, tag.typ);
+//  fprintf(stderr, "timeout = %d ms for tag=<%d,%d,%d>\n", timeout, tag.mux, tag.sec, tag.typ);
   get_retries(&tag, timeout);    // APP overrides xdc_recv() timeout  (timeout in milliseconds)
   return NULL;
 }
