@@ -117,7 +117,7 @@ rx_tag_info *get_rx_info(gaps_tag *tag) {
       rx_info[i].newd = 0;
       t_in_ms = ((t_env = getenv("TIMEOUT_MS")) == NULL) ? RX_POLL_TIMEOUT_MSEC_DEFAULT : atoi(t_env);
       rx_info[i].retries = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;
-fprintf(stderr, "default t_in_ms = %d (retries=%d)\n", t_in_ms, rx_info[i].retries);
+fprintf(stderr, "default t_in_ms = %d (retries=%d) i=%d\n", t_in_ms, rx_info[i].retries, RX_POLL_INTERVAL_NSEC);
       if (pthread_mutex_init(&(rx_info[i].lock), NULL) != 0) {
         pthread_mutex_unlock(&rxlock);
         log_fatal("rx_tag_info mutex init has failed failed");
