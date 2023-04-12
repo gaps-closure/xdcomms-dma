@@ -65,7 +65,7 @@ typedef struct _rx_tag_info {
   char                  newd;    // set to indicate received new packet (reset after reading)
   bw                   *p_ptr;   // XYZ2 Replace with void *
   int                   retries; // number of rx retries (every RX_POLL_INTERVAL_NSEC)
-                                 //  - passed using xdc_sub_socket_non_blocking())
+                                 //  - value can be passed using xdc_sub_socket_non_blocking())
 } rx_tag_info;
 
 /* Table of codec per data types (Max of DATA_TYP_MAX types) */

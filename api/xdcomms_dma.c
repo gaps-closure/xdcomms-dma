@@ -111,7 +111,7 @@ rx_tag_info *get_rx_info(gaps_tag *tag) {
     for(i=0; i < GAPS_TAG_MAX; i++) {
       rx_info[i].ctag = 0;
       rx_info[i].newd = 0;
-      rx_info[i].retries = -1;
+      rx_info[i].retries = ((t_env = getenv("TIMEOUT_MS")) == NULL) ? RX_POLL_TIMEOUT_MSEC_DEFAULT : atoi(t_env);
       if (pthread_mutex_init(&(rx_info[i].lock), NULL) != 0) {
         pthread_mutex_unlock(&rxlock);
         log_fatal("rx_tag_info mutex init has failed failed");
@@ -226,9 +226,12 @@ void tx_tag_info_print(void) {
  */
 int get_retries(gaps_tag *tag, int t_in_ms) {    // XYZ1 delete
   tx_tag_info *m, *new;
-  int          timeout;
+  int          timeout = t_in_ms;
   char        *t_env;
-
+  rx_tag_info *t = get_rx_info(tag);
+  
+  if (t_in_ms > 0)  t->retries = t_in_ms;
+    
   /* a) Find the number of retry values (by searching the linked list) */
   pthread_mutex_lock(&txlock);
 //  log_debug("%s tag=<%d,%d,%d> t=%d", __func__, tag->mux, tag->sec, tag->typ, t_in_ms);
