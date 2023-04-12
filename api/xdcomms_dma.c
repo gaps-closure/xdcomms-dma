@@ -160,7 +160,7 @@ int get_retries(gaps_tag *tag, int t_in_ms) {
     t->retries = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;;     // Set value
     fprintf(stderr, "Set number of RX retries = %d every %d ns (for ctag=%08x)\n", t->retries, RX_POLL_INTERVAL_NSEC, t->ctag);
   }
-  fprintf(stderr, "t_in_ms=%d number of RX retries = %d every %d ns (for ctag=%08x)\n", t_in_ms, t->retries, RX_POLL_INTERVAL_NSEC, t->ctag);
+//  fprintf(stderr, "t_in_ms=%d number of RX retries = %d every %d ns (for ctag=%08x)\n", t_in_ms, t->retries, RX_POLL_INTERVAL_NSEC, t->ctag);
   return (t->retries);
 }
 
