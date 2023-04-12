@@ -2,9 +2,9 @@
  * APP_REQ_REP.C
  *   Simple Request-Reply (client-server) application to test the CLOSURE API
  *
- * February 2022, Peraton Labs
- *   Test modes such as set rx timeout, client vs server, log level, unirectional
- *   vs request-response, and listen for specific vs any sender (added 2022)
+ * April 2023, Peraton Labs
+ *   Test CLOSURE modes such as rx timeout, client vs server, log level,
+ *   unirectional vs request-response, and listen for specific vs any sender (added 2022)
  *   Also tests different tag values (including very large MUX values).
  *
  * 1) Compilation (with the necessary includes and libraries):
@@ -14,7 +14,11 @@
  * 2) View testing options:
  *   ./app_req_rep -h
  *
- * 3) Run APP via HAL and Network (after HAL daemon is running in all enclaves and network is up
+ * 3) Run APP using xdcomms_HAL library (no need for HAL daemon)
+ *
+ *
+ *
+ * 4) Run APP via HAL and Network (after HAL daemon is running in all enclaves and network is up
  *
  *    [a] Default Flow: Green enclave-1 sends position <1,1,1>; Orange replies with posiiton <2,2,1>
  *      green:   ./app_req_rep
@@ -52,7 +56,8 @@
  *          We can repeat the orange's command to respond to the second request:
  *      orange:  ./app_req_rep -e 2 -o 100
  *
- *    [h] Big: Green enclave sends raw data <1,1,3>; Orange replies with raw data <2,2,3>
+ *    [h] Big: Green enclave sends raw data <1,1,3> of size 400 Bytes;
+          Orange replies with raw data <2,2,3> of size 800 Bytes
  *        (HAL must be configured to use BE (ILIP device) Pyaload Mode in both directions)
  *      orange:  ./app_req_rep -e 2 -o 800 -g 0
  *      green:   ./app_req_rep -o 0 -o 0 -g 400
