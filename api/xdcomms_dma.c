@@ -554,7 +554,7 @@ void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout) {
 fprintf(stderr, "%s: timeout = %d ms for tag=<%d,%d,%d>\n", __func__, timeout, tag.mux, tag.sec, tag.typ);
 tx_tag_info_print();
 rx_tag_info *t = get_rx_info(&tag);
-fprintf(stderr, "rx_tag_info: ctag=%08x new=%d lock=%d buf_ptr=%x ret=%d", t->ctag, t->newd, t->lock, t->p_ptr, t->retries);
+fprintf(stderr, "rx_tag_info: ctag=%08x new=%d lock=%d buf_ptr=%x ret=%d", t->ctag, t->newd, (int) t->lock, (void *) t->p_ptr, t->retries);
   return NULL;
 }
 void xdc_asyn_send(void *socket, void *adu, gaps_tag *tag) { dma_send(adu, tag); }
