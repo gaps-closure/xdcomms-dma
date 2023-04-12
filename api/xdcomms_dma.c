@@ -93,6 +93,9 @@ void bw_ctag_decode(uint32_t *ctag, gaps_tag *tag) {
   tag->typ = (ctag_h &     0xff);
 }
 
+/**********************************************************************/
+/* rx_tag_info                                                        */
+/**********************************************************************/
 void rx_tag_info_print(rx_tag_info *t) {
   log_trace("rx_tag_info: ctag=%08x new=%d lock=%d buf_ptr=%x ret=%d", t->ctag, t->newd, t->lock, t->p_ptr, t->retries);
 }
@@ -138,6 +141,21 @@ rx_tag_info *get_rx_info(gaps_tag *tag) {
   rx_tag_info_print(&rx_info[i]);
   pthread_mutex_unlock(&rxlock);
   return &rx_info[i];
+}
+
+/* Return the number of retries for the specified input tag (from the value stored
+ * in the tx_tag_info linked-list. If not set, t will calculate the number of
+ * retries from one of three possible timeout values (specified in milli-seconds).
+ * In order of precedence (highest first) they are the:
+ *    a) Input parameter (t_in_ms) specified in a xdc_sub_socket_non_blocking() call
+ *       (this is the only way to specify a different value for each flow).
+ *    b) Environment variable (TIMEOUT_MS) speciied when starting app (see get_rx_info()).
+ *    c) Default (RX_POLL_TIMEOUT_MSEC_DEFAULT) from xdcomms.h (see get_rx_info())
+ */
+int get_retries(gaps_tag *tag, int t_in_ms) {
+  rx_tag_info *t = get_rx_info(tag);
+  if (t_in_ms > 0)  t->retries = t_in_ms;     // Set value
+  return (t->retries);
 }
 
 /**********************************************************************/
@@ -200,37 +218,6 @@ void bw_gaps_data_decode(bw *p, size_t p_len, uint8_t *buff_out, size_t *len_out
 /**********************************************************************/
 /* DMA-based open, send, and receive functions                        */
 /**********************************************************************/
-void tx_tag_info_print(void) {
-  tx_tag_info *m;
-  
-  pthread_mutex_lock(&txlock);
-  fprintf(stderr, "tx_tag_info: ");
-  for (m = tx_tag_info_root; m != NULL; m = m->next) {
-    fprintf(stderr, "[t=<%d,",  m->tag.mux);
-    fprintf(stderr,  "%d,",    m->tag.sec);
-    fprintf(stderr,  "%d>, ",   m->tag.typ);
-    fprintf(stderr,  "r=%d] ",  m->retries);
-//    fprintf(stderr,  " next=%p\n",  m->next);
-  }
-  fprintf(stderr,  "\n");
-  pthread_mutex_unlock(&txlock);
-}
-
-/* Return the number of retries for the specified input tag (from the value stored
- * in the tx_tag_info linked-list. If not set, t will calculate the number of
- * retries from one of three possible timeout values (specified in milli-seconds).
- * In order of precedence (highest first) they are the:
- *    a) Input parameter (t_in_ms) specified in a xdc_sub_socket_non_blocking() call
- *       (this is the only way to specify a different value for each flow).
- *    b) Environment variable (TIMEOUT_MS) speciied when starting app (see get_rx_info()).
- *    c) Default (RX_POLL_TIMEOUT_MSEC_DEFAULT) from xdcomms.h (see get_rx_info())
- */
-int get_retries(gaps_tag *tag, int t_in_ms) {
-  rx_tag_info *t = get_rx_info(tag);
-  if (t_in_ms > 0)  t->retries = t_in_ms;     // Set value
-  return (t->retries);
-}
-
 /* Open channel and save virtual address of buffer pointer */
 int dma_open_channel(chan *c, char **channel_name, int channel_count, int buffer_count) {
   int i;
