@@ -222,43 +222,13 @@ void tx_tag_info_print(void) {
  * In order of precedence (highest first) they are the:
  *    a) Input parameter (t_in_ms) specified in a xdc_sub_socket_non_blocking() call
  *       (this is the only way to specify a different value for each flow).
- *    b) Environment variable (TIMEOUT_MS) speciied when the applicaiton is started.
- *    c) Default (RX_POLL_TIMEOUT_MSEC_DEFAULT) specified in xdcomms.h
+ *    b) Environment variable (TIMEOUT_MS) speciied when starting app (see get_rx_info()).
+ *    c) Default (RX_POLL_TIMEOUT_MSEC_DEFAULT) from xdcomms.h (see get_rx_info())
  */
-int get_retries(gaps_tag *tag, int t_in_ms) {    // XYZ1 delete
-  tx_tag_info *m, *new;
-  int          timeout = t_in_ms;
-  char        *t_env;
+int get_retries(gaps_tag *tag, int t_in_ms) {
   rx_tag_info *t = get_rx_info(tag);
-  
-  if (t_in_ms > 0)  t->retries = t_in_ms;
+  if (t_in_ms > 0)  t->retries = t_in_ms;     // Set value
   return (t->retries);
-
-  /* a) Find the number of retry values (by searching the linked list) */
-  pthread_mutex_lock(&txlock);
-//  log_debug("%s tag=<%d,%d,%d> t=%d", __func__, tag->mux, tag->sec, tag->typ, t_in_ms);
-  for (m = tx_tag_info_root; m != NULL; m = m->next) {
-    if ( (m->tag.mux == tag->mux)
-      && (m->tag.sec == tag->sec)
-      && (m->tag.typ == tag->typ) ) {
-      pthread_mutex_unlock(&txlock);
-      return m->retries;   /* found */
-    }
-  }
-  /* b) If not set, then set the value (see above description) and store in new linked list node */
-  timeout = t_in_ms;
-  if (timeout < 0) timeout = ((t_env = getenv("TIMEOUT_MS")) == NULL) ? RX_POLL_TIMEOUT_MSEC_DEFAULT : atoi(t_env);
-  new = (tx_tag_info *) malloc(sizeof(tx_tag_info));
-  new->retries = (timeout*NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;
-  log_trace("Set retries = %d [timeout(%d ms) / interval(%d ms)] for tag=<%d,%d,%d>", new->retries, timeout, RX_POLL_INTERVAL_NSEC / NSEC_IN_MSEC, tag->mux, tag->sec, tag->typ);
-  if (new->retries < 1) new->retries = 0;
-  new->tag.mux = tag->mux;
-  new->tag.sec = tag->sec;
-  new->tag.typ = tag->typ;
-  new->next    = tx_tag_info_root;
-  tx_tag_info_root  = new;
-  pthread_mutex_unlock(&txlock);
-  return new->retries;
 }
 
 /* Open channel and save virtual address of buffer pointer */
