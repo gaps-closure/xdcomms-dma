@@ -94,7 +94,7 @@ void bw_ctag_decode(uint32_t *ctag, gaps_tag *tag) {
 }
 
 void rx_tag_info_print(rx_tag_info *t) {
-  log_trace("rx_tag_info: ctag=%08x new=%d lock=%d buf_ptr=%x", t->ctag, t->newd, t->lock, t->p_ptr);
+  log_trace("rx_tag_info: ctag=%08x new=%d lock=%d buf_ptr=%x ret=%d", t->ctag, t->newd, t->lock, t->p_ptr, t->retries);
 }
 
 /* Return pointer to Rx packet buffer for specified tag */
@@ -111,6 +111,7 @@ rx_tag_info *get_rx_info(gaps_tag *tag) {
     for(i=0; i < GAPS_TAG_MAX; i++) {
       rx_info[i].ctag = 0;
       rx_info[i].newd = 0;
+      rx_info[i].retries = -1;
       if (pthread_mutex_init(&(rx_info[i].lock), NULL) != 0) {
         pthread_mutex_unlock(&rxlock);
         log_fatal("rx_tag_info mutex init has failed failed");
@@ -118,7 +119,7 @@ rx_tag_info *get_rx_info(gaps_tag *tag) {
       }
     }
   }
-  /* b) Find an the packet buffer for this tag (stored in en*/
+  /* b) Find info for this tag (stored in rx_info erray) */
   for(i=0; i < GAPS_TAG_MAX; i++) { /* Break on finding tag or empty whichever is first */
     if (rx_info[i].ctag == ctag) break; /* found existing slot for tag */
     if (rx_info[i].ctag == 0) {          /* found empty slot (before tag) */
@@ -137,7 +138,6 @@ rx_tag_info *get_rx_info(gaps_tag *tag) {
   pthread_mutex_unlock(&rxlock);
   return &rx_info[i];
 }
-
 
 /**********************************************************************/
 /* BW Packet processing                                               */
