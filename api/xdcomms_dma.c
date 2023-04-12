@@ -510,7 +510,6 @@ void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout) {
   log_debug("%s: timeout = %d ms for tag=<%d,%d,%d> a", __func__, timeout, tag.mux, tag.sec, tag.typ);
   get_retries(&tag, timeout);    // APP overrides xdc_recv() timeout  (timeout in milliseconds)
 fprintf(stderr, "%s: timeout = %d ms for tag=<%d,%d,%d>\n", __func__, timeout, tag.mux, tag.sec, tag.typ);
-tx_tag_info_print();
 rx_tag_info *t = get_rx_info(&tag);
 fprintf(stderr, "rx_tag_info: ctag=%08x new=%d buf_ptr=%p ret=%d", t->ctag, t->newd, t->p_ptr, t->retries);
   return NULL;
