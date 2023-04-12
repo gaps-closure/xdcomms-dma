@@ -555,6 +555,7 @@ fprintf(stderr, "%s: timeout = %d ms for tag=<%d,%d,%d>\n", __func__, timeout, t
 tx_tag_info_print();
 rx_tag_info *t = get_rx_info(&tag);
 rx_tag_info_print(t);
+  fprintf(stderr, "XXX");
   return NULL;
 }
 void xdc_asyn_send(void *socket, void *adu, gaps_tag *tag) { dma_send(adu, tag); }
