@@ -302,14 +302,14 @@ void asyn_send(void *adu, gaps_tag *tag) {
   size_t       packet_len, adu_len;                      /* Note: encoder calculates length */
   static chan  tx_channels[1];                           /* Use only a single channel */
   const int    buffer_id=0;                              /* Use only a single buffer */
-  char         tx_channel_name[24], dev_type[4];
+  char         tx_channel_name[1][24], dev_type[4];
     
   log_trace("Start of %s", __func__);
   // Open channel if needed
   if (once == 1) {
     pthread_mutex_lock(&txlock);
-    get_tx_dev_name_and_type(dev_type, tx_channel_name);
-    if (strcmp(dev_type, "dma") == 0) dma_open_channel(tx_channels, &tx_channel_name, 1, TX_BUFFER_COUNT);
+    get_tx_dev_name_and_type(dev_type, tx_channel_name[0]);
+    if (strcmp(dev_type, "dma") == 0) dma_open_channel(tx_channels, tx_channel_name, 1, TX_BUFFER_COUNT);
     else {
       log_fatal("Unsupported device type %s\n", dev_type);
       exit(-1);
