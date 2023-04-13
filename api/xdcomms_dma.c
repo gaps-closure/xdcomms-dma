@@ -9,10 +9,8 @@
  * v0.4 MAY 2023:  Supprts communication with MIND and/or ESCAPE CDGs.
  * The xdcomms file abstracts the Hardware-specific communication based
  * on the contents of a HAL configuration file. It supports
- *   - MIND-DMA: with MIND specific code from v0.3 put in a new linked
- *     file (hal_MIND_DMA.c)
- *   - ESCAPE-SHM: supported Shared Memory (SHM) comms in a new linked
- *     file (hal_ESCAPE_SHM.c)
+ *   - MIND-DMA: MIND specific code from v0.3 into new linked file (hal_MIND_DMA.c)
+ *   - ESCAPE-SHM: Shared Memory (SHM) comms in a new linked file (hal_ESCAPE_SHM.c)
  *
  * v0.3 OCTOBER 2022:  Supprts direct transfers between CLOSURE and
  * the MIND-DMA CDG. The app connect to the MIND proxy DMA driver,
@@ -76,7 +74,7 @@ codec_map *cmap_find(int data_type) {
 /* Tag Compression / Decompression                                    */
 /**********************************************************************/
 /* Compress teg (tag -> ctag) */
-void bw_ctag_encode(uint32_t *ctag, gaps_tag *tag) {
+void ctag_encode(uint32_t *ctag, gaps_tag *tag) {
   uint32_t ctag_h;
   ctag_h = ((CTAG_MOD * (
                          ( CTAG_MOD * ((tag->mux) % CTAG_MOD)) +
@@ -86,7 +84,7 @@ void bw_ctag_encode(uint32_t *ctag, gaps_tag *tag) {
 }
 
 /* Decode compressed teg (ctag -> tag) */
-void bw_ctag_decode(uint32_t *ctag, gaps_tag *tag) {
+void ctag_decode(uint32_t *ctag, gaps_tag *tag) {
   uint32_t ctag_h = ntohl(*ctag);
   tag->mux = (ctag_h & 0xff0000) >> 16 ;
   tag->sec = (ctag_h &   0xff00) >> 8;
@@ -107,7 +105,7 @@ rx_tag_info *get_rx_info(gaps_tag *tag) {
   int i, t_in_ms;
   char *t_env;
 
-  bw_ctag_encode(&ctag, tag);       /* Use encoded ctag as  */
+  ctag_encode(&ctag, tag);       /* Use encoded ctag as  */
   /* a) Initilize all possible tag packet buffers (after locking from other application threads) */
   pthread_mutex_lock(&rxlock);
   if(once==1) {
@@ -202,7 +200,7 @@ void bw_gaps_data_encode(bw *p, size_t *p_len, uint8_t *buff_in, size_t *buff_le
   log_buf_trace("API <- raw app data:", buff_in, *buff_len);
   log_buf_trace("    -> encoded data:", p->data, *buff_len);
   /* b) Create CLOSURE packet header */
-  bw_ctag_encode(&(p->message_tag_ID), tag);
+  ctag_encode(&(p->message_tag_ID), tag);
   bw_len_encode(&(p->data_len), *buff_len);
   p->crc16 = htons(bw_crc_calc(p));
   /* c) Return packet length */
@@ -213,7 +211,7 @@ void bw_gaps_data_encode(bw *p, size_t *p_len, uint8_t *buff_in, size_t *buff_le
 void bw_gaps_data_decode(bw *p, size_t p_len, uint8_t *buff_out, size_t *len_out, gaps_tag *tag) {
   codec_map  *cm = cmap_find(tag->typ);
   
-  bw_ctag_decode(&(p->message_tag_ID), tag);
+  ctag_decode(&(p->message_tag_ID), tag);
   bw_len_decode(len_out, p->data_len);
   cm->decode (buff_out, p->data, len_out);
   log_buf_trace("API -> raw app data:", p->data,  *len_out);
@@ -280,28 +278,46 @@ int send_channel_buffer(chan *c, size_t packet_len, int buffer_id) {
   return dma_start_to_finish(c->fd, &buffer_id, &(c->buf_ptr[buffer_id]));
 }
 
+void get_dev_name_and_type(char *dev_type, char *tx_channel_name) {
+  char        *tx;
+
+  dev_type = getenv("TYPEDEV");
+  switch (dev_type) {
+    case "shm":
+      strcpy(dev_type, "shm");
+      break;
+    default:
+      strcpy(dev_type, "mem");
+      strcpy(dev_type, ((tx = getenv("DMATXDEV")) == NULL) ? "dma_proxy_tx" : tx);
+  }
+  log_trace("Tx Device type=%s name=%s", dev_type, tx_channel_name);
+  exit(22);
+}
+
 /* Asynchronously send ADU to DMA driver in 'bw' packet */
-void dma_send(void *adu, gaps_tag *tag) {
+void asyn_send(void *adu, gaps_tag *tag) {
+  static int   once=1;                                   /* Open tx_channels only once */
   bw          *p;                                        /* Packet pointer */
   const int    i=0;                                      /* Assume single DMA channel */
   size_t       packet_len, adu_len;                      /* Note: encoder calculates length */
-  static int   once=1;                                   /* Open tx_channels only once */
   static chan  tx_channels[1];                           /* Use only a single channel */
   const int    buffer_id=0;                              /* Use only a single buffer */
-  char        *tx_channel_names[1];
-  char        *tx;
+  char         tx_channel_name[24], dev_type[4];
     
   log_trace("Start of %s", __func__);
-  tx_channel_names[0] = ((tx = getenv("DMATXDEV")) == NULL) ? "dma_proxy_tx" : tx;
-
-  /* Open channel if needed, encode packet into DMA buffer, and send */
-  pthread_mutex_lock(&txlock);
-//  time_trace("Tx packet start: tag=<%d,%d,%d>", tag->mux, tag->sec, tag->typ);
+  // Open channel if needed
   if (once == 1) {
+    pthread_mutex_lock(&txlock);
+    open_tx_xdc_dev(dev_type, tx_channel_name);
+    if (strcmp(dev_type, "dma") == 0) dma_open_channel(tx_channels, tx_channel_name, 1, TX_BUFFER_COUNT);
+    else {
+      log_fatal("Unsupported device type %s\n", dev_type);
+      exit(-1);
+    }
     once = 0;
-    dma_open_channel(tx_channels, tx_channel_names, 1, TX_BUFFER_COUNT);
   }
 
+  // encode packet into TX buffer and send */
   p = (bw *) &(tx_channels[i].buf_ptr[buffer_id]);          /* DMA channel buffer holds created packet */
   time_trace("XDC_Tx1 ready to encode for tag=<%d,%d,%d>", tag->mux, tag->sec, tag->typ);
   bw_gaps_data_encode(p, &packet_len, adu, &adu_len, tag);  /* Put packet into channel buffer */
@@ -333,7 +349,7 @@ void *rcvr_thread_function(thread_args *vargs) {
     c->buf_ptr[buffer_id].length = pkt_length;
     if (dma_start_to_finish(c->fd, &buffer_id, &(c->buf_ptr[buffer_id])) == 0) {
       p = (bw *) &(c->buf_ptr[buffer_id]);    /* XXX: DMA buffer must be larger than size of BW */
-      bw_ctag_decode(&(p->message_tag_ID), &tag);
+      ctag_decode(&(p->message_tag_ID), &tag);
       time_trace("XDC_THRD got packet tag=<%d,%d,%d> (fd=%d id=%d)", tag.mux, tag.sec, tag.typ, c->fd, buffer_id);
       log_trace("THREAD rx packet tag=<%d,%d,%d> buf-id=%d st=%d", tag.mux, tag.sec, tag.typ, buffer_id, c->buf_ptr[buffer_id].status);
 
@@ -512,12 +528,12 @@ void *xdc_ctx(void) { return NULL; }
 void *xdc_pub_socket(void) { return NULL; }
 void *xdc_sub_socket(gaps_tag tag) { return NULL; }
 void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout) {
-  log_debug("%s: timeout = %d ms for tag=<%d,%d,%d>\n", __func__, timeout, tag.mux, tag.sec, tag.typ);
+  log_debug("%s: timeout = %d ms for tag=<%d,%d,%d>", __func__, timeout, tag.mux, tag.sec, tag.typ);
 //  fprintf(stderr, "timeout = %d ms for tag=<%d,%d,%d>\n", timeout, tag.mux, tag.sec, tag.typ);
   get_retries(&tag, timeout);    // APP overrides xdc_recv() timeout  (timeout in milliseconds)
   return NULL;
 }
-void xdc_asyn_send(void *socket, void *adu, gaps_tag *tag) { dma_send(adu, tag); }
+void xdc_asyn_send(void *socket, void *adu, gaps_tag *tag) { asyn_send(adu, tag); }
 
 int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   struct timespec request = {(RX_POLL_INTERVAL_NSEC/NSEC_IN_SEC), (RX_POLL_INTERVAL_NSEC % NSEC_IN_SEC) };
