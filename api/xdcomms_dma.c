@@ -283,7 +283,7 @@ void get_tx_dev_name_and_type(char *dev_type, char *tx_channel_name) {
   
   log_trace("XX %s", type);
   if (type==NULL) strcpy(dev_type, "dma");
-  if strcmp(dev_type, "dma") {
+  if (strcmp(dev_type, "dma") == 0) {
     strcpy(tx_channel_name, ((tx = getenv("DMATXDEV")) == NULL) ? "dma_proxy_tx" : tx);
     return;
   }
