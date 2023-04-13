@@ -279,17 +279,17 @@ int send_channel_buffer(chan *c, size_t packet_len, int buffer_id) {
 }
 
 void get_tx_dev_name_and_type(char *dev_type, char *tx_channel_name) {
-  char *type = getenv("TYPEDEV"), *tx = NULL;
+  char *user_type = getenv("TYPEDEV"), *user_name = getenv("DMATXDEV");
   
-  log_trace("XX %s", type);
-  if (type==NULL) strcpy(dev_type, "dma");
+  log_trace("User defined: type=%d name=%s\n", name);
+  if (user_type==NULL) strcpy(dev_type, "dma");
   if (strcmp(dev_type, "dma") == 0) {
-    strcpy(tx_channel_name, ((tx = getenv("DMATXDEV")) == NULL) ? "dma_proxy_tx" : tx);
+    strcpy(tx_channel_name, (user_name == NULL) ? "dma_proxy_tx" : user_name);
     return;
   }
   if (strcmp(type, "shm") == 0) {
     strcpy(dev_type, "shm");
-    strcpy(tx_channel_name, ((tx = getenv("DMATXDEV")) == NULL) ? "mem" : tx);
+    strcpy(tx_channel_name, (user_name == NULL) ? "mem" : user_name);
     return;
   }
 }
