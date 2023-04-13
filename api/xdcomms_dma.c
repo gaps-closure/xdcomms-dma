@@ -281,16 +281,19 @@ int send_channel_buffer(chan *c, size_t packet_len, int buffer_id) {
 void get_tx_dev_name_and_type(char *dev_type, char *tx_channel_name) {
   char *user_type = getenv("TYPEDEV"), *user_name = getenv("DMATXDEV");
   
-  log_trace("User defined: type=%d name=%s\n", name);
+  log_trace("User defined: type=%d name=%s\n", user_type, user_name);
   if (user_type==NULL) strcpy(dev_type, "dma");
   if (strcmp(dev_type, "dma") == 0) {
     strcpy(tx_channel_name, (user_name == NULL) ? "dma_proxy_tx" : user_name);
     return;
   }
-  if (strcmp(type, "shm") == 0) {
+  else if (strcmp(type, "shm") == 0) {
     strcpy(dev_type, "shm");
     strcpy(tx_channel_name, (user_name == NULL) ? "mem" : user_name);
-    return;
+  }
+  else {
+    log_fatal("Unsupported device type %s\n", dev_type);
+    exit(-1);
   }
 }
 
@@ -314,7 +317,6 @@ void asyn_send(void *adu, gaps_tag *tag) {
     if (strcmp(dev_type, "dma") == 0) dma_open_channel(tx_channels, (char **) tx_channel_name, 1, TX_BUFFER_COUNT);
     else {
       log_fatal("Unsupported device type %s\n", dev_type);
-      exit(-1);
     }
     once = 0;
   }
