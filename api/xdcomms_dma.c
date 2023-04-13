@@ -287,7 +287,7 @@ void get_dev_name_and_type(char *dev_type, char *tx_channel_name) {
     strcpy(tx_channel_name, ((tx = getenv("DMATXDEV")) == NULL) ? "mem" : tx);
   }
   else {
-    strcpy(dev_type, "dma")
+    strcpy(dev_type, "dma");
     strcpy(tx_channel_name, ((tx = getenv("DMATXDEV")) == NULL) ? "dma_proxy_tx" : tx);
   }
   log_trace("Tx Device type=%s name=%s", dev_type, tx_channel_name);
