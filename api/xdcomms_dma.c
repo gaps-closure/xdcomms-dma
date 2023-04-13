@@ -309,7 +309,7 @@ void asyn_send(void *adu, gaps_tag *tag) {
   if (once == 1) {
     pthread_mutex_lock(&txlock);
     get_tx_dev_name_and_type(dev_type, tx_channel_name[0]);
-    if (strcmp(dev_type, "dma") == 0) dma_open_channel(tx_channels, tx_channel_name, 1, TX_BUFFER_COUNT);
+    if (strcmp(dev_type, "dma") == 0) dma_open_channel(tx_channels, &tx_channel_name[0], 1, TX_BUFFER_COUNT);
     else {
       log_fatal("Unsupported device type %s\n", dev_type);
       exit(-1);
