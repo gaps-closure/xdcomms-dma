@@ -279,7 +279,7 @@ int send_channel_buffer(chan *c, size_t packet_len, int buffer_id) {
 }
 
 void get_tx_dev_name_and_type(char *dev_type, char *tx_channel_name) {
-  char        *tx;
+  char        *tx = NULL;
 
   dev_type = getenv("TYPEDEV");
   log_trace("XX %s", dev_type);
