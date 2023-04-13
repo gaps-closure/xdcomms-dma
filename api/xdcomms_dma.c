@@ -281,15 +281,16 @@ int send_channel_buffer(chan *c, size_t packet_len, int buffer_id) {
 void get_tx_dev_name_and_type(char *dev_type, char *tx_channel_name) {
   char        *tx;
 
-  log_trace("XX");
   dev_type = getenv("TYPEDEV");
-  if (strcmp(dev_type, "shm") == 0) {
-    strcpy(dev_type, "mem");
-    strcpy(tx_channel_name, ((tx = getenv("DMATXDEV")) == NULL) ? "mem" : tx);
-  }
-  else {
+  log_trace("XX %s", dev_type);
+  if (dev_type==NULL) || (dev_type==dma) {
     strcpy(dev_type, "dma");
     strcpy(tx_channel_name, ((tx = getenv("DMATXDEV")) == NULL) ? "dma_proxy_tx" : tx);
+  }
+  else {
+    if (strcmp(dev_type, "shm") == 0) {
+      strcpy(tx_channel_name, ((tx = getenv("DMATXDEV")) == NULL) ? "mem" : tx);
+    }
   }
   log_trace("Tx Device type=%s name=%s", dev_type, tx_channel_name);
   exit(22);
