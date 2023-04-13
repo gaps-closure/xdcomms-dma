@@ -282,9 +282,10 @@ void get_dev_name_and_type(char *dev_type, char *tx_channel_name) {
   char        *tx;
 
   dev_type = getenv("TYPEDEV");
-  if (strcmp(dev_type, "shm") == 0)
+  if (strcmp(dev_type, "shm") == 0) {
     strcpy(dev_type, "mem");
     strcpy(tx_channel_name, ((tx = getenv("DMATXDEV")) == NULL) ? "mem" : tx);
+  }
   else {
     strcpy(dev_type, "dma")
     strcpy(tx_channel_name, ((tx = getenv("DMATXDEV")) == NULL) ? "dma_proxy_tx" : tx);
