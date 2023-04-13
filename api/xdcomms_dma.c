@@ -281,6 +281,7 @@ int send_channel_buffer(chan *c, size_t packet_len, int buffer_id) {
 void get_tx_dev_name_and_type(char *dev_type, char *tx_channel_name) {
   char        *tx;
 
+  log_trace("XX");
   dev_type = getenv("TYPEDEV");
   if (strcmp(dev_type, "shm") == 0) {
     strcpy(dev_type, "mem");
