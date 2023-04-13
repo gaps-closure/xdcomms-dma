@@ -279,18 +279,19 @@ int send_channel_buffer(chan *c, size_t packet_len, int buffer_id) {
 }
 
 void get_tx_dev_name_and_type(char *dev_type, char *tx_channel_name) {
-  char *name = NULL, *type=NULL;
+  char *type = getenv("TYPEDEV");
   
-  type = getenv("TYPEDEV");
   log_trace("XX %s", type);
   if (type==NULL) strcpy(dev_type, "dma");
-  if strcmp(dev_type, "dma"); strcpy(tx_channel_name, ((tx = getenv("DMATXDEV")) == NULL) ? "dma_proxy_tx" : tx);
+  if strcmp(dev_type, "dma") {
+    strcpy(tx_channel_name, ((tx = getenv("DMATXDEV")) == NULL) ? "dma_proxy_tx" : tx);
+    return;
+  }
   if (strcmp(type, "shm") == 0) {
     strcpy(dev_type, "shm");
     strcpy(tx_channel_name, ((tx = getenv("DMATXDEV")) == NULL) ? "mem" : tx);
+    return;
   }
-  log_trace("Tx Device type=%s name=%s", dev_type, tx_channel_name);
-  exit(22);
 }
 
 /* Asynchronously send ADU to DMA driver in 'bw' packet */
@@ -308,6 +309,8 @@ void asyn_send(void *adu, gaps_tag *tag) {
   if (once == 1) {
     pthread_mutex_lock(&txlock);
     get_tx_dev_name_and_type(dev_type, tx_channel_name[0]);
+    log_trace("Tx Device type=%s name=%s", dev_type, tx_channel_name[0]);
+    exit(22);
     if (strcmp(dev_type, "dma") == 0) dma_open_channel(tx_channels, (char **) tx_channel_name, 1, TX_BUFFER_COUNT);
     else {
       log_fatal("Unsupported device type %s\n", dev_type);
