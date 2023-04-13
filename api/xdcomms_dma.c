@@ -278,7 +278,7 @@ int send_channel_buffer(chan *c, size_t packet_len, int buffer_id) {
   return dma_start_to_finish(c->fd, &buffer_id, &(c->buf_ptr[buffer_id]));
 }
 
-void get_dev_name_and_type(char *dev_type, char *tx_channel_name) {
+void get_tx_dev_name_and_type(char *dev_type, char *tx_channel_name) {
   char        *tx;
 
   dev_type = getenv("TYPEDEV");
@@ -308,7 +308,7 @@ void asyn_send(void *adu, gaps_tag *tag) {
   // Open channel if needed
   if (once == 1) {
     pthread_mutex_lock(&txlock);
-    open_tx_xdc_dev(dev_type, tx_channel_name);
+    get_tx_dev_name_and_type(dev_type, tx_channel_name);
     if (strcmp(dev_type, "dma") == 0) dma_open_channel(tx_channels, tx_channel_name, 1, TX_BUFFER_COUNT);
     else {
       log_fatal("Unsupported device type %s\n", dev_type);
