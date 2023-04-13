@@ -283,11 +283,11 @@ void get_tx_dev_name_and_type(char *dev_type, char *tx_channel_name) {
   
   log_trace("User defined: type=%d name=%s\n", user_type, user_name);
   if (user_type==NULL) strcpy(dev_type, "dma");
-  if (strcmp(dev_type, "dma") == 0) {
+  if      (strcmp(dev_type, "dma") == 0) {
     strcpy(tx_channel_name, (user_name == NULL) ? "dma_proxy_tx" : user_name);
     return;
   }
-  else if (strcmp(type, "shm") == 0) {
+  else if (strcmp(dev_type, "shm") == 0) {
     strcpy(dev_type, "shm");
     strcpy(tx_channel_name, (user_name == NULL) ? "mem" : user_name);
   }
