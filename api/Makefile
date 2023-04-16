@@ -1,7 +1,7 @@
-APP = xdcomms
-NAME := xdcomms
-MAJOR = 1.0
-MINOR = 1
+APP     = xdcomms
+NAME   := xdcomms
+MAJOR   = 1.0
+MINOR   = 1
 VERSION = $(MAJOR).$(MINOR)
 
 INCL         = -I ../log -I ../crc 

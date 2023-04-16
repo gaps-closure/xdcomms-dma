@@ -17,6 +17,7 @@
 #define CTAG_MOD                         256
 #define PKT_G1_ADU_SIZE_MAX            65528  // Max packet size with 16-bit data_len = 2^16 - 8 (see bw header)
 #define ADU_SIZE_MAX_C               1000000     /* 1 MB - Increased for ILIP payload mode*/
+#define MAX_DEV_NAME_LEN                  64
 
 // Buffer allocation to threads. NB: RX_THREADS * RX_BUFFS_PER_THREAD <= RX_BUFFER_COUNT
 #define RX_THREADS                         1  // Total number of receiver threads
@@ -33,41 +34,6 @@
 #define RX_POLL_TIMEOUT_MSEC_DEFAULT      40  // Default Total Poll time in milliseconds
 /* Per-tag Rx buffer stores retries (based on timeout) per tag value */
 
-/* MIND packet format */
-typedef struct _sdh_bw {
-  uint32_t  message_tag_ID;             /* Compressed Application Mux, Sec, Typ */
-  uint16_t  data_len;                   /* Length (in bytes) */
-  uint16_t  crc16;                      /* Error detection field */
-  uint8_t   data[PKT_G1_ADU_SIZE_MAX];  /* Application data unit */
-} bw;
-/* MIND DMA channel structure */
-typedef struct channel {
-  struct channel_buffer *buf_ptr;
-  int fd;
-} chan;
-
-/* CLOSURE tag structure */
-typedef struct _tag {
-  uint32_t    mux;      /* APP ID */
-  uint32_t    sec;      /* Security tag */
-  uint32_t    typ;      /* data type */
-} gaps_tag;
-/* CLOSURE Per-tag Rx information (stroed as linked list) */
-typedef struct _tx_tag_info {
-  gaps_tag              tag;
-  int                   retries; // number of rx retries (passed using xdc_sub_socket_non_blocking())
-  struct _tx_tag_info  *next;    // linked list *
-} tx_tag_info;
-/* CLOSURE Per-tag Rx information (stored as array list) */
-typedef struct _rx_tag_info {
-  uint32_t              ctag;    // Compressed tag (unique index)
-  pthread_mutex_t       lock;    // Ensure thread does not write while xdcomms reads
-  char                  newd;    // set to indicate received new packet (reset after reading)
-  bw                   *p_ptr;   // XYZ2 Replace with void *
-  int                   retries; // number of rx retries (every RX_POLL_INTERVAL_NSEC)
-                                 //  - value can be passed using xdc_sub_socket_non_blocking())
-} rx_tag_info;
-
 /* Table of codec per data types (Max of DATA_TYP_MAX types) */
 typedef void (*codec_func_ptr)(void *, void *, size_t *);
 typedef struct _codec_map {
@@ -77,11 +43,30 @@ typedef struct _codec_map {
   codec_func_ptr  decode;
 } codec_map;
 
-/* Receiver thread arguments */
+/* CLOSURE tag structure */
+typedef struct _tag {
+  uint32_t         mux;      /* APP ID */
+  uint32_t         sec;      /* Security tag */
+  uint32_t         typ;      /* data type */
+} gaps_tag;
+
+/* RX thread arguments */
 typedef struct _thread_args {
-  chan    *c;
-  int      buffer_id_start;
+  chan            *c;               // Channel RX thread is looking for
+  int              buffer_id_start; // Device buffer index
 } thread_args;
+
+typedef struct channel {
+  uint32_t         ctag;             // Compressed tag (unique index) - used to search for channel
+  char             device_type[4];   // device type: e.g., shm (ESCAPE) or dma (MIND)
+  char             device_name[64];  // Device name: e.g., /dev/mem or /dev/sue_dominous
+  int              fd;               // Device file descriptor
+  void            *buf_ptr;          // Device buffer structure (differs by device type)
+  pthread_mutex_t  lock;             // Ensure RX thread does not write while xdcomms reads
+  char             newd;             // RX thread received new packet (xdcomms resets after reading)
+  int              retries;          // number of RX polls (every RX_POLL_INTERVAL_NSEC) before timeout
+  int              count;            // number of RX polls (every RX_POLL_INTERVAL_NSEC) before timeout
+} chan;
 
 extern void tag_print     (gaps_tag *, FILE *);
 extern void tag_write     (gaps_tag *, uint32_t,   uint32_t,   uint32_t);

@@ -38,15 +38,15 @@
 #include "dma-proxy.h"
 #include "xdcomms.h"
 
-codec_map    cmap[DATA_TYP_MAX];       /* maps data type to its data encode + decode functions */
-rx_tag_info  rx_info[GAPS_TAG_MAX];       /* array of buffers to store Rx packet info per tag */
-tx_tag_info *tx_tag_info_root = NULL;  /* linked list to save number of retires per tag */
+codec_map  cmap[DATA_TYP_MAX];       /* maps data type to its data encode + decode functions */
+chan       chan_info[GAPS_TAG_MAX];  // array of buffers to store channel info per tag
 
 pthread_mutex_t txlock;
 pthread_mutex_t rxlock;
+pthread_mutex_t chan_create;
 
 /**********************************************************************/
-/* Codec map table to store encoding and decoding function pointers   */
+/* A) Codec map table to store encoding and decoding function pointers   */
 /**********************************************************************/
 void cmap_print_one(codec_map *cm) {
   fprintf(stderr, "[typ=%d ", cm->data_type);
@@ -71,7 +71,7 @@ codec_map *cmap_find(int data_type) {
 }
 
 /**********************************************************************/
-/* Tag Compression / Decompression                                    */
+/* B) Tag Compression / Decompression                                    */
 /**********************************************************************/
 /* Compress teg (tag -> ctag) */
 void ctag_encode(uint32_t *ctag, gaps_tag *tag) {
@@ -92,77 +92,80 @@ void ctag_decode(uint32_t *ctag, gaps_tag *tag) {
 }
 
 /**********************************************************************/
-/* rx_tag_info                                                        */
+/* C) Channel Info: Print, Create, Find (for all devices and TX/RX)   */
 /**********************************************************************/
-void rx_tag_info_print(rx_tag_info *t) {
-  log_trace("rx_tag_info: ctag=%08x new=%d lock=%d buf_ptr=%x ret=%d", t->ctag, t->newd, t->lock, t->p_ptr, t->retries);
+void chan_print(chan *cp) {
+  log_trace("channel %08x: type=%s name=%s fd=%d new=%d lock=%d buf_ptr=%x ret=%d every %d ns", cp->ctag, cp->device_type, cp->device_name, cp->fd, cp->newd, cp->lock, cp->buf_ptr, cp->retries, RX_POLL_INTERVAL_NSEC);
 }
 
 /* Return pointer to Rx packet buffer for specified tag */
-rx_tag_info *get_rx_info(gaps_tag *tag) {
+chan *get_chan_info(gaps_tag *tag) {
   static int once=1;
   uint32_t ctag;
   int i, t_in_ms;
   char *t_env;
 
   ctag_encode(&ctag, tag);       /* Use encoded ctag as  */
-  /* a) Initilize all possible tag packet buffers (after locking from other application threads) */
-  pthread_mutex_lock(&rxlock);
+  
+  /* a) Initilize all channels (after locking from other application threads) */
+  pthread_mutex_lock(&chan_create);
   if(once==1) {
+    t_in_ms = ((t_env = getenv("TIMEOUT_MS")) == NULL) ? RX_POLL_TIMEOUT_MSEC_DEFAULT : atoi(t_env);
     once = 0;
     for(i=0; i < GAPS_TAG_MAX; i++) {
-      rx_info[i].ctag = 0;
-      rx_info[i].newd = 0;
-      t_in_ms = ((t_env = getenv("TIMEOUT_MS")) == NULL) ? RX_POLL_TIMEOUT_MSEC_DEFAULT : atoi(t_env);
-      rx_info[i].retries = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;
-// fprintf(stderr, "default t_in_ms = %d (retries=%d) i=%d\n", t_in_ms, rx_info[i].retries, RX_POLL_INTERVAL_NSEC);
-      if (pthread_mutex_init(&(rx_info[i].lock), NULL) != 0) {
+      chan_info[i].ctag    = 0;
+      chan_info[i].newd    = 0;
+      chan_info[i].count   = 0;
+      chan_info[i].retries = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;
+      if (pthread_mutex_init(&(chan_info[i].lock), NULL) != 0) {
         pthread_mutex_unlock(&rxlock);
         log_fatal("rx_tag_info mutex init has failed failed");
         exit(EXIT_FAILURE);
       }
     }
   }
-  /* b) Find info for this tag (stored in rx_info erray) */
+
+  /* b) Find info for this tag */
   for(i=0; i < GAPS_TAG_MAX; i++) { /* Break on finding tag or empty whichever is first */
-    if (rx_info[i].ctag == ctag) break; /* found existing slot for tag */
-    if (rx_info[i].ctag == 0) {          /* found empty slot (before tag) */
-      rx_info[i].ctag = ctag;
+    if (chan_info[i].ctag == ctag) break; /* found existing slot for tag */
+    if (chan_info[i].ctag == 0) {          /* found empty slot (before tag) */
+      chan_info[i].ctag = ctag;
       break;
     }
   }
-  log_trace("%s: rx_info entry %d for ctag=%x (once=%d)", __func__, i, ctag, once);
+  pthread_mutex_unlock(&chan_create);
+
+  log_trace("%s: chan_info entry %d for ctag=%x]", __func__, i, ctag);
   if (i >= GAPS_TAG_MAX) {
     pthread_mutex_unlock(&rxlock);
     log_fatal("TagBuf table is full (GAPS_TAG_MAX=%d)\n", i);
     exit(EXIT_FAILURE);
   }
-  /* c) Unlock and return rx_info pointer */
-  rx_tag_info_print(&rx_info[i]);
-  pthread_mutex_unlock(&rxlock);
-  return &rx_info[i];
+  /* c) Unlock and return chan_info pointer */
+  chan_print(&chan_info[i]);
+  return &chan_info[i];
 }
 
 /* Return the number of retries for the specified input tag (from the value stored
- * in the tx_tag_info linked-list. If not set, t will calculate the number of
+ * in the rx_tag_info linked-list. If not set, t will calculate the number of
  * retries from one of three possible timeout values (specified in milli-seconds).
  * In order of precedence (highest first) they are the:
  *    a) Input parameter (t_in_ms) specified in a xdc_sub_socket_non_blocking() call
  *       (this is the only way to specify a different value for each flow).
- *    b) Environment variable (TIMEOUT_MS) speciied when starting app (see get_rx_info()).
- *    c) Default (RX_POLL_TIMEOUT_MSEC_DEFAULT) from xdcomms.h (see get_rx_info())
+ *    b) Environment variable (TIMEOUT_MS) speciied when starting app (see get_chan_info()).
+ *    c) Default (RX_POLL_TIMEOUT_MSEC_DEFAULT) from xdcomms.h (see get_chan_info())
  */
 int get_retries(gaps_tag *tag, int t_in_ms) {
-  rx_tag_info *t = get_rx_info(tag);
+  chan *cp = get_chan_info(tag);
   if (t_in_ms > 0) {
-    t->retries = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;;     // Set value
-    fprintf(stderr, "Set number of RX retries = %d every %d ns (for ctag=%08x)\n", t->retries, RX_POLL_INTERVAL_NSEC, t->ctag);
+    cp->retries = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;;     // Set value
+    fprintf(stderr, "Set number of RX retries = %d every %d ns (for ctag=%08x)\n", cp->retries, RX_POLL_INTERVAL_NSEC, cp->ctag);
   }
-  return (t->retries);
+  return (cp->retries);
 }
 
 /**********************************************************************/
-/* BW Packet processing                                               */
+/* D) BW Packet processing                                               */
 /**********************************************************************/
 void bw_print(bw *p) {
   fprintf(stderr, "%s: ", __func__);
@@ -219,43 +222,101 @@ void bw_gaps_data_decode(bw *p, size_t p_len, uint8_t *buff_out, size_t *len_out
 }
 
 /**********************************************************************/
-/* DMA-based open, send, and receive functions                        */
+/* Device open functions                                              */
 /**********************************************************************/
 /* Open channel and save virtual address of buffer pointer */
-int dma_open_channel(chan *c, char **channel_name, int channel_count, int buffer_count) {
-  int i;
-
+void *dma_open_channel(char *device_name, int buffer_count) {
+  
   log_trace("%s: open DMA channel", __func__);
-  if(channel_count != 1) {
-      log_fatal("xdcomms_dma handles only one DMA channel currently");
-      exit(EXIT_FAILURE);
-  }
-
-  for (i = 0; i < channel_count; i++) {
-    log_trace("DMA IOCTL mode", __func__);
-    char dev_chan[64] = "/dev/";
-    if (strlen(channel_name[i]) >= 60) {
-      log_fatal("Channel name must be less than 60 chars: %s", channel_name[i]);
+    chan->fd = open(device_name, O_RDWR);
+    if (chan->fd < 1) {
+      log_fatal("Unable to open DMA proxy device file: %s (fd=%d)", channel_name, chan->fd);
       exit(EXIT_FAILURE);
     }
-    strcat(dev_chan, channel_name[i]);
-    c[i].fd = open(dev_chan, O_RDWR);
-    if (c[i].fd < 1) {
-      log_fatal("Unable to open DMA proxy device file: %s", channel_name[i]);
-      exit(EXIT_FAILURE);
-    }
-    c[i].buf_ptr = (struct channel_buffer *)mmap(NULL, sizeof(struct channel_buffer) * buffer_count,
-                    PROT_READ | PROT_WRITE, MAP_SHARED, c[i].fd, 0);
-    if (c[i].buf_ptr == MAP_FAILED) {
+    chan->buf_ptr = (struct channel_buffer *) mmap(NULL, sizeof(struct channel_buffer) * buffer_count,
+                    PROT_READ | PROT_WRITE, MAP_SHARED, chan->fd, 0);
+    if (chan->buf_ptr == MAP_FAILED) {
       log_fatal("Failed to mmap tx channel\n");
       exit(EXIT_FAILURE);
     }
-    log_trace("Opened channel (id=%d): %s (buf_ptr=%p, fd=%d)", i, channel_name[i], c[i].buf_ptr, c[i].fd);
+    log_trace("Opened channel %s: buf_ptr=%p, fd=%d", channel_name, chan->buf_ptr, chan->fd);
   }
   return (0); /* success */
 }
 
-/* Perform DMA ioctl operations to tx or rx data */
+*destin = mmalloc(PROT_WRITE, MMAP_ADDR_HOST, fd, pa_virt_addr, pa_map_length); // to host mmap
+
+// Open DMA channel sat given Physical address
+//   Returns file descriptor and page-aligned address/length, so can deallocate
+void *shm_open_channel(char *device_name, int protection, unsigned long phys_addr, int *fd, void **pa_virt_addr, unsigned long *pa_map_length) {
+  void          *virt_addr;
+  unsigned long  pa_phys_addr;       /* page aligned physical address (offset) */
+  int            flags = MAP_SHARED;        // or (|) together bit flags
+
+
+  if((*fd = open("/dev/mem", O_RDWR | O_SYNC)) == -1) FATAL;
+  pa_phys_addr   = phys_addr & ~PAGE_MASK;    // Align physical addr (offset) to be at multiple of page size.
+  *pa_map_length = (*pa_map_length) + phys_addr - pa_phys_addr;     // Increase len due to phy addr alignment
+  *pa_virt_addr  = mmap(0, *pa_map_length, protection, flags, *fd, pa_phys_addr);
+  if (*pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
+  virt_addr      = *pa_virt_addr + phys_addr - pa_phys_addr;   // add offset to page aligned addr
+  fprintf(stderr, "    Shared mmap'ed DDR [len=0x%lx Bytes] starts at virtual address %p\n", *pa_map_length, virt_addr);
+
+#ifdef __TEST_USE_MLOCK__
+  int lockerr;
+  lockerr = mlock(*pa_virt_addr, *pa_map_length);
+  if (lockerr) fprintf(stderr, "ERROR: mlock failed \n");  // XXX: ought to bail out
+#endif /* __TEST_USE_MLOCK__ */
+
+#ifdef DEBUG
+  fprintf(stderr, "Shared mmap'ed DDR [len=0x%lx Bytes] starts at virtual address %p\n", *pa_map_length, virt_addr);
+  if (phys_addr > 0) fprintf(stderr, "Using Linux Physical addr %p: up to pa=0x%lX\n",
+                                  (void *) phys_addr, phys_addr + (*pa_map_length) - 1);
+#endif
+  return (virt_addr);
+}
+
+// Get channel device name and type
+void get_dev_name_and_type(char *device_type, char *device_name) {
+  char *user_type = getenv("TYPEDEV"));
+  char *user_name = getenv("DMATXDEV"));
+  (user_type == NULL) ? strcat(device_type, "dma") : strcpy(device_type, user_type);
+
+  strcpy(device_name, "/dev/");
+  if      (strcmp(device_type, "dma") == 0) {
+    (user_name == NULL) ? strcat(device_name, "dma_proxy_tx") : strcat(device_name, user_name));
+  }
+  else if (strcmp(device_type, "shm") == 0) {
+    (user_name == NULL) ? strcat(device_name, "mem") : strcat(device_name, user_name));
+  }
+  else {
+    log_fatal("Unsupported device type %s\n", device_type);
+    exit(-1);
+  }
+}
+
+// Open channel device (based on name and type) and return its channel structure
+void *open_device(chan *cp) {
+  chan_print(cp);
+  get_dev_name_and_type(cp->device_type, cp->device_name);
+  log_trace("%s of type=%s name=%s", __func__, cp->device_type, cp->device_name);
+  chan_print(cp);
+  exit(22);
+  if (strcmp(device_type, "dma") == 0) {
+    return (dma_open_channel(device_type, device_name, 1, TX_BUFFER_COUNT));
+  }
+  if (strcmp(device_type, "shm") == 0) {
+    return (shm_open_channel(device_type, device_name, PROT_WRITE, MMAP_ADDR_HOST, fd));
+  }
+  else {
+    log_fatal("Unsupported device type %s\n", device_type);
+    exit(-1);
+  }
+}
+/**********************************************************************/
+/* Device write functions                                              */
+/**********************************************************************/
+/* Use DMA ioctl operations to tx or rx data */
 int dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *cbuf_ptr) {
 //  log_trace("START_XFER (fd=%d, id=%d buf_ptr=%p unset-status=%d)", fd, *buffer_id_ptr, cbuf_ptr, cbuf_ptr->status);
 //  time_trace("DMA Proxy transfer 1 (fd=%d, id=%d)", fd, *buffer_id_ptr);
@@ -271,69 +332,51 @@ int dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *cbuf_
 }
 
 /* Send Packet to DMA driver */
-int send_channel_buffer(chan *c, size_t packet_len, int buffer_id) {
+int send_channel_buffer(chan *cp, size_t packet_len, int buffer_id) {
   log_trace("Start of %s: Ready to Write packet (len=%d) to fd=%d (id=%d) ", __func__, packet_len, c->fd, buffer_id);
-  c->buf_ptr[buffer_id].length = packet_len;
-  if (packet_len <= sizeof(bw)) log_buf_trace("TX_PKT", (uint8_t *) &(c->buf_ptr[buffer_id]), packet_len);
-  return dma_start_to_finish(c->fd, &buffer_id, &(c->buf_ptr[buffer_id]));
+  cp->buf_ptr[buffer_id].length = packet_len;
+  if (packet_len <= sizeof(bw)) log_buf_trace("TX_PKT", (uint8_t *) &(cp->buf_ptr[buffer_id]), packet_len);
+  return dma_start_to_finish(cp->fd, &buffer_id, &(cp->buf_ptr[buffer_id]));
 }
 
-void get_tx_dev_name_and_type(char *dev_type, char *tx_channel_name) {
-  char *user_type = getenv("TYPEDEV"), *user_name = getenv("DMATXDEV");
-  
-  log_trace("User defined: type=%d name=%s\n", user_type, user_name);
-  if (user_type==NULL) strcpy(dev_type, "dma");
-  if      (strcmp(dev_type, "dma") == 0) {
-    strcpy(tx_channel_name, (user_name == NULL) ? "dma_proxy_tx" : user_name);
-    return;
-  }
-  else if (strcmp(dev_type, "shm") == 0) {
-    strcpy(dev_type, "shm");
-    strcpy(tx_channel_name, (user_name == NULL) ? "mem" : user_name);
-  }
-  else {
-    log_fatal("Unsupported device type %s\n", dev_type);
-    exit(-1);
-  }
-}
+void dma_send(void *adu, gaps_tag *tag, void *tx_chan) {
+  dma_channel  *dma_tx_chan = (dma_channel *) tx_chan;
+  bw           *p;                        // Packet pointer
+  const int    buffer_id=0;               // Use only a single buffer
+  size_t       packet_len, adu_len;       // encoder calculates length */
 
-/* Asynchronously send ADU to DMA driver in 'bw' packet */
-void asyn_send(void *adu, gaps_tag *tag) {
-  static int   once=1;                                   /* Open tx_channels only once */
-  bw          *p;                                        /* Packet pointer */
-  const int    i=0;                                      /* Assume single DMA channel */
-  size_t       packet_len, adu_len;                      /* Note: encoder calculates length */
-  static chan  tx_channels[1];                           /* Use only a single channel */
-  const int    buffer_id=0;                              /* Use only a single buffer */
-  char         tx_channel_name[1][24], dev_type[4];
-    
-  log_trace("Start of %s", __func__);
-  // Open channel if needed
-  if (once == 1) {
-    pthread_mutex_lock(&txlock);
-    get_tx_dev_name_and_type(dev_type, tx_channel_name[0]);
-    log_trace("Tx Device type=%s name=%s", dev_type, tx_channel_name[0]);
-    exit(22);
-    if (strcmp(dev_type, "dma") == 0) dma_open_channel(tx_channels, (char **) tx_channel_name, 1, TX_BUFFER_COUNT);
-    else {
-      log_fatal("Unsupported device type %s\n", dev_type);
-    }
-    once = 0;
-  }
-
-  // encode packet into TX buffer and send */
-  p = (bw *) &(tx_channels[i].buf_ptr[buffer_id]);          /* DMA channel buffer holds created packet */
+  p = (bw *) &(dma_tx_chan.buf_ptr,buffer[buffer_id]);    // point to a DMA packet buffer */
   time_trace("XDC_Tx1 ready to encode for tag=<%d,%d,%d>", tag->mux, tag->sec, tag->typ);
   bw_gaps_data_encode(p, &packet_len, adu, &adu_len, tag);  /* Put packet into channel buffer */
   time_trace("XDC_Tx2 ready to send data for tag=<%d,%d,%d> len=%ld", tag->mux, tag->sec, tag->typ, packet_len);
-  send_channel_buffer(&tx_channels[i], packet_len, buffer_id);
+  send_channel_buffer(dma_tx_chan, packet_len, buffer_id);
   time_trace("XDC_Tx3 sent data for tag=<%d,%d,%d> len=%ld", tag->mux, tag->sec, tag->typ, packet_len);
   log_debug("XDCOMMS tx packet tag=<%d,%d,%d> len=%ld", tag->mux, tag->sec, tag->typ, packet_len);
 //  log_trace("%s: Buffer id = %d packet pointer=%p", buffer_id, p);
 //  time_trace("Tx packet end: tag=<%d,%d,%d> pkt-len=%d", tag->mux, tag->sec, tag->typ, packet_len);
-  pthread_mutex_unlock(&txlock);
 }
 
+/* Asynchronously send ADU to DMA driver in 'bw' packet */
+void asyn_send(void *adu, gaps_tag *tag) {
+  static int  once=1;                    // Open tx_channels only once
+  chan       *cp = get_chan_info(tag);   // channel structure pointer for any device type
+
+  // a) Open channel once (and get device type, device name and channel struct
+  log_trace("Start of %s", __func__);
+  pthread_mutex_lock(&(cp.lock));
+  if (once == 1) {   // Open channel once if needed
+    open_device(cp);
+    once = 0;
+  }
+  // b) encode packet into TX buffer and send */
+  if (strcmp(cp->device_type, "dma") == 0) dma_send(cp);
+  if (strcmp(cp->device_type, "shm") == 0) shm_send(cp);
+  pthread_mutex_unlock(&(cp.lock));
+}
+
+/**********************************************************************/
+/* Device read functions                                              */
+/**********************************************************************/
 /* Receive packets via DMA in a loop (rate controled by FINISH_XFER blocking call) */
 void *rcvr_thread_function(thread_args *vargs) {
   gaps_tag     tag;
@@ -358,7 +401,7 @@ void *rcvr_thread_function(thread_args *vargs) {
       log_trace("THREAD rx packet tag=<%d,%d,%d> buf-id=%d st=%d", tag.mux, tag.sec, tag.typ, buffer_id, c->buf_ptr[buffer_id].status);
 
       /* get buffer for tag, lock buffer, copy packet ptr to buffer, mark as newdata, release lock */
-      t = get_rx_info(&tag);
+      t = get_chan_info(&tag);
       pthread_mutex_lock(&(t->lock));
 //      memcpy(&(t->p), p, sizeof(bw)); /* XXX: optimize, copy only length of actual packet received */
       t->p_ptr = p;
@@ -398,25 +441,35 @@ void rcvr_thread_start(void) {
   pthread_mutex_unlock(&rxlock);
 }
 
-/* Receive packet from DMA driver, storing data and length in ADU */
-int dma_recv(void *adu, gaps_tag *tag, rx_tag_info *t) {
-  bw *p;
-  size_t packet_len=0;  /* initialize to check at return */
-  size_t adu_len=0;
+/* Receive packet from driver (via rx thread), storing data and length in ADU */
+int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
+  bw     *pp;            // packet pointer
+  size_t  packet_len=0;  // initialize to check at return
+  size_t  adu_len=0;
 
-  pthread_mutex_lock(&(t->lock));
+  pthread_mutex_lock(&(cp->lock));
   log_trace("%s: Check for received packet on tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
-  rx_tag_info_print(t);
-  if (t->newd != 0) {         // get packet from buffer if available)
-    p = t->p_ptr;             // Point to device rx buffer
-    time_trace("XDC_Rx2 start decode for tag=<%d,%d,%d>", tag->mux, tag->sec, tag->typ);
-    bw_gaps_data_decode(p, 0, adu, &adu_len, tag);   /* Put packet into ADU */
-    packet_len = bw_get_packet_length(p, adu_len);
-    log_trace("XDCOMMS reads from DMA channel (buf_ptr=%p) len=(b=%d p=%d)", p, adu_len, packet_len);
-    if (packet_len <= sizeof(bw)) log_buf_trace("RX_PKT", (uint8_t *) p, packet_len);
-    t->newd = 0;                      // unmark newdata
-    time_trace("XDC_Rx3 packet copied to ADU: tag=<%d,%d,%d> pkt-len=%d adu-len=%d", tag->mux, tag->sec, tag->typ, packet_len, adu_len);
-    log_debug("XDCOMMS rx packet tag=<%d,%d,%d> len=%d", tag->mux, tag->sec, tag->typ, packet_len);
+  chan_print(cp);
+  exit(24);
+  if (cp->newd != 0) {                            // get packet from buffer if available)
+    if (strcmp(cp->device_type, "dma") == 0) {    // MIND DMA driver
+      pp = cp->buf_ptr;                           // Point to device rx buffer
+      time_trace("XDC_Rx2 start decode for tag=<%d,%d,%d>", tag->mux, tag->sec, tag->typ);
+      bw_gaps_data_decode(cp->buf_ptr, 0, adu, &adu_len, tag);   /* Put packet into ADU */
+      packet_len = bw_get_packet_length(pp, adu_len);
+      log_trace("XDCOMMS reads from DMA channel (buf_ptr=%p) len=(b=%d p=%d)", p, adu_len, packet_len);
+      if (packet_len <= sizeof(bw)) log_buf_trace("RX_PKT", (uint8_t *) pp, packet_len);
+      cp->newd = 0;                      // unmark newdata
+      time_trace("XDC_Rx3 packet copied to ADU: tag=<%d,%d,%d> pkt-len=%d adu-len=%d", tag->mux, tag->sec, tag->typ, packet_len, adu_len);
+      log_debug("XDCOMMS rx packet tag=<%d,%d,%d> len=%d", tag->mux, tag->sec, tag->typ, packet_len);
+    }
+    else if (strcmp(cp->device_type, "shm") == 0) {
+      log_fatal("%s: Not yet written>", __func__);
+    }
+    else {
+      log_fatal("Unsupported device type %s\n", cp->device_type);
+      exit(-1);
+    }
   }
   pthread_mutex_unlock(&(t->lock));
   return (adu_len > 0) ? adu_len : -1;
@@ -543,12 +596,12 @@ int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   struct timespec request = {(RX_POLL_INTERVAL_NSEC/NSEC_IN_SEC), (RX_POLL_INTERVAL_NSEC % NSEC_IN_SEC) };
   int              ntries = 1 + get_retries(tag, -1);  // number of tries to rx packet
                                                       
-  rcvr_thread_start();                       // Start rx thread for all tags (on first xdc_recv() call)
-  rx_tag_info *t = get_rx_info(tag);         // get buffer for tag (to communicate with thread)
+  rcvr_thread_start();                   // Start rx thread for all tags (on first xdc_recv() call)
+  chan *cp = get_chan_info(tag);         // get buffer for tag (to communicate with thread)
   log_trace("%s for tag=<%d,%d,%d>: ntries=%d interval=%d (%d.%09d) ns", __func__, tag->mux, tag->sec, tag->typ, ntries, RX_POLL_INTERVAL_NSEC, request.tv_sec, request.tv_nsec);
 //  time_trace("XDC_Rx1 Wait for tag=<%d,%d,%d> (test %d times every %d ns)", tag->mux, tag->sec, tag->typ, ntries, RX_POLL_INTERVAL_NSEC);
   while ((ntries--) > 0)  {
-    if (dma_recv(adu, tag, t) > 0)  return 0;
+    if (nonblock_recv(adu, tag, t) > 0)  return 0;
 //    log_trace("LOOP timeout %s: tag=<%d,%d,%d>: remaining tries = %d ", __func__, tag->mux, tag->sec, tag->typ, ntries);
     nanosleep(&request, NULL);
   }
