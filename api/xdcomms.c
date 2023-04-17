@@ -229,7 +229,7 @@ void dma_open_channel(chan *cp, int buffer_count) {
   log_trace("%s: open DMA channel", __func__);
   // a) Open device
   cp->fd = open(cp->device_name, O_RDWR);
-  if (cp->fd < 1) FATAL
+  if (cp->fd < 1) FATAL;
 
   // b) mmpp device
   cp->buf_ptr = mmap(NULL, sizeof(struct channel_buffer) * buffer_count,
