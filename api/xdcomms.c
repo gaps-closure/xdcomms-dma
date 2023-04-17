@@ -37,6 +37,7 @@
 
 #include "dma-proxy.h"
 #include "xdcomms.h"
+#include "shm.h"
 
 codec_map  cmap[DATA_TYP_MAX];       /* maps data type to its data encode + decode functions */
 chan       chan_info[GAPS_TAG_MAX];  // array of buffers to store channel info per tag
