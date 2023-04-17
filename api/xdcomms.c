@@ -225,7 +225,7 @@ void bw_gaps_data_decode(bw *p, size_t p_len, uint8_t *buff_out, size_t *len_out
 /* Device open functions                                              */
 /**********************************************************************/
 /* Open channel and save virtual address of buffer pointer */
-void *dma_open_channel(chan cp, int buffer_count) {
+void *dma_open_channel(chan *cp, int buffer_count) {
   
   log_trace("%s: open DMA channel", __func__);
     cp->fd = open(cp->device_name, O_RDWR);
