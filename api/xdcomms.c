@@ -103,7 +103,7 @@ void dma_open_channel(chan *cp, int buffer_count) {
 
   // b) mmpp device
   cp->buf_ptr = mmap(NULL, sizeof(struct channel_buffer) * buffer_count, cp->protect, MAP_SHARED, cp->fd, 0);
-  if (cp->buf_ptr == MAP_FAILED) FATAL
+  if (cp->buf_ptr == MAP_FAILED) FATAL;
   log_trace("Opened channel %s: buf_ptr=%p, fd=%d", cp->dev_name, cp->buf_ptr, cp->fd);
 }
 
@@ -114,7 +114,7 @@ void *shm_open_channel(chan *cp, unsigned long phys_addr, void **pa_virt_addr, u
   unsigned long  pa_phys_addr;       /* page aligned physical address (offset) */
   int            flags = MAP_SHARED;        // or (|) together bit flags
 
-  if((*fd = open("/dev/mem", O_RDWR | O_SYNC)) == -1) FATAL;
+  if((*(cp->fd) = open("/dev/mem", O_RDWR | O_SYNC)) == -1) FATAL;
   pa_phys_addr   = phys_addr & ~MMAP_PAGE_MASK;    // Align physical addr (offset) to be at multiple of page size.
   *pa_map_length = (*pa_map_length) + phys_addr - pa_phys_addr;     // Increase len due to phy addr alignment
   *pa_virt_addr  = mmap(0, *pa_map_length, protection, flags, *fd, pa_phys_addr);
