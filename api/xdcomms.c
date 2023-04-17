@@ -92,17 +92,142 @@ void ctag_decode(uint32_t *ctag, gaps_tag *tag) {
 }
 
 /**********************************************************************/
-/* C) Channel Info: Print, Create, Find (for all devices and TX/RX)   */
+/* Device open                                               */
 /**********************************************************************/
-void chan_print(chan *cp) {
-  log_trace("channel %08x: type=%s name=%s fd=%d new=%d lock=%d buf_ptr=%x ret=%d every %d ns", cp->ctag, cp->device_type, cp->device_name, cp->fd, cp->newd, cp->lock, cp->buf_ptr, cp->retries, RX_POLL_INTERVAL_NSEC);
+/* Open channel and save virtual address of buffer pointer */
+void dma_open_channel(chan *cp, int buffer_count) {
+  log_trace("%s: open DMA channel", __func__);
+  // a) Open device
+  cp->fd = open(cp->dev_name, O_RDWR);
+  if (cp->fd < 1) FATAL;
+
+  // b) mmpp device
+  cp->buf_ptr = mmap(NULL, sizeof(struct channel_buffer) * buffer_count, cp->protect, MAP_SHARED, cp->fd, 0);
+  if (cp->buf_ptr == MAP_FAILED) FATAL
+  log_trace("Opened channel %s: buf_ptr=%p, fd=%d", cp->dev_name, cp->buf_ptr, cp->fd);
 }
 
+// Open DMA channel sat given Physical address
+//   Returns file descriptor and page-aligned address/length, so can deallocate
+void *shm_open_channel(chan *cp, unsigned long phys_addr, void **pa_virt_addr, unsigned long *pa_map_length) {
+  void          *virt_addr;
+  unsigned long  pa_phys_addr;       /* page aligned physical address (offset) */
+  int            flags = MAP_SHARED;        // or (|) together bit flags
+
+  if((*fd = open("/dev/mem", O_RDWR | O_SYNC)) == -1) FATAL;
+  pa_phys_addr   = phys_addr & ~PAGE_MASK;    // Align physical addr (offset) to be at multiple of page size.
+  *pa_map_length = (*pa_map_length) + phys_addr - pa_phys_addr;     // Increase len due to phy addr alignment
+  *pa_virt_addr  = mmap(0, *pa_map_length, protection, flags, *fd, pa_phys_addr);
+  if (*pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
+  virt_addr      = *pa_virt_addr + phys_addr - pa_phys_addr;   // add offset to page aligned addr
+  fprintf(stderr, "    Shared mmap'ed DDR [len=0x%lx Bytes] starts at virtual address %p\n", *pa_map_length, virt_addr);
+
+#ifdef __TEST_USE_MLOCK__
+  int lockerr;
+  lockerr = mlock(*pa_virt_addr, *pa_map_length);
+  if (lockerr) fprintf(stderr, "ERROR: mlock failed \n");  // XXX: ought to bail out
+#endif /* __TEST_USE_MLOCK__ */
+
+#ifdef DEBUG
+  fprintf(stderr, "Shared mmap'ed DDR [len=0x%lx Bytes] starts at virtual address %p\n", *pa_map_length, virt_addr);
+  if (phys_addr > 0) fprintf(stderr, "Using Linux Physical addr %p: up to pa=0x%lX\n",
+                                  (void *) phys_addr, phys_addr + (*pa_map_length) - 1);
+#endif
+  return (virt_addr);
+}
+
+// Open channel device (based on name and type) and return its channel structure
+void *open_device(chan *cp) {
+  log_trace("%s of type=%s name=%s", __func__, cp->dev_type, cp->dev_name);
+  chan_print(cp);
+  exit(22);
+  if (strcmp(dev_type, "dma") == 0) {
+    return (dma_open_channel(cp, TX_BUFFER_COUNT, dev_direction));
+  }
+  if (strcmp(dev_type, "shm") == 0) {
+    return (shm_open_channel(cp, PROT_WRITE, MMAP_ADDR_HOST, dev_direction));
+  }
+  else {
+    log_fatal("Unsupported device type %s\n", dev_type);
+    exit(-1);
+  }
+}
+
+// If new device, then open it (and remember it in local list)
+void dev_open_if_new(chan *cp) {
+  static char dev_name_list[MAX_DEV_COUNT][64];
+  static int  dev_set_list[MAX_DEV_COUNT] = {0};
+  int         i;
+  
+  chan_print(cp);
+  for(i=0; i<MAX_DEV_COUNT; i++) {
+    if (dev_set_list[i] == 0) {
+      dev_set_list[i]  = 1;      // Put device name into list
+      strcpy(dev_name_list[i], cp->dev_name);
+      dev_open(cp);              // Open new device
+      return;
+    }
+    if (strcmp(dev_name, device_set_list[i]) == 0) return;  // not a new device
+  }
+  FATAL;    // Only here if list cannot store all devices (> MAX_DEV_COUNT)
+}
+
+/**********************************************************************/
+/* D) Channel Info: Print, Create, Find (for all devices and TX/RX)   */
+/**********************************************************************/
+void chan_print(chan *cp) {
+  log_trace("channel %08x: type=%s name=%s fd=%d new=%d lock=%d buf_ptr=%x ret=%d every %d ns", cp->ctag, cp->dev_type, cp->dev_name, cp->fd, cp->newd, cp->lock, cp->buf_ptr, cp->retries, RX_POLL_INTERVAL_NSEC);
+}
+
+void chan_init_all() {
+  int i, t_in_ms;
+  
+  t_in_ms = ((t_env = getenv("TIMEOUT_MS")) == NULL) ? RX_POLL_TIMEOUT_MSEC_DEFAULT : atoi(t_env);
+  for(i=0; i < GAPS_TAG_MAX; i++) {
+    chan_info[i].ctag    = 0;
+    chan_info[i].newd    = 0;
+    chan_info[i].count   = 0;
+    chan_info[i].retries = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;
+    chan_info[i].protect = PROT_READ | PROT_WRITE;
+    if (pthread_mutex_init(&(chan_info[i].lock), NULL) != 0)   FATAL;
+  }
+}
+
+// Get channel device name and type
+void get_dev_name_and_type(char *dev_type, char *dev_name) {
+  char *user_type = getenv("TYPEDEV"));
+  char *user_name = getenv("DMATXDEV"));
+  (user_type == NULL) ? strcat(dev_type, "dma") : strcpy(dev_type, user_type);
+
+  strcpy(dev_name, "/dev/");
+  if      (strcmp(dev_type, "dma") == 0) {
+    (user_name == NULL) ? strcat(dev_name, "dma_proxy_tx") : strcat(dev_name, user_name));
+  }
+  else if (strcmp(dev_type, "shm") == 0) {
+    (user_name == NULL) ? strcat(dev_name, "mem") : strcat(dev_name, user_name));
+  }
+  else {
+    log_fatal("Unsupported device type %s\n", dev_type);
+    exit(-1);
+  }
+}
+
+// For new tag, a) open device (if not already open), b) start rx thread and c) set configuration
+void chan_init_one(uint32_t ctag, char *dev_name) {
+  // b) Set channel configuration for this tag
+  chan_info[i].ctag = ctag;
+  get_dev_name_and_type(cp->dev_type, cp->dev_name);
+
+  chan_info[i].
+  // c) Start rx thread for this tag
+  
+  dev_open_if_new(&(chan_info[i]);
+}
+                  
 /* Return pointer to Rx packet buffer for specified tag */
 chan *get_chan_info(gaps_tag *tag) {
   static int once=1;
   uint32_t ctag;
-  int i, t_in_ms;
   char *t_env;
 
   ctag_encode(&ctag, tag);       /* Use encoded ctag as  */
@@ -110,26 +235,15 @@ chan *get_chan_info(gaps_tag *tag) {
   /* a) Initilize all channels (after locking from other application threads) */
   pthread_mutex_lock(&chan_create);
   if(once==1) {
-    t_in_ms = ((t_env = getenv("TIMEOUT_MS")) == NULL) ? RX_POLL_TIMEOUT_MSEC_DEFAULT : atoi(t_env);
+    chan_init_all();
     once = 0;
-    for(i=0; i < GAPS_TAG_MAX; i++) {
-      chan_info[i].ctag    = 0;
-      chan_info[i].newd    = 0;
-      chan_info[i].count   = 0;
-      chan_info[i].retries = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;
-      if (pthread_mutex_init(&(chan_info[i].lock), NULL) != 0) {
-        pthread_mutex_unlock(&rxlock);
-        log_fatal("rx_tag_info mutex init has failed failed");
-        exit(EXIT_FAILURE);
-      }
-    }
   }
 
   /* b) Find info for this tag */
   for(i=0; i < GAPS_TAG_MAX; i++) { /* Break on finding tag or empty whichever is first */
     if (chan_info[i].ctag == ctag) break; /* found existing slot for tag */
     if (chan_info[i].ctag == 0) {          /* found empty slot (before tag) */
-      chan_info[i].ctag = ctag;
+      chan_init_one(
       break;
     }
   }
@@ -222,93 +336,6 @@ void bw_gaps_data_decode(bw *p, size_t p_len, uint8_t *buff_out, size_t *len_out
 }
 
 /**********************************************************************/
-/* Device open functions                                              */
-/**********************************************************************/
-/* Open channel and save virtual address of buffer pointer */
-void dma_open_channel(chan *cp, int buffer_count) {
-  log_trace("%s: open DMA channel", __func__);
-  // a) Open device
-  cp->fd = open(cp->device_name, O_RDWR);
-  if (cp->fd < 1) FATAL;
-
-  // b) mmpp device
-  cp->buf_ptr = mmap(NULL, sizeof(struct channel_buffer) * buffer_count,
-                    PROT_READ | PROT_WRITE, MAP_SHARED, cp->fd, 0);
-  if (cp->buf_ptr == MAP_FAILED) {
-    log_fatal("Failed to mmap tx channel\n");
-    exit(EXIT_FAILURE);
-  }
-  log_trace("Opened channel %s: buf_ptr=%p, fd=%d", cp->device_name, cp->buf_ptr, cp->fd);
-}
-
-// Open DMA channel sat given Physical address
-//   Returns file descriptor and page-aligned address/length, so can deallocate
-void *shm_open_channel(char *device_name, int protection, unsigned long phys_addr, int *fd, void **pa_virt_addr, unsigned long *pa_map_length) {
-  void          *virt_addr;
-  unsigned long  pa_phys_addr;       /* page aligned physical address (offset) */
-  int            flags = MAP_SHARED;        // or (|) together bit flags
-
-
-  if((*fd = open("/dev/mem", O_RDWR | O_SYNC)) == -1) FATAL;
-  pa_phys_addr   = phys_addr & ~PAGE_MASK;    // Align physical addr (offset) to be at multiple of page size.
-  *pa_map_length = (*pa_map_length) + phys_addr - pa_phys_addr;     // Increase len due to phy addr alignment
-  *pa_virt_addr  = mmap(0, *pa_map_length, protection, flags, *fd, pa_phys_addr);
-  if (*pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
-  virt_addr      = *pa_virt_addr + phys_addr - pa_phys_addr;   // add offset to page aligned addr
-  fprintf(stderr, "    Shared mmap'ed DDR [len=0x%lx Bytes] starts at virtual address %p\n", *pa_map_length, virt_addr);
-
-#ifdef __TEST_USE_MLOCK__
-  int lockerr;
-  lockerr = mlock(*pa_virt_addr, *pa_map_length);
-  if (lockerr) fprintf(stderr, "ERROR: mlock failed \n");  // XXX: ought to bail out
-#endif /* __TEST_USE_MLOCK__ */
-
-#ifdef DEBUG
-  fprintf(stderr, "Shared mmap'ed DDR [len=0x%lx Bytes] starts at virtual address %p\n", *pa_map_length, virt_addr);
-  if (phys_addr > 0) fprintf(stderr, "Using Linux Physical addr %p: up to pa=0x%lX\n",
-                                  (void *) phys_addr, phys_addr + (*pa_map_length) - 1);
-#endif
-  return (virt_addr);
-}
-
-// Get channel device name and type
-void get_dev_name_and_type(char *device_type, char *device_name) {
-  char *user_type = getenv("TYPEDEV"));
-  char *user_name = getenv("DMATXDEV"));
-  (user_type == NULL) ? strcat(device_type, "dma") : strcpy(device_type, user_type);
-
-  strcpy(device_name, "/dev/");
-  if      (strcmp(device_type, "dma") == 0) {
-    (user_name == NULL) ? strcat(device_name, "dma_proxy_tx") : strcat(device_name, user_name));
-  }
-  else if (strcmp(device_type, "shm") == 0) {
-    (user_name == NULL) ? strcat(device_name, "mem") : strcat(device_name, user_name));
-  }
-  else {
-    log_fatal("Unsupported device type %s\n", device_type);
-    exit(-1);
-  }
-}
-
-// Open channel device (based on name and type) and return its channel structure
-void *open_device(chan *cp) {
-  chan_print(cp);
-  get_dev_name_and_type(cp->device_type, cp->device_name);
-  log_trace("%s of type=%s name=%s", __func__, cp->device_type, cp->device_name);
-  chan_print(cp);
-  exit(22);
-  if (strcmp(device_type, "dma") == 0) {
-    return (dma_open_channel(cp, TX_BUFFER_COUNT));
-  }
-  if (strcmp(device_type, "shm") == 0) {
-    return (shm_open_channel(cp, PROT_WRITE, MMAP_ADDR_HOST));
-  }
-  else {
-    log_fatal("Unsupported device type %s\n", device_type);
-    exit(-1);
-  }
-}
-/**********************************************************************/
 /* Device write functions                                              */
 /**********************************************************************/
 /* Use DMA ioctl operations to tx or rx data */
@@ -360,12 +387,12 @@ void asyn_send(void *adu, gaps_tag *tag) {
   log_trace("Start of %s", __func__);
   pthread_mutex_lock(&(cp.lock));
   if (once == 1) {   // Open channel once if needed
-    open_device(cp);
+    open_device(cp, DEV_DIR_OUT);
     once = 0;
   }
   // b) encode packet into TX buffer and send */
-  if (strcmp(cp->device_type, "dma") == 0) dma_send(cp);
-  if (strcmp(cp->device_type, "shm") == 0) shm_send(cp);
+  if (strcmp(cp->dev_type, "dma") == 0) dma_send(cp);
+  if (strcmp(cp->dev_type, "shm") == 0) shm_send(cp);
   pthread_mutex_unlock(&(cp.lock));
 }
 
@@ -447,7 +474,7 @@ int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
   chan_print(cp);
   exit(24);
   if (cp->newd != 0) {                            // get packet from buffer if available)
-    if (strcmp(cp->device_type, "dma") == 0) {    // MIND DMA driver
+    if (strcmp(cp->dev_type, "dma") == 0) {    // MIND DMA driver
       pp = cp->buf_ptr;                           // Point to device rx buffer
       time_trace("XDC_Rx2 start decode for tag=<%d,%d,%d>", tag->mux, tag->sec, tag->typ);
       bw_gaps_data_decode(cp->buf_ptr, 0, adu, &adu_len, tag);   /* Put packet into ADU */
@@ -458,11 +485,11 @@ int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
       time_trace("XDC_Rx3 packet copied to ADU: tag=<%d,%d,%d> pkt-len=%d adu-len=%d", tag->mux, tag->sec, tag->typ, packet_len, adu_len);
       log_debug("XDCOMMS rx packet tag=<%d,%d,%d> len=%d", tag->mux, tag->sec, tag->typ, packet_len);
     }
-    else if (strcmp(cp->device_type, "shm") == 0) {
+    else if (strcmp(cp->dev_type, "shm") == 0) {
       log_fatal("%s: Not yet written>", __func__);
     }
     else {
-      log_fatal("Unsupported device type %s\n", cp->device_type);
+      log_fatal("Unsupported device type %s\n", cp->dev_type);
       exit(-1);
     }
   }

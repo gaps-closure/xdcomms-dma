@@ -18,6 +18,7 @@
 #define PKT_G1_ADU_SIZE_MAX            65528  // Max packet size with 16-bit data_len = 2^16 - 8 (see bw header)
 #define ADU_SIZE_MAX_C               1000000     /* 1 MB - Increased for ILIP payload mode*/
 #define MAX_DEV_NAME_LEN                  64
+#define MAX_DEV_COUNT                      4
 
 // Buffer allocation to threads. NB: RX_THREADS * RX_BUFFS_PER_THREAD <= RX_BUFFER_COUNT
 #define RX_THREADS                         1  // Total number of receiver threads
@@ -36,7 +37,8 @@
 #define FATAL do { fprintf(stderr, "Error at line %d, file %s (%d) [%s]\n", \
     __LINE__, __FILE__, errno, strerror(errno)); exit(1); } while(0)
 
-
+#define DEV_DIR_IN  0
+#define DEV_DIR_OUT 1
 
 /* Per-tag Rx buffer stores retries (based on timeout) per tag value */
 
@@ -58,9 +60,12 @@ typedef struct _tag {
 
 typedef struct channel {
   uint32_t         ctag;             // Compressed tag (unique index) - used to search for channel
-  char             device_type[4];   // device type: e.g., shm (ESCAPE) or dma (MIND)
-  char             device_name[64];  // Device name: e.g., /dev/mem or /dev/sue_dominous
+  int              dev_direction;    // 0=in (from network), 1=out (to network)
+  int              dev_buf_count;    // Number of device buffers
+  char             dev_type[4];      // device type: e.g., shm (ESCAPE) or dma (MIND)
+  char             dev_name[64];     // Device name: e.g., /dev/mem or /dev/sue_dominous
   int              fd;               // Device file descriptor
+  int              protect;          // Mmap protection field
   void            *buf_ptr;          // Device buffer structure (differs by device type)
   pthread_mutex_t  lock;             // Ensure RX thread does not write while xdcomms reads
   char             newd;             // RX thread received new packet (xdcomms resets after reading)
