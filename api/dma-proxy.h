@@ -51,7 +51,7 @@ struct channel_buffer {
 	unsigned int      length;
 } __attribute__ ((aligned (1024)));		/* 64 byte alignment required for DMA, but 1024 handy for viewing memory */
 
-typedef struct channel {
+typedef struct _dma_channel {
   struct channel_buffer *buf_ptr;
   int    fd;
 } dma_channel;
