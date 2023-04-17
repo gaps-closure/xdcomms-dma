@@ -26,6 +26,8 @@
  * is cached aligned.
  */
 
+#include "xdcomms.h"
+
 #define BUFFER_SIZE (128 * 1024)	 	    /* must match driver exactly */
 #ifdef SUE_DONIMOUS
 #define BUFFER_COUNT 16					        /* driver only */
@@ -51,7 +53,7 @@ struct channel_buffer {
 
 typedef struct channel {
   struct channel_buffer *buf_ptr;
-  int fd;
+  int    fd;
 } dma_channel;
 
 /* BW packet format (MIND format) */

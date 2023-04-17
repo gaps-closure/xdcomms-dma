@@ -50,12 +50,6 @@ typedef struct _tag {
   uint32_t         typ;      /* data type */
 } gaps_tag;
 
-/* RX thread arguments */
-typedef struct _thread_args {
-  chan            *c;               // Channel RX thread is looking for
-  int              buffer_id_start; // Device buffer index
-} thread_args;
-
 typedef struct channel {
   uint32_t         ctag;             // Compressed tag (unique index) - used to search for channel
   char             device_type[4];   // device type: e.g., shm (ESCAPE) or dma (MIND)
@@ -67,6 +61,12 @@ typedef struct channel {
   int              retries;          // number of RX polls (every RX_POLL_INTERVAL_NSEC) before timeout
   int              count;            // number of RX polls (every RX_POLL_INTERVAL_NSEC) before timeout
 } chan;
+
+/* RX thread arguments */
+typedef struct _thread_args {
+  chan            *c;               // Channel RX thread is looking for
+  int              buffer_id_start; // Device buffer index
+} thread_args;
 
 extern void tag_print     (gaps_tag *, FILE *);
 extern void tag_write     (gaps_tag *, uint32_t,   uint32_t,   uint32_t);
