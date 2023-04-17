@@ -1,6 +1,8 @@
 #ifndef _SHM_H_
 #define _SHM_H_
 
+#include "xdcomms.h"
+
 #define MMAP_LEN_HOST      0x80000UL        // 0.5 MB
 #define MMAP_LEN_ESCAPE    0x10000000UL     // 256 MB
 #define MMAP_ADDR_ESCAPE   0x2080000000UL   // mmap physical memory address @ 130 GB
