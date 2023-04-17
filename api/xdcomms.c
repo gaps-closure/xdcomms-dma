@@ -35,8 +35,8 @@
 #include <sys/param.h>
 #include <pthread.h>
 
-#include "dma-proxy.h"
 #include "xdcomms.h"
+#include "dma-proxy.h"
 #include "shm.h"
 
 codec_map  cmap[DATA_TYP_MAX];       /* maps data type to its data encode + decode functions */

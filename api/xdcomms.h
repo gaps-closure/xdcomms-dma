@@ -10,8 +10,7 @@
 #include <assert.h>
 #include "log.h"
 #include "crc.h"
-#include "dma-proxy.h"
-#include "shm.h"
+
 
 #define DATA_TYP_MAX                      50
 #define GAPS_TAG_MAX                      50
