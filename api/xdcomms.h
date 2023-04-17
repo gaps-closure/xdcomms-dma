@@ -32,6 +32,12 @@
 #define NSEC_IN_MSEC                 1000000  // 10^6
 #define RX_POLL_INTERVAL_NSEC        1000000  // Poll Interval in nanpseconds e.g. 1000000 = checks every 1ms
 #define RX_POLL_TIMEOUT_MSEC_DEFAULT      40  // Default Total Poll time in milliseconds
+
+#define FATAL do { fprintf(stderr, "Error at line %d, file %s (%d) [%s]\n", \
+    __LINE__, __FILE__, errno, strerror(errno)); exit(1); } while(0)
+
+
+
 /* Per-tag Rx buffer stores retries (based on timeout) per tag value */
 
 /* Table of codec per data types (Max of DATA_TYP_MAX types) */

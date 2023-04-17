@@ -225,23 +225,20 @@ void bw_gaps_data_decode(bw *p, size_t p_len, uint8_t *buff_out, size_t *len_out
 /* Device open functions                                              */
 /**********************************************************************/
 /* Open channel and save virtual address of buffer pointer */
-void *dma_open_channel(chan *cp, int buffer_count) {
-  
+void dma_open_channel(chan *cp, int buffer_count) {
   log_trace("%s: open DMA channel", __func__);
-    cp->fd = open(cp->device_name, O_RDWR);
-    if (cp->fd < 1) {
-      log_fatal("Unable to open DMA proxy device file: %s (fd=%d)", cp->device_name, cp->fd);
-      exit(EXIT_FAILURE);
-    }
-    cp->buf_ptr = mmap(NULL, sizeof(struct channel_buffer) * buffer_count,
+  // a) Open device
+  cp->fd = open(cp->device_name, O_RDWR);
+  if (cp->fd < 1) FATAL
+
+  // b) mmpp device
+  cp->buf_ptr = mmap(NULL, sizeof(struct channel_buffer) * buffer_count,
                     PROT_READ | PROT_WRITE, MAP_SHARED, cp->fd, 0);
-    if (cp->buf_ptr == MAP_FAILED) {
-      log_fatal("Failed to mmap tx channel\n");
-      exit(EXIT_FAILURE);
-    }
-    log_trace("Opened channel %s: buf_ptr=%p, fd=%d", cp->device_name, cp->buf_ptr, cp->fd);
+  if (cp->buf_ptr == MAP_FAILED) {
+    log_fatal("Failed to mmap tx channel\n");
+    exit(EXIT_FAILURE);
   }
-  return (0); /* success */
+  log_trace("Opened channel %s: buf_ptr=%p, fd=%d", cp->device_name, cp->buf_ptr, cp->fd);
 }
 
 // Open DMA channel sat given Physical address
@@ -301,7 +298,7 @@ void *open_device(chan *cp) {
   chan_print(cp);
   exit(22);
   if (strcmp(device_type, "dma") == 0) {
-    return (dma_open_channel(cp, 1, TX_BUFFER_COUNT));
+    return (dma_open_channel(cp, TX_BUFFER_COUNT));
   }
   if (strcmp(device_type, "shm") == 0) {
     return (shm_open_channel(cp, PROT_WRITE, MMAP_ADDR_HOST));
