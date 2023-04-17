@@ -114,7 +114,7 @@ void *shm_open_channel(chan *cp, unsigned long phys_addr, void **pa_virt_addr, u
   unsigned long  pa_phys_addr;       /* page aligned physical address (offset) */
   int            flags = MAP_SHARED;        // or (|) together bit flags
 
-  if((*(cp->fd) = open("/dev/mem", O_RDWR | O_SYNC)) == -1) FATAL;
+  if((cp->fd = open("/dev/mem", O_RDWR | O_SYNC)) == -1) FATAL;
   pa_phys_addr   = phys_addr & ~MMAP_PAGE_MASK;    // Align physical addr (offset) to be at multiple of page size.
   *pa_map_length = (*pa_map_length) + phys_addr - pa_phys_addr;     // Increase len due to phy addr alignment
   *pa_virt_addr  = mmap(0, *pa_map_length, protection, flags, *fd, pa_phys_addr);
