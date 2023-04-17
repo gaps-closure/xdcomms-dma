@@ -115,7 +115,7 @@ void *shm_open_channel(chan *cp, unsigned long phys_addr, void **pa_virt_addr, u
   int            flags = MAP_SHARED;        // or (|) together bit flags
 
   if((*fd = open("/dev/mem", O_RDWR | O_SYNC)) == -1) FATAL;
-  pa_phys_addr   = phys_addr & ~PAGE_MASK;    // Align physical addr (offset) to be at multiple of page size.
+  pa_phys_addr   = phys_addr & ~MMAP_PAGE_MASK;    // Align physical addr (offset) to be at multiple of page size.
   *pa_map_length = (*pa_map_length) + phys_addr - pa_phys_addr;     // Increase len due to phy addr alignment
   *pa_virt_addr  = mmap(0, *pa_map_length, protection, flags, *fd, pa_phys_addr);
   if (*pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
@@ -195,8 +195,8 @@ void chan_init_all() {
 
 // Get channel device name and type
 void get_dev_name_and_type(char *dev_type, char *dev_name) {
-  char *user_type = getenv("TYPEDEV"));
-  char *user_name = getenv("DMATXDEV"));
+  char *user_type = getenv("TYPEDEV");
+  char *user_name = getenv("DMATXDEV");
   (user_type == NULL) ? strcat(dev_type, "dma") : strcpy(dev_type, user_type);
 
   strcpy(dev_name, "/dev/");
@@ -272,7 +272,7 @@ chan *get_chan_info(gaps_tag *tag) {
 int get_retries(gaps_tag *tag, int t_in_ms) {
   chan *cp = get_chan_info(tag);
   if (t_in_ms > 0) {
-    cp->retries = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;;     // Set value
+    cp->retries = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;     // Set value
     fprintf(stderr, "Set number of RX retries = %d every %d ns (for ctag=%08x)\n", cp->retries, RX_POLL_INTERVAL_NSEC, cp->ctag);
   }
   return (cp->retries);
