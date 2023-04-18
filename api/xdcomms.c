@@ -6,16 +6,21 @@
  * Library supports direct commicaiton between partitioned application
  * and CDGs, without a separate HAL daemon (linked with ZMQ).
  *
- * v0.4 MAY 2023:  Supprts communication with MIND and/or ESCAPE CDGs.
- * The xdcomms file abstracts the Hardware-specific communication based
- * on the contents of a HAL configuration file. It supports
- *   - MIND-DMA: MIND specific code from v0.3 into new linked file (hal_MIND_DMA.c)
- *   - ESCAPE-SHM: Shared Memory (SHM) comms in a new linked file (hal_ESCAPE_SHM.c)
+ * v0.4 MAY 2023: provides a hardware abstractions layer that supports
+ * a channel abstraction using a new chan structure defined in 'xdcomms.h'
+ * To relect this abstraction, the main file is renamed from sdcomms-dma.c'
+ * to 'xdcomms.c'. Currently it supports:
+ *   - MIND-DMA: with Direct Memory Access specific structures in 'dma-proxy.h'
+ *   - ESCAPE-SHM: with Shared Memory specific structures in 'shm-h'
+ * Configuration is done using environment variables, e.g.:
+ *  DMARXDEV=sue_donimous_rx1 DMATXDEV=sue_donimous_tx1 ./app_req_rep -e 2
+ *  DMARXDEV=sue_donimous_rx0 DMATXDEV=sue_donimous_tx0 ./app_req_rep
  *
- * v0.3 OCTOBER 2022:  Supprts direct transfers between CLOSURE and
- * the MIND-DMA CDG. The app connect to the MIND proxy DMA driver,
- * which uses kernel space DMA control to the XILINX AXI DMA / MCDMA
- * driver on the GE MIND ZCU102 FPGA board. For testing, it can also
+ *
+ * v0.3 OCTOBER 2022: Supprts direct transfers between CLOSURE and the
+ * MIND-DMA CDG. The app connect to the MIND proxy DMA driver, which
+ * uses kernel space DMA control to the XILINX AXI DMA / MCDMA driver
+ * on the GE MIND ZCU102 FPGA board. For testing, it can also
  * communicate without FPGA hardware using a Pseudo driver emulation
  */
 
@@ -99,15 +104,14 @@ void ctag_decode(uint32_t *ctag, gaps_tag *tag) {
 void dma_open_channel(chan *cp, int buffer_count) {
   log_trace("%s: open DMA channel", __func__);
   // a) Open device
-  cp->fd = open(cp->dev_name, O_RDWR);
-  if (cp->fd < 1) FATAL;
+  if (cp->fd = open(cp->dev_name, O_RDWR) < 1) FATAL;
 
   // b) mmpp device
-  cp->buf_ptr = mmap(NULL, sizeof(struct channel_buffer) * buffer_count, cp->protect, MAP_SHARED, cp->fd, 0);
+  cp->buf_ptr = mmap(NULL, sizeof(struct channel_buffer) * buffer_count, cp->mmap_protect, cp->mmap_flags, cp->fd, 0);
   if (cp->buf_ptr == MAP_FAILED) FATAL;
   log_trace("Opened channel %s: buf_ptr=%p, fd=%d", cp->dev_name, cp->buf_ptr, cp->fd);
 }
-
+MAP_SHARED
 // Open DMA channel sat given Physical address
 //   Returns file descriptor and page-aligned address/length, so can deallocate
 void *shm_open_channel(chan *cp, unsigned long phys_addr, void **pa_virt_addr, unsigned long *pa_map_length) {
@@ -115,19 +119,16 @@ void *shm_open_channel(chan *cp, unsigned long phys_addr, void **pa_virt_addr, u
   unsigned long  pa_phys_addr;       /* page aligned physical address (offset) */
   int            flags = MAP_SHARED;        // or (|) together bit flags
 
+  // a) Open device
   if((cp->fd = open("/dev/mem", O_RDWR | O_SYNC)) == -1) FATAL;
-  pa_phys_addr   = phys_addr & ~MMAP_PAGE_MASK;    // Align physical addr (offset) to be at multiple of page size.
-  *pa_map_length = (*pa_map_length) + phys_addr - pa_phys_addr;     // Increase len due to phy addr alignment
-  *pa_virt_addr  = mmap(0, *pa_map_length, protection, flags, *fd, pa_phys_addr);
+  
+  // b) mmpp device: reduce address to be a multiple of page size and add the diff to length
+  pa_phys_addr   = cp->phys_addr & ~MMAP_PAGE_MASK;
+  *pa_map_length = (*pa_map_length) + cp->phys_addr - pa_phys_addr;
+  *pa_virt_addr  = mmap(0, *pa_map_length, cp->mmap_protect, cp->mmap_flags, cp->fd, pa_phys_addr);
   if (*pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
   virt_addr      = *pa_virt_addr + phys_addr - pa_phys_addr;   // add offset to page aligned addr
   fprintf(stderr, "    Shared mmap'ed DDR [len=0x%lx Bytes] starts at virtual address %p\n", *pa_map_length, virt_addr);
-
-#ifdef __TEST_USE_MLOCK__
-  int lockerr;
-  lockerr = mlock(*pa_virt_addr, *pa_map_length);
-  if (lockerr) fprintf(stderr, "ERROR: mlock failed \n");  // XXX: ought to bail out
-#endif /* __TEST_USE_MLOCK__ */
 
 #ifdef DEBUG
   fprintf(stderr, "Shared mmap'ed DDR [len=0x%lx Bytes] starts at virtual address %p\n", *pa_map_length, virt_addr);
@@ -195,17 +196,20 @@ void chan_init_all() {
 }
 
 // Get channel device name and type
-void get_dev_name_and_type(char *dev_type, char *dev_name) {
-  char *user_type = getenv("TYPEDEV");
-  char *user_name = getenv("DMATXDEV");
-  (user_type == NULL) ? strcat(dev_type, "dma") : strcpy(dev_type, user_type);
+void get_dev_config(char *dev_type, char *dev_name, char *env_type, char *env_name, char *env_base, char *env_off, char *def_type, char *def_name_dma, char *def_name_shm) {
+  // a) define device type
+  (env_type == NULL) ? strcat(dev_type, def_type) : strcpy(dev_type, env_type);
 
-  strcpy(dev_name, "/dev/");
+  // b) define device name
+  strcpy(dev_name, "/dev/");        // prefix
   if      (strcmp(dev_type, "dma") == 0) {
-    (user_name == NULL) ? strcat(dev_name, "dma_proxy_tx") : strcat(dev_name, user_name));
+    (env_name == NULL) ? strcat(dev_name, def_name_dma) : strcat(dev_name, env_name));
   }
   else if (strcmp(dev_type, "shm") == 0) {
-    (user_name == NULL) ? strcat(dev_name, "mem") : strcat(dev_name, user_name));
+    (env_name == NULL) ? strcat(dev_name, def_name_shm) : strcat(dev_name, env_name));
+    (env_base == NULL) ? strcat(dev_base, def_base : strcat(dev_base, env_base));
+    (env_off_tx == NULL) ? strcat(dev_off_tx, def_off_tx : strcat(dev_off_tx, env_off_tx));
+    (env_off_rx == NULL) ? strcat(dev_off_rx, def_off_rx : strcat(dev_off_tx, env_off_tx));
   }
   else {
     log_fatal("Unsupported device type %s\n", dev_type);
@@ -213,15 +217,23 @@ void get_dev_name_and_type(char *dev_type, char *dev_name) {
   }
 }
 
-// For new tag, a) open device (if not already open), b) start rx thread and c) set configuration
+// Configure channel info for a new tag
 void chan_init_one(uint32_t ctag, char *dev_name) {
-  // b) Set channel configuration for this tag
+  // a) Set channel configuration for this tag
   chan_info[i].ctag = ctag;
-  get_dev_name_and_type(cp->dev_type, cp->dev_name);
+  get_dev_config(cp->tx_dev_type, cp->tx_dev_name, cp->base, cp->tx_off
+                 't', getenv("TXDEVTYPE"), getenv("TXDEVID"),
+                 getenv("DEVBASE"), getenv("TXDEVOFF"),
+                 "dma", "dma_proxy_tx", "mem");
+  get_dev_config(cp->rx_dev_type, cp->rx_dev_name, cp->base, cp->rx_off,
+                 'r', getenv("RXDEVTYPE"), getenv("RXDEVID"),
+                 getenv("DEVBASE"), getenv("RXDEVOFF"),
+                 "dma", "dma_proxy_rx", "mem");
 
-  chan_info[i].
-  // c) Start rx thread for this tag
+  // b) Start rx thread for this tag
   
+  
+  // c) open device (if not already open)
   dev_open_if_new(&(chan_info[i]);
 }
                   

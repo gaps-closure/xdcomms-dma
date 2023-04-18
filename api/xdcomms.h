@@ -65,7 +65,8 @@ typedef struct channel {
   char             dev_type[4];      // device type: e.g., shm (ESCAPE) or dma (MIND)
   char             dev_name[64];     // Device name: e.g., /dev/mem or /dev/sue_dominous
   int              fd;               // Device file descriptor
-  int              protect;          // Mmap protection field
+  int              mmap_protect;     // Mmap protection field
+  unsigned long    phys_addr;
   void            *buf_ptr;          // Device buffer structure (differs by device type)
   pthread_mutex_t  lock;             // Ensure RX thread does not write while xdcomms reads
   char             newd;             // RX thread received new packet (xdcomms resets after reading)
