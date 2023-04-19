@@ -109,9 +109,9 @@ void dma_open_channel(chan *cp, int buffer_count) {
   if ((cp->fd = open(cp->dev_name, O_RDWR)) < 1) FATAL;
 
   // b) mmpp device
-  cp->buf_ptr = mmap(NULL, sizeof(struct channel_buffer) * buffer_count, cp->mmap_prot, cp->mmap_flags, cp->fd, 0);
-  if (cp->buf_ptr == MAP_FAILED) FATAL;
-  log_trace("Opened channel %s: buf_ptr=%p, fd=%d", cp->dev_name, cp->buf_ptr, cp->fd);
+  cp->mmap_buf_ptr = mmap(NULL, sizeof(struct channel_buffer) * buffer_count, cp->mmap_prot, cp->mmap_flags, cp->fd, 0);
+  if (cp->mmap_buf_ptr == MAP_FAILED) FATAL;
+  log_trace("Opened channel %s: mmap_buf_ptr=%p, fd=%d", cp->dev_name, cp->mmap_buf_ptr, cp->fd);
 }
 
 // Open DMA channel sat given Physical address
@@ -237,7 +237,7 @@ void bw_gaps_data_decode(bw *p, size_t p_len, uint8_t *buff_out, size_t *len_out
 /* E) Channel Info: Print, Create, Find (for all devices and TX/RX)   */
 /**********************************************************************/
 void chan_print(chan *cp) {
-  log_trace("channel %08x: type=%s name=%s fd=%d new=%d lock=%d buf_ptr=%x ret=%d every %d ns", cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->newd, cp->lock, cp->buf_ptr, cp->retries, RX_POLL_INTERVAL_NSEC);
+  log_trace("channel %08x: type=%s name=%s fd=%d new=%d lock=%d mmap physical addr=%d mmap len=%d buf_ptr (mmap vaddr)=%x ret=%d every %d ns", cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->newd, cp->lock, cp->mmap_phys_addr cp->mmap_len, cp->mmap_buf_ptr, cp->retries, RX_POLL_INTERVAL_NSEC);
 }
 
 void chan_init_all_once() {
@@ -303,7 +303,7 @@ void chan_init_config_one(uint32_t ctag, char dir, chan cp) {
     get_dev_val (cp->addr_offset, getenv("DEVOFFSET"), 0x0, MMAP_LEN_HOST, cp->dev_type);
     get_dev_val(cp->mmap_len, getenv("MMAPLEN"), (sizeof(struct channel_buffer) * TX_BUFFER_COUNT), MMAP_LEN_ESCAPE, cp->dev_type);
   }
-  get_dev_val(cp->mmap_addr, getenv("MMAPADDR"), DMA_ADDR_HOST, SHM_MMAP_ADDR_HOST, cp->dev_type);
+  get_dev_val(cp->mmap_phys_addr, getenv("MMAPADDR"), DMA_ADDR_HOST, SHM_MMAP_ADDR_HOST, cp->dev_type);
 }
                   
 /* Return pointer to Rx packet buffer for specified tag */
@@ -375,9 +375,9 @@ int dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *cbuf_
 /* Send Packet to DMA driver */
 int send_channel_buffer(chan *cp, size_t packet_len, int buffer_id) {
   log_trace("Start of %s: Ready to Write packet (len=%d) to fd=%d (id=%d) ", __func__, packet_len, c->fd, buffer_id);
-  cp->buf_ptr[buffer_id].length = packet_len;
-  if (packet_len <= sizeof(bw)) log_buf_trace("TX_PKT", (uint8_t *) &(cp->buf_ptr[buffer_id]), packet_len);
-  return dma_start_to_finish(cp->fd, &buffer_id, &(cp->buf_ptr[buffer_id]));
+  cp->mmap_buf_ptr[buffer_id].length = packet_len;
+  if (packet_len <= sizeof(bw)) log_buf_trace("TX_PKT", (uint8_t *) &(cp->mmap_buf_ptr[buffer_id]), packet_len);
+  return dma_start_to_finish(cp->fd, &buffer_id, &(cp->mmap_buf_ptr[buffer_id]));
 }
 
 void dma_send(void *adu, gaps_tag *tag, void *tx_chan) {
@@ -386,7 +386,7 @@ void dma_send(void *adu, gaps_tag *tag, void *tx_chan) {
   const int    buffer_id=0;               // Use only a single buffer
   size_t       packet_len, adu_len;       // encoder calculates length */
 
-  p = (bw *) &(dma_tx_chan.buf_ptr,buffer[buffer_id]);    // point to a DMA packet buffer */
+  p = (bw *) &(dma_tx_chan.mmap_buf_ptr,buffer[buffer_id]);    // point to a DMA packet buffer */
   time_trace("XDC_Tx1 ready to encode for tag=<%d,%d,%d>", tag->mux, tag->sec, tag->typ);
   bw_gaps_data_encode(p, &packet_len, adu, &adu_len, tag);  /* Put packet into channel buffer */
   time_trace("XDC_Tx2 ready to send data for tag=<%d,%d,%d> len=%ld", tag->mux, tag->sec, tag->typ, packet_len);
@@ -430,16 +430,16 @@ void *rcvr_thread_function(thread_args *vargs) {
 
   pkt_length = sizeof(bw);      /* XXX: ALl packets use buffer of Max size */
   log_debug("THREAD %s starting: fd=%d base_id=%d", __func__, c->fd, vargs->buffer_id_start);
-//  log_trace("THREAD ptrs: a=%p, b=%p, c=%p", vargs, &(c->buf_ptr[0]), c);
+//  log_trace("THREAD ptrs: a=%p, b=%p, c=%p", vargs, &(c->mmap_buf_ptr[0]), c);
   
   while (1) {
     buffer_id = vargs->buffer_id_start + buffer_id_index;
-    c->buf_ptr[buffer_id].length = pkt_length;
-    if (dma_start_to_finish(c->fd, &buffer_id, &(c->buf_ptr[buffer_id])) == 0) {
-      p = (bw *) &(c->buf_ptr[buffer_id]);    /* XXX: DMA buffer must be larger than size of BW */
+    c->mmap_buf_ptr[buffer_id].length = pkt_length;
+    if (dma_start_to_finish(c->fd, &buffer_id, &(c->mmap_buf_ptr[buffer_id])) == 0) {
+      p = (bw *) &(c->mmap_buf_ptr[buffer_id]);    /* XXX: DMA buffer must be larger than size of BW */
       ctag_decode(&(p->message_tag_ID), &tag);
       time_trace("XDC_THRD got packet tag=<%d,%d,%d> (fd=%d id=%d)", tag.mux, tag.sec, tag.typ, c->fd, buffer_id);
-      log_trace("THREAD rx packet tag=<%d,%d,%d> buf-id=%d st=%d", tag.mux, tag.sec, tag.typ, buffer_id, c->buf_ptr[buffer_id].status);
+      log_trace("THREAD rx packet tag=<%d,%d,%d> buf-id=%d st=%d", tag.mux, tag.sec, tag.typ, buffer_id, c->mmap_buf_ptr[buffer_id].status);
 
       /* get buffer for tag, lock buffer, copy packet ptr to buffer, mark as newdata, release lock */
       t = get_chan_info(&tag);
@@ -494,11 +494,11 @@ int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
   exit(24);
   if (cp->newd != 0) {                            // get packet from buffer if available)
     if (strcmp(cp->dev_type, "dma") == 0) {    // MIND DMA driver
-      pp = cp->buf_ptr;                           // Point to device rx buffer
+      pp = cp->mmap_buf_ptr;                           // Point to device rx buffer
       time_trace("XDC_Rx2 start decode for tag=<%d,%d,%d>", tag->mux, tag->sec, tag->typ);
-      bw_gaps_data_decode(cp->buf_ptr, 0, adu, &adu_len, tag);   /* Put packet into ADU */
+      bw_gaps_data_decode(cp->mmap_buf_ptr, 0, adu, &adu_len, tag);   /* Put packet into ADU */
       packet_len = bw_get_packet_length(pp, adu_len);
-      log_trace("XDCOMMS reads from DMA channel (buf_ptr=%p) len=(b=%d p=%d)", p, adu_len, packet_len);
+      log_trace("XDCOMMS reads from DMA channel (mmap_buf_ptr=%p) len=(b=%d p=%d)", p, adu_len, packet_len);
       if (packet_len <= sizeof(bw)) log_buf_trace("RX_PKT", (uint8_t *) pp, packet_len);
       cp->newd = 0;                      // unmark newdata
       time_trace("XDC_Rx3 packet copied to ADU: tag=<%d,%d,%d> pkt-len=%d adu-len=%d", tag->mux, tag->sec, tag->typ, packet_len, adu_len);
