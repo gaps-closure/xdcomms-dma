@@ -122,7 +122,7 @@ void *shm_open_channel(chan *cp, unsigned long phys_addr, void **pa_virt_addr, u
   int            flags = MAP_SHARED;        // or (|) together bit flags
 
   // a) Open device
-  if (cp->fd = open(cp->dev_name, O_RDWR | O_SYNC)) == -1) FATAL;
+  if ((cp->fd = open(cp->dev_name, O_RDWR | O_SYNC)) == -1) FATAL;
   
   // b) mmpp device: reduce address to be a multiple of page size and add the diff to length
    pa_phys_addr  = cp->phys_addr & ~MMAP_PAGE_MASK;
