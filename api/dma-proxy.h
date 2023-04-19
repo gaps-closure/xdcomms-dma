@@ -64,7 +64,6 @@ typedef struct _sdh_bw {
   uint8_t   data[PKT_G1_ADU_SIZE_MAX];  /* Application data unit */
 } bw;
 
-#define DMA_BUFFERS_TOTAL_BYTES (sizeof(struct channel_buffer) * BUFFER_COUNT)
 #define DMA_ADDR_HOST     0x0UL            // Host System selects mmap physical memory address
 
 
