@@ -106,7 +106,7 @@ void ctag_decode(uint32_t *ctag, gaps_tag *tag) {
 void dma_open_channel(chan *cp, int buffer_count) {
   log_trace("%s: open DMA channel", __func__);
   // a) Open device
-  if (cp->fd = open(cp->dev_name, O_RDWR) < 1) FATAL;
+  if ((cp->fd = open(cp->dev_name, O_RDWR)) < 1) FATAL;
 
   // b) mmpp device
   cp->buf_ptr = mmap(NULL, sizeof(struct channel_buffer) * buffer_count, cp->mmap_protect, cp->mmap_flags, cp->fd, 0);
