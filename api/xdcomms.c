@@ -1,27 +1,29 @@
 /*
  * Cross Domain (XD) Communication API between Partitioned Applicaitons
  * and a GAP's Cross Domain Guard (CDG)
- *   v0.4, April 2023
+ *   v0.4, May 2023
  *
  * Library supports direct commicaiton between partitioned application
  * and CDGs, without a separate HAL daemon (linked with ZMQ).
  *
- * v0.4 MAY 2023: provides a hardware abstractions layer that supports
- * a channel abstraction using a new chan structure defined in 'xdcomms.h'
- * To relect this abstraction, the main file is renamed from sdcomms-dma.c'
- * to 'xdcomms.c'. Currently it supports:
+ * v0.4 MAY 2023: adds hardware abstractions layer that defines
+ * abstracted one-way channels defined in 'xdcomms.h'. To relect this
+ * abstraction, this file is renamed from sdcomms-dma.c' to 'xdcomms.c'.
+ * Currently, it supports:
  *   - MIND-DMA: with Direct Memory Access specific structures in 'dma-proxy.h'
  *   - ESCAPE-SHM: with Shared Memory specific structures in 'shm-h'
- * Configuration is done using environment variables, e.g.:
- *  DMARXDEV=sue_donimous_rx1 DMATXDEV=sue_donimous_tx1 ./app_req_rep -e 2
- *  DMARXDEV=sue_donimous_rx0 DMATXDEV=sue_donimous_tx0 ./app_req_rep
- *
+ * Configuration is done using environment variables. Example below
  *
  * v0.3 OCTOBER 2022: Supprts direct transfers between CLOSURE and the
  * MIND-DMA CDG. The app connect to the MIND proxy DMA driver, which
  * uses kernel space DMA control to the XILINX AXI DMA / MCDMA driver
  * on the GE MIND ZCU102 FPGA board. For testing, it can also
  * communicate without FPGA hardware using a Pseudo driver emulation
+ */
+
+/* Example configuration using test application (found in ../test/)
+ *  DMARXDEV=sue_donimous_rx1 DMATXDEV=sue_donimous_tx1 ./app_req_rep -e 2
+ *  DMARXDEV=sue_donimous_rx0 DMATXDEV=sue_donimous_tx0 ./app_req_rep
  */
 
 #include <stdio.h>
@@ -44,7 +46,7 @@
 #include "dma-proxy.h"
 #include "shm.h"
 
-codec_map  cmap[DATA_TYP_MAX];       /* maps data type to its data encode + decode functions */
+codec_map  cmap[DATA_TYP_MAX];       // maps data type to its data encode + decode functions
 chan       chan_info[GAPS_TAG_MAX];  // array of buffers to store channel info per tag
 
 pthread_mutex_t txlock;
@@ -111,7 +113,7 @@ void dma_open_channel(chan *cp, int buffer_count) {
   if (cp->buf_ptr == MAP_FAILED) FATAL;
   log_trace("Opened channel %s: buf_ptr=%p, fd=%d", cp->dev_name, cp->buf_ptr, cp->fd);
 }
-MAP_SHARED
+
 // Open DMA channel sat given Physical address
 //   Returns file descriptor and page-aligned address/length, so can deallocate
 void *shm_open_channel(chan *cp, unsigned long phys_addr, void **pa_virt_addr, unsigned long *pa_map_length) {
@@ -120,11 +122,11 @@ void *shm_open_channel(chan *cp, unsigned long phys_addr, void **pa_virt_addr, u
   int            flags = MAP_SHARED;        // or (|) together bit flags
 
   // a) Open device
-  if((cp->fd = open("/dev/mem", O_RDWR | O_SYNC)) == -1) FATAL;
+  if (cp->fd = open(cp->dev_name, O_RDWR | O_SYNC)) == -1) FATAL;
   
   // b) mmpp device: reduce address to be a multiple of page size and add the diff to length
-  pa_phys_addr   = cp->phys_addr & ~MMAP_PAGE_MASK;
-  *pa_map_length = (*pa_map_length) + cp->phys_addr - pa_phys_addr;
+   pa_phys_addr  = cp->phys_addr & ~MMAP_PAGE_MASK;
+  *pa_map_length = cp->mmap_length + cp->phys_addr - pa_phys_addr;
   *pa_virt_addr  = mmap(0, *pa_map_length, cp->mmap_protect, cp->mmap_flags, cp->fd, pa_phys_addr);
   if (*pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
   virt_addr      = *pa_virt_addr + phys_addr - pa_phys_addr;   // add offset to page aligned addr
@@ -178,53 +180,85 @@ void dev_open_if_new(chan *cp) {
 /* D) Channel Info: Print, Create, Find (for all devices and TX/RX)   */
 /**********************************************************************/
 void chan_print(chan *cp) {
-  log_trace("channel %08x: type=%s name=%s fd=%d new=%d lock=%d buf_ptr=%x ret=%d every %d ns", cp->ctag, cp->dev_type, cp->dev_name, cp->fd, cp->newd, cp->lock, cp->buf_ptr, cp->retries, RX_POLL_INTERVAL_NSEC);
+  log_trace("channel %08x: type=%s name=%s fd=%d new=%d lock=%d buf_ptr=%x ret=%d every %d ns", cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->newd, cp->lock, cp->buf_ptr, cp->retries, RX_POLL_INTERVAL_NSEC);
 }
 
-void chan_init_all() {
-  int i, t_in_ms;
+void chan_init_all_once() {
+  static int once=1;
+  int        i, t_in_ms;
   
-  t_in_ms = ((t_env = getenv("TIMEOUT_MS")) == NULL) ? RX_POLL_TIMEOUT_MSEC_DEFAULT : atoi(t_env);
-  for(i=0; i < GAPS_TAG_MAX; i++) {
-    chan_info[i].ctag    = 0;
-    chan_info[i].newd    = 0;
-    chan_info[i].count   = 0;
-    chan_info[i].retries = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;
-    chan_info[i].protect = PROT_READ | PROT_WRITE;
-    if (pthread_mutex_init(&(chan_info[i].lock), NULL) != 0)   FATAL;
+  if (once==1) {
+    t_in_ms = ((t_env = getenv("TIMEOUT_MS")) == NULL) ? RX_POLL_TIMEOUT_MSEC_DEFAULT : atoi(t_env);
+    for(i=0; i < GAPS_TAG_MAX; i++) {
+      chan_info[i].ctag       = 0;
+      chan_info[i].newd       = 0;
+      chan_info[i].count      = 0;
+      chan_info[i].retries    = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;
+      chan_info[i].mmap_prot  = PROT_READ | PROT_WRITE
+      chan_info[i].mmap_flags = MAP_SHARED;
+      if (pthread_mutex_init(&(chan_info[i].lock), NULL) != 0)   FATAL;
+    }
+    once=0;
   }
 }
 
 // Get channel device name and type
-void get_dev_config(char *dev_type, char *dev_name, char *env_type, char *env_name, char *env_base, char *env_off, char *def_type, char *def_name_dma, char *def_name_shm) {
-  // a) define device type
-  (env_type == NULL) ? strcat(dev_type, def_type) : strcpy(dev_type, env_type);
+void get_dev_type(char *dev_type, char *env_type, char *def_type) {
+  (env_type == NULL) ? strcpy(dev_type, def_type) : strcpy(dev_type, env_type);
+}
 
-  // b) define device name
-  strcpy(dev_name, "/dev/");        // prefix
-  if      (strcmp(dev_type, "dma") == 0) {
+void get_dev_name(char *dev_name, char *env_name, char *def_name_dma, char *def_name_shm, char *dev_type) {
+  strcpy(dev_type, "/dev/");        // prefix
+  if (strcmp(dev_type, "dma") == 0) {
     (env_name == NULL) ? strcat(dev_name, def_name_dma) : strcat(dev_name, env_name));
   }
-  else if (strcmp(dev_type, "shm") == 0) {
+  else if (strcmp(dev_type, "shm") == 0)
     (env_name == NULL) ? strcat(dev_name, def_name_shm) : strcat(dev_name, env_name));
-    (env_base == NULL) ? strcat(dev_base, def_base : strcat(dev_base, env_base));
-    (env_off_tx == NULL) ? strcat(dev_off_tx, def_off_tx : strcat(dev_off_tx, env_off_tx));
-    (env_off_rx == NULL) ? strcat(dev_off_rx, def_off_rx : strcat(dev_off_tx, env_off_tx));
+  }
+  else FATAL;
+}
+      
+      int num
+      
+      
+    }? strcat(dev_name, def_name_dma) : strcat(dev_name, env_name));
+  }
+  else if (strcmp(dev_type, "shm") == 0)
+    (env_name == NULL) ? strcat(dev_name, def_name_shm) : strcat(dev_name, env_name));
+  }
+  else FATAL;
+}
+
+void get_dev_val(unsigned long *val, char *env_val, unsigned long def_val_dma, unsigned long def_val_shm, char *dev_type) {
+  if (env_name == NULL) {
+    if       (strcmp(dev_type, "dma") == 0) *val = def_val_dma;
+    else if  (strcmp(dev_type, "shm") == 0) *val = def_val_shm;
+    else FATAL;
   }
   else {
-    log_fatal("Unsupported device type %s\n", dev_type);
-    exit(-1);
+    *val = (unsigned long) strtol(env_val, NULL, 16);
   }
 }
 
-// Configure channel info for a new tag
-void chan_init_one(uint32_t ctag, char *dev_name) {
+// Initialize for a new tag
+void chan_init_one(uint32_t ctag, char dir, chan cp) {
   // a) Set channel configuration for this tag
   chan_info[i].ctag = ctag;
-  get_dev_config(cp->tx_dev_type, cp->tx_dev_name, cp->base, cp->tx_off
-                 't', getenv("TXDEVTYPE"), getenv("TXDEVID"),
-                 getenv("DEVBASE"), getenv("TXDEVOFF"),
-                 "dma", "dma_proxy_tx", "mem");
+  chan_info[i].dir  = dir;
+  if (dir == 't') {
+    get_dev_type(cp->dev_type, getenv("TXDEVTYPE"), "dma");
+    get_dev_name(cp->dev_name, getenv("TXDEVNAME"), "dma_proxy_tx", "mem", cp->dev_type);
+    get_dev_val (cp->addr_offset, getenv("DEVOFFSET"), 0x0, , 0x0, cp->dev_type);
+  }
+  else {
+    get_dev_type(cp->dev_type, getenv("RXDEVTYPE"), "dma");
+    get_dev_name(cp->dev_name, getenv("RXDEVNAME"), "dma_proxy_rx", "mem", cp->rx_dev_type);
+  }
+  get_dev_val(cp->mmap_addr, getenv("MMAPADDR"), DMA_ADDR_HOST, SHM_MMAP_ADDR_HOST, cp->dev_type);
+  get_dev_val(cp->mmap_len,  getenv("MMAPLEN"), DMA_BUFFERS_TOTAL_BYTES, MMAP_LEN_ESCAPE, cp->dev_type);
+
+  getenv("DEVADDBASE"), getenv("TXDEVOFFSET"), , "dma_proxy_tx");
+                 , "mem");
   get_dev_config(cp->rx_dev_type, cp->rx_dev_name, cp->base, cp->rx_off,
                  'r', getenv("RXDEVTYPE"), getenv("RXDEVID"),
                  getenv("DEVBASE"), getenv("RXDEVOFF"),
@@ -238,38 +272,29 @@ void chan_init_one(uint32_t ctag, char *dev_name) {
 }
                   
 /* Return pointer to Rx packet buffer for specified tag */
-chan *get_chan_info(gaps_tag *tag) {
-  static int once=1;
+chan *get_chan_info(gaps_tag *tag, char dir) {
   uint32_t ctag;
   char *t_env;
-
-  ctag_encode(&ctag, tag);       /* Use encoded ctag as  */
   
   /* a) Initilize all channels (after locking from other application threads) */
   pthread_mutex_lock(&chan_create);
-  if(once==1) {
-    chan_init_all();
-    once = 0;
-  }
+  chan_init_all_once();
 
   /* b) Find info for this tag */
-  for(i=0; i < GAPS_TAG_MAX; i++) { /* Break on finding tag or empty whichever is first */
-    if (chan_info[i].ctag == ctag) break; /* found existing slot for tag */
-    if (chan_info[i].ctag == 0) {          /* found empty slot (before tag) */
-      chan_init_one(
+  ctag_encode(&ctag, tag);                 // Encoded ctag
+  for(i=0; i < GAPS_TAG_MAX; i++) {        // Break on finding tag or empty
+    if (chan_info[i].ctag == ctag) break;  // found existing slot for tag
+    if (chan_info[i].ctag == 0) {          // found empty slot (before tag)
+      chan_init_one(ctag, dir, &(chan_info[i]);
       break;
     }
   }
-  pthread_mutex_unlock(&chan_create);
-
   log_trace("%s: chan_info entry %d for ctag=%x]", __func__, i, ctag);
-  if (i >= GAPS_TAG_MAX) {
-    pthread_mutex_unlock(&rxlock);
-    log_fatal("TagBuf table is full (GAPS_TAG_MAX=%d)\n", i);
-    exit(EXIT_FAILURE);
-  }
+
   /* c) Unlock and return chan_info pointer */
+  if (i >= GAPS_TAG_MAX) FATAL;
   chan_print(&chan_info[i]);
+  pthread_mutex_unlock(&chan_create);
   return &chan_info[i];
 }
 

@@ -58,20 +58,22 @@ typedef struct _tag {
   uint32_t         typ;      /* data type */
 } gaps_tag;
 
+// channel configuration (with device abstraction)
 typedef struct channel {
-  uint32_t         ctag;             // Compressed tag (unique index) - used to search for channel
-  int              dev_direction;    // 0=in (from network), 1=out (to network)
-  int              dev_buf_count;    // Number of device buffers
-  char             dev_type[4];      // device type: e.g., shm (ESCAPE) or dma (MIND)
-  char             dev_name[64];     // Device name: e.g., /dev/mem or /dev/sue_dominous
-  int              fd;               // Device file descriptor
-  int              mmap_protect;     // Mmap protection field
-  unsigned long    phys_addr;
-  void            *buf_ptr;          // Device buffer structure (differs by device type)
-  pthread_mutex_t  lock;             // Ensure RX thread does not write while xdcomms reads
-  char             newd;             // RX thread received new packet (xdcomms resets after reading)
-  int              retries;          // number of RX polls (every RX_POLL_INTERVAL_NSEC) before timeout
-  int              count;            // number of RX polls (every RX_POLL_INTERVAL_NSEC) before timeout
+  uint32_t         ctag;           // Compressed tag (unique index) - used to search for channel
+  char             dir;            // Receive (from network) or Transmit (to network): 'r' or 't'
+  char             dev_type[4];    // device type: e.g., shm (ESCAPE) or dma (MIND)
+  char             dev_name[64];   // Device name: e.g., /dev/mem or /dev/sue_dominous
+  int              fd;             // Device file descriptor (set when device openned)
+  unsigned long    mmap_addr;
+  unsigned long    mmap_len;
+  int              mmap_prot;      // Mmap protection field (Read and/or write)
+  int              mmap_flags;
+  void            *buf_ptr;        // Device buffer structure (differs by device type)
+  pthread_mutex_t  lock;           // Ensure RX thread does not write while xdcomms reads
+  char             newd;           // RX thread received new packet (xdcomms resets after reading)
+  int              retries;        // number of RX polls (every RX_POLL_INTERVAL_NSEC) before timeout
+  int              count;          // number of RX polls (every RX_POLL_INTERVAL_NSEC) before timeout
 } chan;
 
 /* RX thread arguments */
