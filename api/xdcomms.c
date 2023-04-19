@@ -109,7 +109,7 @@ void dma_open_channel(chan *cp, int buffer_count) {
   if ((cp->fd = open(cp->dev_name, O_RDWR)) < 1) FATAL;
 
   // b) mmpp device
-  cp->buf_ptr = mmap(NULL, sizeof(struct channel_buffer) * buffer_count, cp->mmap_protect, cp->mmap_flags, cp->fd, 0);
+  cp->buf_ptr = mmap(NULL, sizeof(struct channel_buffer) * buffer_count, cp->mmap_prot, cp->mmap_flags, cp->fd, 0);
   if (cp->buf_ptr == MAP_FAILED) FATAL;
   log_trace("Opened channel %s: buf_ptr=%p, fd=%d", cp->dev_name, cp->buf_ptr, cp->fd);
 }
