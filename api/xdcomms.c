@@ -100,6 +100,127 @@ void ctag_decode(uint32_t *ctag, gaps_tag *tag) {
 }
 
 /**********************************************************************/
+/* E) Channel Info: Print, Create, Find (for all devices and TX/RX)   */
+/**********************************************************************/
+void chan_print(chan *cp) {
+  log_trace("channel %08x: type=%s name=%s fd=%d new=%d lock=%d mmap physical addr=%d mmap len=%d buf_ptr (mmap vaddr)=%x ret=%d every %d ns", cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->newd, cp->lock, cp->mmap_phys_addr cp->mmap_len, cp->mmap_virt_addr, cp->retries, RX_POLL_INTERVAL_NSEC);
+}
+
+void chan_init_all_once() {
+  static int once=1;
+  int        i, t_in_ms;
+  
+  if (once==1) {
+    t_in_ms = ((t_env = getenv("TIMEOUT_MS")) == NULL) ? RX_POLL_TIMEOUT_MSEC_DEFAULT : atoi(t_env);
+    for(i=0; i < GAPS_TAG_MAX; i++) {
+      chan_info[i].ctag       = 0;
+      chan_info[i].newd       = 0;
+      chan_info[i].count      = 0;
+      chan_info[i].retries    = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;
+      chan_info[i].mmap_prot  = PROT_READ | PROT_WRITE
+      chan_info[i].mmap_flags = MAP_SHARED;
+      if (pthread_mutex_init(&(chan_info[i].lock), NULL) != 0)   FATAL;
+    }
+    once=0;
+  }
+}
+
+// Get channel device name and type
+void get_dev_type(char *dev_type, char *env_type, char *def_type) {
+  (env_type == NULL) ? strcpy(dev_type, def_type) : strcpy(dev_type, env_type);
+}
+
+void get_dev_name(char *dev_name, char *env_name, char *def_name_dma, char *def_name_shm, char *dev_type) {
+  strcpy(dev_type, "/dev/");        // prefix
+  if (strcmp(dev_type, "dma") == 0) {
+    (env_name == NULL) ? strcat(dev_name, def_name_dma) : strcat(dev_name, env_name));
+  }
+  else if (strcmp(dev_type, "shm") == 0)
+    (env_name == NULL) ? strcat(dev_name, def_name_shm) : strcat(dev_name, env_name));
+  }
+  else FATAL;
+}
+
+void get_dev_val(unsigned long *val, char *env_val, unsigned long def_val_dma, unsigned long def_val_shm, char *dev_type) {
+  if (env_name == NULL) {
+    if       (strcmp(dev_type, "dma") == 0) *val = def_val_dma;
+    else if  (strcmp(dev_type, "shm") == 0) *val = def_val_shm;
+    else FATAL;
+  }
+  else {
+    *val = (unsigned long) strtol(env_val, NULL, 16);
+  }
+}
+
+// Initialize configuration for a new tag
+void chan_init_config_one(uint32_t ctag, char dir, chan cp) {
+  // a) Set channel configuration for this tag
+  chan_info[i].ctag = ctag;
+  chan_info[i].dir  = dir;
+  if (dir == 't') {
+    get_dev_type(cp->dev_type, getenv("TXDEVTYPE"), "dma");
+    get_dev_name(cp->dev_name, getenv("TXDEVNAME"), "dma_proxy_tx", "mem", cp->dev_type);
+    get_dev_val (cp->addr_offset, getenv("DEVOFFSET"), 0x0, , 0x0, cp->dev_type);
+    get_dev_val(cp->mmap_len, getenv("MMAPLEN"), (sizeof(struct channel_buffer) * TX_BUFFER_COUNT), MMAP_LEN_ESCAPE, cp->dev_type);
+  }
+  else {
+    get_dev_type(cp->dev_type, getenv("RXDEVTYPE"), "dma");
+    get_dev_name(cp->dev_name, getenv("RXDEVNAME"), "dma_proxy_rx", "mem", cp->rx_dev_type);
+    get_dev_val (cp->addr_offset, getenv("DEVOFFSET"), 0x0, MMAP_LEN_HOST, cp->dev_type);
+    get_dev_val(cp->mmap_len, getenv("MMAPLEN"), (sizeof(struct channel_buffer) * TX_BUFFER_COUNT), MMAP_LEN_ESCAPE, cp->dev_type);
+  }
+  get_dev_val(cp->mmap_phys_addr, getenv("MMAPADDR"), DMA_ADDR_HOST, SHM_MMAP_ADDR_HOST, cp->dev_type);
+}
+                  
+/* Return pointer to Rx packet buffer for specified tag */
+chan *get_chan_info(gaps_tag *tag, char dir) {
+  uint32_t ctag;
+  char *t_env;
+  
+  /* a) Initilize all channels (after locking from other application threads) */
+  pthread_mutex_lock(&chan_create);
+  chan_init_all_once();
+
+  /* b) Find info for this tag */
+  ctag_encode(&ctag, tag);                 // Encoded ctag
+  for(i=0; i < GAPS_TAG_MAX; i++) {        // Break on finding tag or empty
+    if (chan_info[i].ctag == ctag) break;  // found existing slot for tag
+    if (chan_info[i].ctag == 0) {          // found empty slot (before tag)
+      chan_init_config_one(ctag, dir, &(chan_info[i]);  // a) Configure new tag
+      if (dir == 'r') rcvr_thread_start(void);          // b) Start rx thread for new tag
+      dev_open_if_new(&(chan_info[i]);                  // c) open device (if not already open)
+      break;
+    }
+  }
+  log_trace("%s: chan_info entry %d for ctag=%x]", __func__, i, ctag);
+
+  /* c) Unlock and return chan_info pointer */
+  if (i >= GAPS_TAG_MAX) FATAL;
+  chan_print(&chan_info[i]);
+  pthread_mutex_unlock(&chan_create);
+  return &chan_info[i];
+}
+
+/* Return the number of retries for the specified input tag (from the value stored
+ * in the rx_tag_info linked-list. If not set, t will calculate the number of
+ * retries from one of three possible timeout values (specified in milli-seconds).
+ * In order of precedence (highest first) they are the:
+ *    a) Input parameter (t_in_ms) specified in a xdc_sub_socket_non_blocking() call
+ *       (this is the only way to specify a different value for each flow).
+ *    b) Environment variable (TIMEOUT_MS) speciied when starting app (see get_chan_info()).
+ *    c) Default (RX_POLL_TIMEOUT_MSEC_DEFAULT) from xdcomms.h (see get_chan_info())
+ */
+int get_retries(gaps_tag *tag, int t_in_ms) {
+  chan *cp = get_chan_info(tag);
+  if (t_in_ms > 0) {
+    cp->retries = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;     // Set value
+    fprintf(stderr, "Set number of RX retries = %d every %d ns (for ctag=%08x)\n", cp->retries, RX_POLL_INTERVAL_NSEC, cp->ctag);
+  }
+  return (cp->retries);
+}
+
+                      
+/**********************************************************************/
 /* Device open                                               */
 /**********************************************************************/
 /* Open channel and save virtual address of buffer pointer */
@@ -226,125 +347,6 @@ void bw_gaps_data_decode(bw *p, size_t p_len, uint8_t *buff_out, size_t *len_out
   log_buf_trace("    <- decoded data:", buff_out, *len_out);
 }
 
-/**********************************************************************/
-/* E) Channel Info: Print, Create, Find (for all devices and TX/RX)   */
-/**********************************************************************/
-void chan_print(chan *cp) {
-  log_trace("channel %08x: type=%s name=%s fd=%d new=%d lock=%d mmap physical addr=%d mmap len=%d buf_ptr (mmap vaddr)=%x ret=%d every %d ns", cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->newd, cp->lock, cp->mmap_phys_addr cp->mmap_len, cp->mmap_virt_addr, cp->retries, RX_POLL_INTERVAL_NSEC);
-}
-
-void chan_init_all_once() {
-  static int once=1;
-  int        i, t_in_ms;
-  
-  if (once==1) {
-    t_in_ms = ((t_env = getenv("TIMEOUT_MS")) == NULL) ? RX_POLL_TIMEOUT_MSEC_DEFAULT : atoi(t_env);
-    for(i=0; i < GAPS_TAG_MAX; i++) {
-      chan_info[i].ctag       = 0;
-      chan_info[i].newd       = 0;
-      chan_info[i].count      = 0;
-      chan_info[i].retries    = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;
-      chan_info[i].mmap_prot  = PROT_READ | PROT_WRITE
-      chan_info[i].mmap_flags = MAP_SHARED;
-      if (pthread_mutex_init(&(chan_info[i].lock), NULL) != 0)   FATAL;
-    }
-    once=0;
-  }
-}
-
-// Get channel device name and type
-void get_dev_type(char *dev_type, char *env_type, char *def_type) {
-  (env_type == NULL) ? strcpy(dev_type, def_type) : strcpy(dev_type, env_type);
-}
-
-void get_dev_name(char *dev_name, char *env_name, char *def_name_dma, char *def_name_shm, char *dev_type) {
-  strcpy(dev_type, "/dev/");        // prefix
-  if (strcmp(dev_type, "dma") == 0) {
-    (env_name == NULL) ? strcat(dev_name, def_name_dma) : strcat(dev_name, env_name));
-  }
-  else if (strcmp(dev_type, "shm") == 0)
-    (env_name == NULL) ? strcat(dev_name, def_name_shm) : strcat(dev_name, env_name));
-  }
-  else FATAL;
-}
-
-void get_dev_val(unsigned long *val, char *env_val, unsigned long def_val_dma, unsigned long def_val_shm, char *dev_type) {
-  if (env_name == NULL) {
-    if       (strcmp(dev_type, "dma") == 0) *val = def_val_dma;
-    else if  (strcmp(dev_type, "shm") == 0) *val = def_val_shm;
-    else FATAL;
-  }
-  else {
-    *val = (unsigned long) strtol(env_val, NULL, 16);
-  }
-}
-
-// Initialize configuration for a new tag
-void chan_init_config_one(uint32_t ctag, char dir, chan cp) {
-  // a) Set channel configuration for this tag
-  chan_info[i].ctag = ctag;
-  chan_info[i].dir  = dir;
-  if (dir == 't') {
-    get_dev_type(cp->dev_type, getenv("TXDEVTYPE"), "dma");
-    get_dev_name(cp->dev_name, getenv("TXDEVNAME"), "dma_proxy_tx", "mem", cp->dev_type);
-    get_dev_val (cp->addr_offset, getenv("DEVOFFSET"), 0x0, , 0x0, cp->dev_type);
-    get_dev_val(cp->mmap_len, getenv("MMAPLEN"), (sizeof(struct channel_buffer) * TX_BUFFER_COUNT), MMAP_LEN_ESCAPE, cp->dev_type);
-  }
-  else {
-    get_dev_type(cp->dev_type, getenv("RXDEVTYPE"), "dma");
-    get_dev_name(cp->dev_name, getenv("RXDEVNAME"), "dma_proxy_rx", "mem", cp->rx_dev_type);
-    get_dev_val (cp->addr_offset, getenv("DEVOFFSET"), 0x0, MMAP_LEN_HOST, cp->dev_type);
-    get_dev_val(cp->mmap_len, getenv("MMAPLEN"), (sizeof(struct channel_buffer) * TX_BUFFER_COUNT), MMAP_LEN_ESCAPE, cp->dev_type);
-  }
-  get_dev_val(cp->mmap_phys_addr, getenv("MMAPADDR"), DMA_ADDR_HOST, SHM_MMAP_ADDR_HOST, cp->dev_type);
-}
-                  
-/* Return pointer to Rx packet buffer for specified tag */
-chan *get_chan_info(gaps_tag *tag, char dir) {
-  uint32_t ctag;
-  char *t_env;
-  
-  /* a) Initilize all channels (after locking from other application threads) */
-  pthread_mutex_lock(&chan_create);
-  chan_init_all_once();
-
-  /* b) Find info for this tag */
-  ctag_encode(&ctag, tag);                 // Encoded ctag
-  for(i=0; i < GAPS_TAG_MAX; i++) {        // Break on finding tag or empty
-    if (chan_info[i].ctag == ctag) break;  // found existing slot for tag
-    if (chan_info[i].ctag == 0) {          // found empty slot (before tag)
-      chan_init_config_one(ctag, dir, &(chan_info[i]);  // a) Configure new tag
-      if (dir == 'r') rcvr_thread_start(void);          // b) Start rx thread for new tag
-      dev_open_if_new(&(chan_info[i]);                  // c) open device (if not already open)
-      break;
-    }
-  }
-  log_trace("%s: chan_info entry %d for ctag=%x]", __func__, i, ctag);
-
-  /* c) Unlock and return chan_info pointer */
-  if (i >= GAPS_TAG_MAX) FATAL;
-  chan_print(&chan_info[i]);
-  pthread_mutex_unlock(&chan_create);
-  return &chan_info[i];
-}
-
-/* Return the number of retries for the specified input tag (from the value stored
- * in the rx_tag_info linked-list. If not set, t will calculate the number of
- * retries from one of three possible timeout values (specified in milli-seconds).
- * In order of precedence (highest first) they are the:
- *    a) Input parameter (t_in_ms) specified in a xdc_sub_socket_non_blocking() call
- *       (this is the only way to specify a different value for each flow).
- *    b) Environment variable (TIMEOUT_MS) speciied when starting app (see get_chan_info()).
- *    c) Default (RX_POLL_TIMEOUT_MSEC_DEFAULT) from xdcomms.h (see get_chan_info())
- */
-int get_retries(gaps_tag *tag, int t_in_ms) {
-  chan *cp = get_chan_info(tag);
-  if (t_in_ms > 0) {
-    cp->retries = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;     // Set value
-    fprintf(stderr, "Set number of RX retries = %d every %d ns (for ctag=%08x)\n", cp->retries, RX_POLL_INTERVAL_NSEC, cp->ctag);
-  }
-  return (cp->retries);
-}
 
 
 /**********************************************************************/
