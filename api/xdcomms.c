@@ -176,6 +176,12 @@ void dev_open_if_new(chan *cp) {
 /* C) Channel Info: Print, Create, Find (for all devices and TX/RX)   */
 /**********************************************************************/
 // Initialize channel information for all (GAPS_TAG_MAX) possible tags
+//   Set retries from one of three possible timeout values (in msecs).
+//   In order of precedence (highest first) they are the:
+//    a) Input parameter specified in a xdc_sub_socket_non_blocking() call
+//       (this is the only way to specify a different value for each flow).
+//    b) Environment variable (TIMEOUT_MS) speciied when starting app
+//    c) Default (RX_POLL_TIMEOUT_MSEC_DEFAULT) from xdcomms.h
 void chan_init_all_once(void) {
   static int once=1;
   int        i, t_in_ms;
@@ -245,7 +251,7 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
 /* Return pointer to Rx packet buffer for specified tag */
 chan *get_chan_info(gaps_tag *tag, char dir) {
   uint32_t  ctag;
-\  int       i;
+  int       i;
   chan     *cp;
   
   /* a) Initilize all channels (after locking from other application threads) */
@@ -272,25 +278,6 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
   pthread_mutex_unlock(&chan_create);
   return (cp);
 }
-
-/* Return the number of retries for the specified input tag (from the value stored
- * in the rx_tag_info linked-list. If not set, t will calculate the number of
- * retries from one of three possible timeout values (specified in milli-seconds).
- * In order of precedence (highest first) they are the:
- *    a) Input parameter (t_in_ms) specified in a xdc_sub_socket_non_blocking() call
- *       (this is the only way to specify a different value for each flow).
- *    b) Environment variable (TIMEOUT_MS) speciied when starting app (see get_chan_info()).
- *    c) Default (RX_POLL_TIMEOUT_MSEC_DEFAULT) from xdcomms.h (see get_chan_info())
- */
-int get_retries(gaps_tag *tag, int t_in_ms) {
-  chan *cp = get_chan_info(tag);
-  if (t_in_ms > 0) {
-    cp->retries = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;     // Set value
-    fprintf(stderr, "Set number of RX retries = %d every %d ns (for ctag=%08x)\n", cp->retries, RX_POLL_INTERVAL_NSEC, cp->ctag);
-  }
-  return (cp->retries);
-}
-
                   
 /**********************************************************************/
 /* D) BW Packet processing                                               */
@@ -615,18 +602,15 @@ void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout) {
 //  fprintf(stderr, "timeout = %d ms for tag=<%d,%d,%d>\n", timeout, tag.mux, tag.sec, tag.typ);
   if (timeout > 0) cp->retries = (timeout * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;     // Set value
   fprintf(stderr, "Number of RX retries = %d every %d ns (for ctag=%08x)\n", cp->retries, RX_POLL_INTERVAL_NSEC, cp->ctag);
-  }
-  
-  get_retries(&tag, timeout);    // APP overrides xdc_recv() timeout  (timeout in milliseconds)
   return NULL;
 }
 void xdc_asyn_send(void *socket, void *adu, gaps_tag *tag) { asyn_send(adu, tag); }
 
 int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
+  chan *cp                = get_chan_info(tag);      // get buffer for tag (to communicate with thread)
   struct timespec request = {(RX_POLL_INTERVAL_NSEC/NSEC_IN_SEC), (RX_POLL_INTERVAL_NSEC % NSEC_IN_SEC) };
-  int              ntries = 1 + get_retries(tag, -1);  // number of tries to rx packet
+  int              ntries = 1 + (cp->retries);       // number of tries to rx packet
                                                       
-  chan *cp = get_chan_info(tag);         // get buffer for tag (to communicate with thread)
   log_trace("%s for tag=<%d,%d,%d>: ntries=%d interval=%d (%d.%09d) ns", __func__, tag->mux, tag->sec, tag->typ, ntries, RX_POLL_INTERVAL_NSEC, request.tv_sec, request.tv_nsec);
 //  time_trace("XDC_Rx1 Wait for tag=<%d,%d,%d> (test %d times every %d ns)", tag->mux, tag->sec, tag->typ, ntries, RX_POLL_INTERVAL_NSEC);
   while ((ntries--) > 0)  {
