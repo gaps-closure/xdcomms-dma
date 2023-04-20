@@ -120,7 +120,7 @@ void chan_init_all_once(void) {
       chan_info[i].newd       = 0;
       chan_info[i].count      = 0;
       chan_info[i].retries    = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;
-      chan_info[i].mmap_prot  = PROT_READ | PROT_WRITE
+      chan_info[i].mmap_prot  = PROT_READ | PROT_WRITE;
       chan_info[i].mmap_flags = MAP_SHARED;
       if (pthread_mutex_init(&(chan_info[i].lock), NULL) != 0)   FATAL;
     }
