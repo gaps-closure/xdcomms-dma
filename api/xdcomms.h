@@ -84,6 +84,8 @@ typedef struct _thread_args {
   void            *buffer_id_start; // Device buffer index
 } thread_args;
 
+void *rcvr_thread_function(thread_args *vargs);
+
 extern void tag_print     (gaps_tag *, FILE *);
 extern void tag_write     (gaps_tag *, uint32_t,   uint32_t,   uint32_t);
 extern void tag_read      (gaps_tag *, uint32_t *, uint32_t *, uint32_t *);

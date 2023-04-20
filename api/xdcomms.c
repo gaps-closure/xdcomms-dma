@@ -103,6 +103,12 @@ void ctag_decode(uint32_t *ctag, gaps_tag *tag) {
 /**********************************************************************/
 /* C) THREADS   */
 /**********************************************************************/
+void chan_print(chan *cp) {
+  log_trace("channel %08x: dir=%c type=%s name=%s fd=%d new=%d lock=%d paddr=%d maplen=%d buf_ptr (mmap vaddr)=%x ret=%d every %d ns",
+            cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd,
+            cp->newd, cp->lock, cp->mmap_phys_addr, cp->mmap_len, cp->mmap_virt_addr,
+            cp->retries, RX_POLL_INTERVAL_NSEC);
+}
 
 
 /* Start a receiver thread */
@@ -122,13 +128,6 @@ void rcvr_thread_start(chan *cp) {
 /**********************************************************************/
 /* C) Channel Info: Print, Create, Find (for all devices and TX/RX)   */
 /**********************************************************************/
-void chan_print(chan *cp) {
-  log_trace("channel %08x: dir=%c type=%s name=%s fd=%d new=%d lock=%d paddr=%d maplen=%d buf_ptr (mmap vaddr)=%x ret=%d every %d ns",
-            cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd,
-            cp->newd, cp->lock, cp->mmap_phys_addr, cp->mmap_len, cp->mmap_virt_addr,
-            cp->retries, RX_POLL_INTERVAL_NSEC);
-}
-
 // Initialize channel information for all (GAPS_TAG_MAX) possible tags
 void chan_init_all_once(void) {
   static int once=1;
