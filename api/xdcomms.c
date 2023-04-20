@@ -138,7 +138,7 @@ void get_dev_name(char *dev_name, char *env_name, char *def_name_dma, char *def_
   if (strcmp(dev_type, "dma") == 0) {
     (env_name == NULL) ? strcat(dev_name, def_name_dma) : strcat(dev_name, env_name);
   }
-  else if ((strcmp(dev_type, "shm")) == 0)
+  else if ((strcmp(dev_type, "shm")) == 0) {
     (env_name == NULL) ? strcat(dev_name, def_name_shm) : strcat(dev_name, env_name);
   }
   else FATAL;
