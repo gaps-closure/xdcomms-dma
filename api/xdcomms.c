@@ -379,7 +379,6 @@ void dma_send(chan *cp, void *adu) {
 
 /* Asynchronously send ADU to DMA driver in 'bw' packet */
 void asyn_send(void *adu, gaps_tag *tag) {
-  static int  once=1;                    // Open tx_channels only once
   chan       *cp = get_chan_info(tag, 't');   // channel structure pointer for any device type
 
   // a) Open channel once (and get device type, device name and channel struct
