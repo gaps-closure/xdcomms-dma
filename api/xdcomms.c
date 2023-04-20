@@ -371,7 +371,7 @@ void dma_send(chan *cp, void *adu) {
   dma_tx_chan->length = packet_len;
   if (packet_len <= sizeof(bw)) log_buf_trace("TX_PKT", (uint8_t *) &(dma_tx_chan->buffer), packet_len);
   dma_start_to_finish(cp->fd, &buffer_id, dma_tx_chan);
-  time_trace("XDC_Tx3 sent data for tag=<%d,%d,%d> len=%ld", tag->mux, tag->sec, tag->typ, packet_len);
+  time_trace("XDC_Tx3 sent data for tag=<%d,%d,%d> len=%ld", tag.mux, tag.sec, tag.typ, packet_len);
   log_debug("XDCOMMS tx packet tag=<%d,%d,%d> len=%ld", tag->mux, tag->sec, tag->typ, packet_len);
 //  log_trace("%s: Buffer id = %d packet pointer=%p", buffer_id, p);
 //  time_trace("Tx packet end: tag=<%d,%d,%d> pkt-len=%d", tag->mux, tag->sec, tag->typ, packet_len);
