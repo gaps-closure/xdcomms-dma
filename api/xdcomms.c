@@ -200,6 +200,8 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
   uint32_t  ctag;
   char     *t_env;
   int       i;
+  chan     *cp;
+  
   /* a) Initilize all channels (after locking from other application threads) */
   pthread_mutex_lock(&chan_create);
   chan_init_all_once();
@@ -207,11 +209,12 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
   /* b) Find info for this tag */
   ctag_encode(&ctag, tag);                 // Encoded ctag
   for(i=0; i < GAPS_TAG_MAX; i++) {        // Break on finding tag or empty
-    if (chan_info[i].ctag == ctag) break;  // found existing slot for tag
-    if (chan_info[i].ctag == 0) {          // found empty slot (before tag)
-      chan_init_config_one(&(chan_info[i]), ctag, dir); // a) Configure new tag
-      if (dir == 'r') rcvr_thread_start(void);          // b) Start rx thread for new receive tag
-      dev_open_if_new(&(chan_info[i]);                  // c) open device (if not already open)
+    cp = &(chan_info[i]);
+    if (cp->ctag == ctag) break;  // found existing slot for tag
+    if (cp->ctag == 0) {          // found empty slot (before tag)
+      chan_init_config_one(cp, ctag, dir); // a) Configure new tag
+      dev_open_if_new(cp);                 // b) open device (if not already open)
+      if (dir == 'r') rcvr_thread_start(cp);  // c) Start rx thread for new receive tag
       break;
     }
   }
@@ -219,9 +222,9 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
 
   /* c) Unlock and return chan_info pointer */
   if (i >= GAPS_TAG_MAX) FATAL;
-  chan_print(&chan_info[i]);
+  chan_print(cp);
   pthread_mutex_unlock(&chan_create);
-  return &chan_info[i];
+  return (cp);
 }
 
 /* Return the number of retries for the specified input tag (from the value stored
