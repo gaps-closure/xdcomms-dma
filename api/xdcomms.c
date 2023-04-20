@@ -99,6 +99,75 @@ void ctag_decode(uint32_t *ctag, gaps_tag *tag) {
   tag->typ = (ctag_h &     0xff);
 }
 
+/**********************************************************************/
+/* Device open                                               */
+/**********************************************************************/
+/* Open channel and save virtual address of buffer pointer */
+void dma_open_channel(chan *cp, int buffer_count) {
+  log_trace("%s: open DMA channel", __func__);
+  // a) Open device
+  if ((cp->fd = open(cp->dev_name, O_RDWR)) < 1) FATAL;
+
+  // b) mmpp device
+  cp->mmap_virt_addr = mmap(NULL, sizeof(struct channel_buffer) * buffer_count, cp->mmap_prot, cp->mmap_flags, cp->fd, 0);
+  if (cp->mmap_virt_addr == MAP_FAILED) FATAL;
+  log_trace("Opened channel %s: mmap_virt_addr=%p, fd=%d", cp->dev_name, cp->mmap_virt_addr, cp->fd);
+}
+
+// Open DMA channel sat given Physical address
+//   Returns file descriptor and page-aligned address/length, so can deallocate
+void shm_open_channel(chan *cp) {
+  void          *pa_virt_addr;
+  unsigned long  pa_phys_addr, pa_mmap_len;       /* page aligned physical address (offset) */
+
+  // a) Open device
+  if ((cp->fd = open(cp->dev_name, O_RDWR | O_SYNC)) == -1) FATAL;
+  
+  // b) mmpp device: reduce address to be a multiple of page size and add the diff to length
+  pa_phys_addr       = cp->mmap_phys_addr & ~MMAP_PAGE_MASK;
+  pa_mmap_len        = cp->mmap_len + cp->mmap_phys_addr - pa_phys_addr;
+  pa_virt_addr       = mmap(0, pa_mmap_len, cp->mmap_prot, cp->mmap_flags, cp->fd, pa_phys_addr);
+  if (pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
+  cp->mmap_virt_addr = pa_virt_addr + cp->mmap_phys_addr - pa_phys_addr;   // add offset to page aligned addr
+  
+  fprintf(stderr, "    Shared mmap'ed DDR [len=0x%lx Bytes] starts at virtual address %p\n", pa_mmap_len, cp->mmap_virt_addr);
+}
+
+// Open channel device (based on name and type) and return its channel structure
+void *open_device(chan *cp) {
+  log_trace("%s of type=%s name=%s", __func__, cp->dev_type, cp->dev_name);
+  chan_print(cp);
+  exit(22);
+  if (strcmp(dev_type, "dma") == 0) {
+    return (dma_open_channel(cp, TX_BUFFER_COUNT));
+  }
+  if (strcmp(dev_type, "shm") == 0) {
+    return (shm_open_channel(cp));
+  }
+  else {
+    log_fatal("Unsupported device type %s\n", dev_type);
+    exit(-1);
+  }
+}
+
+// If new device, then open it (and remember it in local list)
+void dev_open_if_new(chan *cp) {
+  static char dev_name_list[MAX_DEV_COUNT][64];
+  static int  dev_set_list[MAX_DEV_COUNT] = {0};
+  int         i;
+  
+  chan_print(cp);
+  for(i=0; i<MAX_DEV_COUNT; i++) {
+    if (dev_set_list[i] == 0) {
+      dev_set_list[i]  = 1;      // Put device name into list
+      strcpy(dev_name_list[i], cp->dev_name);
+      dev_open(cp);              // Open new device
+      return;
+    }
+    if (strcmp(dev_name, device_set_list[i]) == 0) return;  // not a new device
+  }
+  FATAL;    // Only here if list cannot store all devices (> MAX_DEV_COUNT)
+}
 
 /**********************************************************************/
 /* C) THREADS   */
@@ -246,75 +315,6 @@ int get_retries(gaps_tag *tag, int t_in_ms) {
 }
 
                       
-/**********************************************************************/
-/* Device open                                               */
-/**********************************************************************/
-/* Open channel and save virtual address of buffer pointer */
-void dma_open_channel(chan *cp, int buffer_count) {
-  log_trace("%s: open DMA channel", __func__);
-  // a) Open device
-  if ((cp->fd = open(cp->dev_name, O_RDWR)) < 1) FATAL;
-
-  // b) mmpp device
-  cp->mmap_virt_addr = mmap(NULL, sizeof(struct channel_buffer) * buffer_count, cp->mmap_prot, cp->mmap_flags, cp->fd, 0);
-  if (cp->mmap_virt_addr == MAP_FAILED) FATAL;
-  log_trace("Opened channel %s: mmap_virt_addr=%p, fd=%d", cp->dev_name, cp->mmap_virt_addr, cp->fd);
-}
-
-// Open DMA channel sat given Physical address
-//   Returns file descriptor and page-aligned address/length, so can deallocate
-void shm_open_channel(chan *cp) {
-  void          *pa_virt_addr;
-  unsigned long  pa_phys_addr, pa_mmap_len;       /* page aligned physical address (offset) */
-
-  // a) Open device
-  if ((cp->fd = open(cp->dev_name, O_RDWR | O_SYNC)) == -1) FATAL;
-  
-  // b) mmpp device: reduce address to be a multiple of page size and add the diff to length
-  pa_phys_addr       = cp->mmap_phys_addr & ~MMAP_PAGE_MASK;
-  pa_mmap_len        = cp->mmap_len + cp->mmap_phys_addr - pa_phys_addr;
-  pa_virt_addr       = mmap(0, pa_mmap_len, cp->mmap_prot, cp->mmap_flags, cp->fd, pa_phys_addr);
-  if (pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
-  cp->mmap_virt_addr = pa_virt_addr + cp->mmap_phys_addr - pa_phys_addr;   // add offset to page aligned addr
-  
-  fprintf(stderr, "    Shared mmap'ed DDR [len=0x%lx Bytes] starts at virtual address %p\n", pa_mmap_len, cp->mmap_virt_addr);
-}
-
-// Open channel device (based on name and type) and return its channel structure
-void *open_device(chan *cp) {
-  log_trace("%s of type=%s name=%s", __func__, cp->dev_type, cp->dev_name);
-  chan_print(cp);
-  exit(22);
-  if (strcmp(dev_type, "dma") == 0) {
-    return (dma_open_channel(cp, TX_BUFFER_COUNT));
-  }
-  if (strcmp(dev_type, "shm") == 0) {
-    return (shm_open_channel(cp));
-  }
-  else {
-    log_fatal("Unsupported device type %s\n", dev_type);
-    exit(-1);
-  }
-}
-
-// If new device, then open it (and remember it in local list)
-void dev_open_if_new(chan *cp) {
-  static char dev_name_list[MAX_DEV_COUNT][64];
-  static int  dev_set_list[MAX_DEV_COUNT] = {0};
-  int         i;
-  
-  chan_print(cp);
-  for(i=0; i<MAX_DEV_COUNT; i++) {
-    if (dev_set_list[i] == 0) {
-      dev_set_list[i]  = 1;      // Put device name into list
-      strcpy(dev_name_list[i], cp->dev_name);
-      dev_open(cp);              // Open new device
-      return;
-    }
-    if (strcmp(dev_name, device_set_list[i]) == 0) return;  // not a new device
-  }
-  FATAL;    // Only here if list cannot store all devices (> MAX_DEV_COUNT)
-}
 
 /**********************************************************************/
 /* D) BW Packet processing                                               */
