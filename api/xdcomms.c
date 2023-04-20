@@ -178,9 +178,9 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
                   
 /* Return pointer to Rx packet buffer for specified tag */
 chan *get_chan_info(gaps_tag *tag, char dir) {
-  uint32_t ctag;
-  char *t_env;
-  
+  uint32_t  ctag;
+  char     *t_env;
+  int       i;
   /* a) Initilize all channels (after locking from other application threads) */
   pthread_mutex_lock(&chan_create);
   chan_init_all_once();
@@ -190,7 +190,7 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
   for(i=0; i < GAPS_TAG_MAX; i++) {        // Break on finding tag or empty
     if (chan_info[i].ctag == ctag) break;  // found existing slot for tag
     if (chan_info[i].ctag == 0) {          // found empty slot (before tag)
-      chan_init_config_one(&(chan_info[i], ctag, dir);  // a) Configure new tag
+      chan_init_config_one(&(chan_info[i]), ctag, dir); // a) Configure new tag
       if (dir == 'r') rcvr_thread_start(void);          // b) Start rx thread for new tag
       dev_open_if_new(&(chan_info[i]);                  // c) open device (if not already open)
       break;
