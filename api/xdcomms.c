@@ -158,8 +158,8 @@ void get_dev_val(unsigned long *val, char *env_val, unsigned long def_val_dma, u
 // Initialize configuration for a new tag
 void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
   // a) Set channel configuration for this tag
-  cp.ctag = ctag;
-  cp.dir  = dir;
+  cp->ctag = ctag;
+  cp->dir  = dir;
   if (dir == 't') {
     get_dev_type(cp->dev_type, getenv("TXDEVTYPE"), "dma");
     get_dev_name(cp->dev_name, getenv("TXDEVNAME"), "dma_proxy_tx", "mem", cp->dev_type);
