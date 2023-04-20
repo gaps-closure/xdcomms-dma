@@ -384,11 +384,7 @@ void asyn_send(void *adu, gaps_tag *tag) {
 
   // a) Open channel once (and get device type, device name and channel struct
   log_trace("Start of %s", __func__);
-  pthread_mutex_lock(&(cp.lock));
-  if (once == 1) {   // Open channel once if needed
-    open_device(cp, DEV_DIR_OUT);
-    once = 0;
-  }
+  pthread_mutex_lock(&(cp->lock));
   // b) encode packet into TX buffer and send */
   if (strcmp(cp->dev_type, "dma") == 0) dma_send(cp, adu);
   if (strcmp(cp->dev_type, "shm") == 0) shm_send(cp, adu);
@@ -422,7 +418,7 @@ void *rcvr_thread_function(thread_args *vargs) {
       log_trace("THREAD rx packet tag=<%d,%d,%d> buf-id=%d st=%d", tag.mux, tag.sec, tag.typ, buffer_id, c->mmap_virt_addr[buffer_id].status);
 
       /* get buffer for tag, lock buffer, copy packet ptr to buffer, mark as newdata, release lock */
-      t = get_chan_info(&tag);
+      t = get_chan_info(&tag, 'r');
       pthread_mutex_lock(&(t->lock));
 //      memcpy(&(t->p), p, sizeof(bw)); /* XXX: optimize, copy only length of actual packet received */
       t->p_ptr = p;
