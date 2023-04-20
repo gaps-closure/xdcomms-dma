@@ -99,6 +99,23 @@ void ctag_decode(uint32_t *ctag, gaps_tag *tag) {
   tag->typ = (ctag_h &     0xff);
 }
 
+
+
+
+/* Start a receiver thread */
+void rcvr_thread_start(chan *cp) {
+  static thread_args rxargs;
+  static pthread_t   tid;
+
+  /* Open rx channel and receive threads (only once) */
+  pthread_mutex_lock(&rxlock);
+  log_trace("%s: open rx channel and start receiver thread(s)", __func__);
+  rxargs.c = cp;
+  rxargs.buffer_id_start = mmap_virt_addr + addr_offset;
+  if (pthread_create(&tid, NULL, (void *) rcvr_thread_function, (void *)&rxargs[i]) != 0) FATAL;
+  pthread_mutex_unlock(&rxlock);
+}
+
 /**********************************************************************/
 /* C) Channel Info: Print, Create, Find (for all devices and TX/RX)   */
 /**********************************************************************/
@@ -191,7 +208,7 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
     if (chan_info[i].ctag == ctag) break;  // found existing slot for tag
     if (chan_info[i].ctag == 0) {          // found empty slot (before tag)
       chan_init_config_one(&(chan_info[i]), ctag, dir); // a) Configure new tag
-      if (dir == 'r') rcvr_thread_start(void);          // b) Start rx thread for new tag
+      if (dir == 'r') rcvr_thread_start(void);          // b) Start rx thread for new receive tag
       dev_open_if_new(&(chan_info[i]);                  // c) open device (if not already open)
       break;
     }
@@ -453,33 +470,7 @@ void *rcvr_thread_function(thread_args *vargs) {
   }
 }
 
-/* Start a receiver thread */
-void rcvr_thread_start(void) {
-  static int   once=1;
-  static chan  rx_channels[1];                         /* Use only a single channel */
-  char        *rx_channel_names[1];
-  char        *rx;
-  static thread_args rxargs[RX_BUFFER_COUNT];
-  static pthread_t tid[RX_BUFFER_COUNT];
 
-  /* Open rx channel and receive threads (only once) */
-  pthread_mutex_lock(&rxlock);
-  if (once==1) {
-    log_trace("%s: open rx channel and start receiver thread(s)", __func__);
-    rx_channel_names[0] = ((rx = getenv("DMARXDEV")) == NULL) ? "dma_proxy_rx" : rx;
-    once = 0;
-    dma_open_channel(rx_channels, rx_channel_names, 1, RX_BUFFER_COUNT);
-    for (int i=0; i < RX_THREADS; i++) {
-      rxargs[i].c = rx_channels;
-      rxargs[i].buffer_id_start = i * RX_BUFFS_PER_THREAD;
-      if (pthread_create(&tid[i], NULL, (void *) rcvr_thread_function, (void *)&rxargs[i]) != 0) {
-        log_fatal("Failed to create rx thread");
-        exit(EXIT_FAILURE);
-      }
-    }
-  }
-  pthread_mutex_unlock(&rxlock);
-}
 
 /* Receive packet from driver (via rx thread), storing data and length in ADU */
 int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
@@ -636,7 +627,6 @@ int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   struct timespec request = {(RX_POLL_INTERVAL_NSEC/NSEC_IN_SEC), (RX_POLL_INTERVAL_NSEC % NSEC_IN_SEC) };
   int              ntries = 1 + get_retries(tag, -1);  // number of tries to rx packet
                                                       
-  rcvr_thread_start();                   // Start rx thread for all tags (on first xdc_recv() call)
   chan *cp = get_chan_info(tag);         // get buffer for tag (to communicate with thread)
   log_trace("%s for tag=<%d,%d,%d>: ntries=%d interval=%d (%d.%09d) ns", __func__, tag->mux, tag->sec, tag->typ, ntries, RX_POLL_INTERVAL_NSEC, request.tv_sec, request.tv_nsec);
 //  time_trace("XDC_Rx1 Wait for tag=<%d,%d,%d> (test %d times every %d ns)", tag->mux, tag->sec, tag->typ, ntries, RX_POLL_INTERVAL_NSEC);
