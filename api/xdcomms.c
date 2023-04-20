@@ -156,10 +156,10 @@ void get_dev_val(unsigned long *val, char *env_val, unsigned long def_val_dma, u
 }
 
 // Initialize configuration for a new tag
-void chan_init_config_one(uint32_t ctag, char dir, chan cp) {
+void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
   // a) Set channel configuration for this tag
-  chan_info[i].ctag = ctag;
-  chan_info[i].dir  = dir;
+  cp.ctag = ctag;
+  cp.dir  = dir;
   if (dir == 't') {
     get_dev_type(cp->dev_type, getenv("TXDEVTYPE"), "dma");
     get_dev_name(cp->dev_name, getenv("TXDEVNAME"), "dma_proxy_tx", "mem", cp->dev_type);
@@ -189,7 +189,7 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
   for(i=0; i < GAPS_TAG_MAX; i++) {        // Break on finding tag or empty
     if (chan_info[i].ctag == ctag) break;  // found existing slot for tag
     if (chan_info[i].ctag == 0) {          // found empty slot (before tag)
-      chan_init_config_one(ctag, dir, &(chan_info[i]);  // a) Configure new tag
+      chan_init_config_one(&(chan_info[i], ctag, dir);  // a) Configure new tag
       if (dir == 'r') rcvr_thread_start(void);          // b) Start rx thread for new tag
       dev_open_if_new(&(chan_info[i]);                  // c) open device (if not already open)
       break;
