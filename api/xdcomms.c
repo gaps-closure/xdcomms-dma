@@ -356,25 +356,19 @@ int dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *cbuf_
   return 0;
 }
 
-/* Send Packet to DMA driver */
-int send_channel_buffer(chan *cp, size_t packet_len, int buffer_id) {
-  log_trace("Start of %s: Ready to Write packet (len=%d) to fd=%d (id=%d) ", __func__, packet_len, c->fd, buffer_id);
-  cp->mmap_virt_addr[buffer_id].length = packet_len;
-  if (packet_len <= sizeof(bw)) log_buf_trace("TX_PKT", (uint8_t *) &(cp->mmap_virt_addr[buffer_id]), packet_len);
-  return dma_start_to_finish(cp->fd, &buffer_id, &(cp->mmap_virt_addr[buffer_id]));
-}
-
-void dma_send(void *adu, gaps_tag *tag, void *tx_chan) {
-  dma_channel  *dma_tx_chan = (dma_channel *) tx_chan;
+void dma_send(chan *cp, void *adu) {
+  struct channel_buffer  *dma_tx_chan = (struct channel_buffer *) cp->mmap_virt_addr;
   bw           *p;                        // Packet pointer
   const int    buffer_id=0;               // Use only a single buffer
   size_t       packet_len, adu_len;       // encoder calculates length */
 
-  p = (bw *) &(dma_tx_chan.mmap_virt_addr,buffer[buffer_id]);    // point to a DMA packet buffer */
+  p = (bw *) &(dma_tx_chan->buffer);      // point to a DMA packet buffer */
   time_trace("XDC_Tx1 ready to encode for tag=<%d,%d,%d>", tag->mux, tag->sec, tag->typ);
   bw_gaps_data_encode(p, &packet_len, adu, &adu_len, tag);  /* Put packet into channel buffer */
   time_trace("XDC_Tx2 ready to send data for tag=<%d,%d,%d> len=%ld", tag->mux, tag->sec, tag->typ, packet_len);
-  send_channel_buffer(dma_tx_chan, packet_len, buffer_id);
+  dma_tx_chan0->length = packet_len;
+  if (packet_len <= sizeof(bw)) log_buf_trace("TX_PKT", (uint8_t *) &(dma_tx_chan->buffer), packet_len);
+  dma_start_to_finish(cp->fd, &buffer_id, &(dma_tx_chan->buffer));
   time_trace("XDC_Tx3 sent data for tag=<%d,%d,%d> len=%ld", tag->mux, tag->sec, tag->typ, packet_len);
   log_debug("XDCOMMS tx packet tag=<%d,%d,%d> len=%ld", tag->mux, tag->sec, tag->typ, packet_len);
 //  log_trace("%s: Buffer id = %d packet pointer=%p", buffer_id, p);
@@ -394,8 +388,8 @@ void asyn_send(void *adu, gaps_tag *tag) {
     once = 0;
   }
   // b) encode packet into TX buffer and send */
-  if (strcmp(cp->dev_type, "dma") == 0) dma_send(cp);
-  if (strcmp(cp->dev_type, "shm") == 0) shm_send(cp);
+  if (strcmp(cp->dev_type, "dma") == 0) dma_send(cp, adu);
+  if (strcmp(cp->dev_type, "shm") == 0) shm_send(cp, adu);
   pthread_mutex_unlock(&(cp.lock));
 }
 
