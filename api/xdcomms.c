@@ -377,6 +377,10 @@ void dma_send(chan *cp, void *adu) {
 //  time_trace("Tx packet end: tag=<%d,%d,%d> pkt-len=%d", tag->mux, tag->sec, tag->typ, packet_len);
 }
 
+void shm_send(chan *cp, void *adu) {
+  log_warn("Must write function %s", __func__);
+}
+
 /* Asynchronously send ADU to DMA driver in 'bw' packet */
 void asyn_send(void *adu, gaps_tag *tag) {
   chan       *cp = get_chan_info(tag, 't');   // channel structure pointer for any device type
@@ -386,7 +390,7 @@ void asyn_send(void *adu, gaps_tag *tag) {
   pthread_mutex_lock(&(cp->lock));
   // b) encode packet into TX buffer and send */
   if (strcmp(cp->dev_type, "dma") == 0) dma_send(cp, adu);
-//  if (strcmp(cp->dev_type, "shm") == 0) shm_send(cp, adu);
+  if (strcmp(cp->dev_type, "shm") == 0) shm_send(cp, adu);
   pthread_mutex_unlock(&(cp->lock));
 }
 
