@@ -65,11 +65,12 @@ typedef struct channel {
   char             dev_type[4];    // device type: e.g., shm (ESCAPE) or dma (MIND)
   char             dev_name[64];   // Device name: e.g., /dev/mem or /dev/sue_dominous
   int              fd;             // Device file descriptor (set when device openned)
-  int              mmap_prot;      // Mmap protection field (Read and/or write)
-  int              mmap_flags;
-  unsigned long    mmap_phys_addr; // Host physical address to MMAP
-  unsigned long    mmap_len;       //
-  void            *buf_ptr;        // Device buffer structure (differs by device type)
+  int              mmap_prot;      // Mmap protection field (e.g., Read and/or write)
+  int              mmap_flags;     // mmap'ed flags (e.g., SHARED)
+  unsigned long    mmap_phys_addr; // mmap'ed physical address
+  unsigned long    mmap_len;       // mmap'ed memory length
+  void            *mmap_virt_addr; // Mmaped virtual address of packet buffer structure
+                                   // (channel_buffer in DMA device, shm_channel in SHM device)
   pthread_mutex_t  lock;           // Ensure RX thread does not write while xdcomms reads
   char             newd;           // RX thread received new packet (xdcomms resets after reading)
   int              retries;        // number of RX polls (every RX_POLL_INTERVAL_NSEC) before timeout
