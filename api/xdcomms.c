@@ -100,7 +100,7 @@ void ctag_decode(uint32_t *ctag, gaps_tag *tag) {
 }
 
 /**********************************************************************/
-/* E) Channel Info: Print, Create, Find (for all devices and TX/RX)   */
+/* C) Channel Info: Print, Create, Find (for all devices and TX/RX)   */
 /**********************************************************************/
 void chan_print(chan *cp) {
   log_trace("channel %08x: dir=%c type=%s name=%s fd=%d new=%d lock=%d paddr=%d maplen=%d buf_ptr (mmap vaddr)=%x ret=%d every %d ns",
@@ -109,7 +109,7 @@ void chan_print(chan *cp) {
             cp->retries, RX_POLL_INTERVAL_NSEC);
 }
 
-void chan_init_all_once() {
+void chan_init_all_once(void) {
   static int once=1;
   int        i, t_in_ms;
   
