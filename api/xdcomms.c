@@ -136,10 +136,10 @@ void get_dev_type(char *dev_type, char *env_type, char *def_type) {
 void get_dev_name(char *dev_name, char *env_name, char *def_name_dma, char *def_name_shm, char *dev_type) {
   strcpy(dev_type, "/dev/");        // prefix
   if (strcmp(dev_type, "dma") == 0) {
-    (env_name == NULL) ? strcat(dev_name, def_name_dma) : strcat(dev_name, env_name));
+    (env_name == NULL) ? strcat(dev_name, def_name_dma) : strcat(dev_name, env_name);
   }
-  else if (strcmp(dev_type, "shm") == 0)
-    (env_name == NULL) ? strcat(dev_name, def_name_shm) : strcat(dev_name, env_name));
+  else if ((strcmp(dev_type, "shm")) == 0)
+    (env_name == NULL) ? strcat(dev_name, def_name_shm) : strcat(dev_name, env_name);
   }
   else FATAL;
 }
