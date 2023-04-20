@@ -105,7 +105,7 @@ void ctag_decode(uint32_t *ctag, gaps_tag *tag) {
 void chan_print(chan *cp) {
   log_trace("channel %08x: dir=%c type=%s name=%s fd=%d new=%d lock=%d paddr=%d maplen=%d buf_ptr (mmap vaddr)=%x ret=%d every %d ns",
             cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd,
-            cp->newd, cp->lock, cp->mmap_phys_addr cp->mmap_len, cp->mmap_virt_addr,
+            cp->newd, cp->lock, cp->mmap_phys_addr, cp->mmap_len, cp->mmap_virt_addr,
             cp->retries, RX_POLL_INTERVAL_NSEC);
 }
 
