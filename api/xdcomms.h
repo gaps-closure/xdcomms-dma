@@ -80,8 +80,8 @@ typedef struct channel {
 
 /* RX thread arguments */
 typedef struct _thread_args {
-  chan            *c;               // Channel RX thread is looking for
-  int              buffer_id_start; // Device buffer index
+  chan            *cp;               // Channel RX thread is looking for
+  void            *buffer_id_start; // Device buffer index
 } thread_args;
 
 extern void tag_print     (gaps_tag *, FILE *);
