@@ -167,7 +167,7 @@ void dev_open_if_new(chan *cp) {
       open_device(cp);           // Open new device
       return;
     }
-    if (strcmp(cp->dev_name, device_set_list[i]) == 0) return;  // not a new device
+    if (strcmp(cp->dev_name, dev_set_list[i]) == 0) return;  // not a new device
   }
   FATAL;    // Only here if list cannot store all devices (> MAX_DEV_COUNT)
 }
