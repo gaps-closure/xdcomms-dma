@@ -81,7 +81,7 @@ codec_map *cmap_find(int data_type) {
 /**********************************************************************/
 /* B) Tag Compression / Decompression                                    */
 /**********************************************************************/
-/* Compress teg (tag -> ctag) */
+/* Compress teg (tag -> ctag) from a 3 member stuct to a uint32_t*/
 void ctag_encode(uint32_t *ctag, gaps_tag *tag) {
   uint32_t ctag_h;
   ctag_h = ((CTAG_MOD * (
@@ -109,6 +109,7 @@ void chan_print(chan *cp) {
             cp->retries, RX_POLL_INTERVAL_NSEC);
 }
 
+// Initialize channel information for all (GAPS_TAG_MAX) possible tags
 void chan_init_all_once(void) {
   static int once=1;
   int        i, t_in_ms;
@@ -128,11 +129,11 @@ void chan_init_all_once(void) {
   }
 }
 
-// Get channel device name and type
+// Get channel device type
 void get_dev_type(char *dev_type, char *env_type, char *def_type) {
   (env_type == NULL) ? strcpy(dev_type, def_type) : strcpy(dev_type, env_type);
 }
-
+// Get channel device name (*dev_name) from enivronment or default (for that type)
 void get_dev_name(char *dev_name, char *env_name, char *def_name_dma, char *def_name_shm, char *dev_type) {
   strcpy(dev_type, "/dev/");        // prefix
   if (strcmp(dev_type, "dma") == 0) {
@@ -144,15 +145,14 @@ void get_dev_name(char *dev_name, char *env_name, char *def_name_dma, char *def_
   else FATAL;
 }
 
+// Get channel device number (*val) from enivronment or default (for that type)
 void get_dev_val(unsigned long *val, char *env_val, unsigned long def_val_dma, unsigned long def_val_shm, char *dev_type) {
-  if (env_name == NULL) {
+  if (env_val == NULL) {
     if       (strcmp(dev_type, "dma") == 0) *val = def_val_dma;
     else if  (strcmp(dev_type, "shm") == 0) *val = def_val_shm;
-    else FATAL;
+    else     FATAL;
   }
-  else {
-    *val = (unsigned long) strtol(env_val, NULL, 16);
-  }
+  else       *val = (unsigned long) strtol(env_val, NULL, 16);
 }
 
 // Initialize configuration for a new tag
@@ -164,7 +164,7 @@ void chan_init_config_one(uint32_t ctag, char dir, chan cp) {
     get_dev_type(cp->dev_type, getenv("TXDEVTYPE"), "dma");
     get_dev_name(cp->dev_name, getenv("TXDEVNAME"), "dma_proxy_tx", "mem", cp->dev_type);
     get_dev_val (cp->addr_offset, getenv("DEVOFFSET"), 0x0, , 0x0, cp->dev_type);
-    get_dev_val(cp->mmap_len, getenv("MMAPLEN"), (sizeof(struct channel_buffer) * TX_BUFFER_COUNT), MMAP_LEN_ESCAPE, cp->dev_type);
+    get_dev_val (cp->mmap_len, getenv("MMAPLEN"), (sizeof(struct channel_buffer) * TX_BUFFER_COUNT), MMAP_LEN_ESCAPE, cp->dev_type);
   }
   else {
     get_dev_type(cp->dev_type, getenv("RXDEVTYPE"), "dma");
