@@ -359,7 +359,7 @@ int dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *cbuf_
 void dma_send(chan *cp, void *adu) {
   struct channel_buffer  *dma_tx_chan = (struct channel_buffer *) cp->mmap_virt_addr;
   bw           *p;                        // Packet pointer
-  const int    buffer_id=0;               // Use only a single buffer
+  int    buffer_id=0;               // Use only a single buffer
   size_t       packet_len, adu_len;       // encoder calculates length */
   gaps_tag     tag;
   
