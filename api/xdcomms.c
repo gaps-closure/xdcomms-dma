@@ -363,7 +363,7 @@ void dma_send(chan *cp, void *adu) {
   size_t       packet_len, adu_len;       // encoder calculates length */
 
   p = (bw *) &(dma_tx_chan->buffer);      // point to a DMA packet buffer */
-  time_trace("XDC_Tx1 ready to encode for tag=<%d,%d,%d>", tag->mux, tag->sec, tag->typ);
+  time_trace("XDC_Tx1 ready to encode for ctag=%08x", cp->ctag);
   bw_gaps_data_encode(p, &packet_len, adu, &adu_len, tag);  /* Put packet into channel buffer */
   time_trace("XDC_Tx2 ready to send data for tag=<%d,%d,%d> len=%ld", tag->mux, tag->sec, tag->typ, packet_len);
   dma_tx_chan0->length = packet_len;
