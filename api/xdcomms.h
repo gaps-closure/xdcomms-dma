@@ -71,7 +71,7 @@ typedef struct channel {
   unsigned long    mmap_len;       // mmap'ed memory length
   void            *mmap_virt_addr; // Mmaped virtual address of packet buffer structure
                                    // (channel_buffer in DMA device, shm_channel in SHM device)
-  unsigned long    addr_offset;    // Offset from mmap_virt_addr to channel info
+  void            *addr_offset;    // Offset from mmap_virt_addr to channel info
   pthread_mutex_t  lock;           // Ensure RX thread does not write while xdcomms reads
   char             newd;           // RX thread received new packet (xdcomms resets after reading)
   int              retries;        // number of RX polls (every RX_POLL_INTERVAL_NSEC) before timeout
