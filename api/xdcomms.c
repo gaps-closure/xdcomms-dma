@@ -103,7 +103,10 @@ void ctag_decode(uint32_t *ctag, gaps_tag *tag) {
 /* E) Channel Info: Print, Create, Find (for all devices and TX/RX)   */
 /**********************************************************************/
 void chan_print(chan *cp) {
-  log_trace("channel %08x: type=%s name=%s fd=%d new=%d lock=%d mmap physical addr=%d mmap len=%d buf_ptr (mmap vaddr)=%x ret=%d every %d ns", cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->newd, cp->lock, cp->mmap_phys_addr cp->mmap_len, cp->mmap_virt_addr, cp->retries, RX_POLL_INTERVAL_NSEC);
+  log_trace("channel %08x: dir=%c type=%s name=%s fd=%d new=%d lock=%d paddr=%d maplen=%d buf_ptr (mmap vaddr)=%x ret=%d every %d ns",
+            cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd,
+            cp->newd, cp->lock, cp->mmap_phys_addr cp->mmap_len, cp->mmap_virt_addr,
+            cp->retries, RX_POLL_INTERVAL_NSEC);
 }
 
 void chan_init_all_once() {
