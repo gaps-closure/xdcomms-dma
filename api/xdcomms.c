@@ -112,7 +112,7 @@ void chan_print(chan *cp) {
 void chan_init_all_once(void) {
   static int once=1;
   int        i, t_in_ms;
-  
+  char      *t_env;
   if (once==1) {
     t_in_ms = ((t_env = getenv("TIMEOUT_MS")) == NULL) ? RX_POLL_TIMEOUT_MSEC_DEFAULT : atoi(t_env);
     for(i=0; i < GAPS_TAG_MAX; i++) {
