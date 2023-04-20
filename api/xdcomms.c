@@ -162,7 +162,7 @@ void dev_open_if_new(chan *cp) {
   chan_print(cp);
   for(i=0; i<MAX_DEV_COUNT; i++) {
     if (dev_set_list[i] == 0) {
-      dev_set_list[i]  = 1;      // Put new device name into list
+      dev_set_list[i] = 1;      // Put new device name into list
       strcpy(dev_name_list[i], cp->dev_name);
       open_device(cp);           // Open new device
       return;
@@ -171,7 +171,6 @@ void dev_open_if_new(chan *cp) {
   }
   FATAL;    // Only here if list cannot store all devices (> MAX_DEV_COUNT)
 }
-
 
 /**********************************************************************/
 /* C) Channel Info: Print, Create, Find (for all devices and TX/RX)   */
@@ -246,8 +245,7 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
 /* Return pointer to Rx packet buffer for specified tag */
 chan *get_chan_info(gaps_tag *tag, char dir) {
   uint32_t  ctag;
-  char     *t_env;
-  int       i;
+\  int       i;
   chan     *cp;
   
   /* a) Initilize all channels (after locking from other application threads) */
@@ -611,8 +609,14 @@ void *xdc_ctx(void) { return NULL; }
 void *xdc_pub_socket(void) { return NULL; }
 void *xdc_sub_socket(gaps_tag tag) { return NULL; }
 void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout) {
-  log_debug("%s: timeout = %d ms for tag=<%d,%d,%d>", __func__, timeout, tag.mux, tag.sec, tag.typ);
+  chan *cp = get_chan_info(tag);
+
+  log_trace("%s: timeout = %d ms for tag=<%d,%d,%d>", __func__, timeout, tag.mux, tag.sec, tag.typ);
 //  fprintf(stderr, "timeout = %d ms for tag=<%d,%d,%d>\n", timeout, tag.mux, tag.sec, tag.typ);
+  if (timeout > 0) cp->retries = (timeout * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;     // Set value
+  fprintf(stderr, "Number of RX retries = %d every %d ns (for ctag=%08x)\n", cp->retries, RX_POLL_INTERVAL_NSEC, cp->ctag);
+  }
+  
   get_retries(&tag, timeout);    // APP overrides xdc_recv() timeout  (timeout in milliseconds)
   return NULL;
 }
