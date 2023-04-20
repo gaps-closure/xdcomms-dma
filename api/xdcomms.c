@@ -152,7 +152,7 @@ void get_dev_val(unsigned long *val, unsigned long *env_val, unsigned long def_v
     else if  (strcmp(dev_type, "shm") == 0) *val = def_val_shm;
     else     FATAL;
   }
-  else       *val = (unsigned long) strtol(env_val, NULL, 16);
+  else       *val = =env_val);
 }
 
 // Initialize configuration for a new tag
@@ -163,6 +163,7 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
   if (dir == 't') { // TX
     get_dev_type(cp->dev_type,    getenv("DEV_TYPE_TX"), "dma");
     get_dev_name(cp->dev_name,    getenv("DEV_NAME_TX"), "dma_proxy_tx", "mem", cp->dev_type);
+// *val = (unsigned long) strtol(env_val, NULL, 16);
     get_dev_val (cp->addr_offset, atoi(getenv("DEV_OFFS_TX")), 0x0, 0x0, cp->dev_type);
     get_dev_val (cp->mmap_len,    atoi(getenv("DEV_MMAP_LE")), (sizeof(struct channel_buffer) * TX_BUFFER_COUNT), MMAP_LEN_ESCAPE, cp->dev_type);
   }
