@@ -144,13 +144,14 @@ void shm_open_channel(chan *cp) {
 }
 
 // Open channel device (based on name and type) and return its channel structure
-void *open_device(chan *cp) {
+void open_device(chan *cp) {
   log_trace("%s of type=%s name=%s", __func__, cp->dev_type, cp->dev_name);
   chan_print(cp);
   exit(22);
-  if (strcmp(cp->dev_type, "dma") == 0) return (dma_open_channel(cp, TX_BUFFER_COUNT));
-  if (strcmp(cp->dev_type, "shm") == 0) return (shm_open_channel(cp));
+  if (strcmp(cp->dev_type, "dma") == 0) dma_open_channel(cp, TX_BUFFER_COUNT);
+  if (strcmp(cp->dev_type, "shm") == 0) shm_open_channel(cp);
   else FATAL;
+  return
 }
 
 // If new device, then open it (and remember it in local list)
@@ -162,9 +163,9 @@ void dev_open_if_new(chan *cp) {
   chan_print(cp);
   for(i=0; i<MAX_DEV_COUNT; i++) {
     if (dev_set_list[i] == 0) {
-      dev_set_list[i]  = 1;      // Put device name into list
+      dev_set_list[i]  = 1;      // Put new device name into list
       strcpy(dev_name_list[i], cp->dev_name);
-      dev_open(cp);              // Open new device
+      open_device(cp);           // Open new device
       return;
     }
     if (strcmp(dev_name, device_set_list[i]) == 0) return;  // not a new device
