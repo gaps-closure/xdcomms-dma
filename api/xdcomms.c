@@ -163,14 +163,14 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
   if (dir == 't') { // TX
     get_dev_type(cp->dev_type,    getenv("DEV_TYPE_TX"), "dma");
     get_dev_name(cp->dev_name,    getenv("DEV_NAME_TX"), "dma_proxy_tx", "mem", cp->dev_type);
-    get_dev_val (cp->addr_offset, getenv("DEV_OFFS_TX"), 0x0, 0x0, cp->dev_type);
-    get_dev_val (cp->mmap_len,    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * TX_BUFFER_COUNT), MMAP_LEN_ESCAPE, cp->dev_type);
+    get_dev_val (cp->addr_offset, atoi(getenv("DEV_OFFS_TX")), 0x0, 0x0, cp->dev_type);
+    get_dev_val (cp->mmap_len,    atoi(getenv("DEV_MMAP_LE")), (sizeof(struct channel_buffer) * TX_BUFFER_COUNT), MMAP_LEN_ESCAPE, cp->dev_type);
   }
   else {            // RX
     get_dev_type(cp->dev_type,    getenv("DEV_TYPE_RX"), "dma");
     get_dev_name(cp->dev_name,    getenv("DEV_NAME_RX"), "dma_proxy_rx", "mem", cp->rx_dev_type);
-    get_dev_val (cp->addr_offset, getenv("DEV_OFFS_RX"), 0x0, MMAP_LEN_HOST, cp->dev_type);
-    get_dev_val (cp->mmap_len,    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * RX_BUFFER_COUNT), MMAP_LEN_ESCAPE, cp->dev_type);
+    get_dev_val (cp->addr_offset, atoi(getenv("DEV_OFFS_RX")), 0x0, MMAP_LEN_HOST, cp->dev_type);
+    get_dev_val (cp->mmap_len,    atoi(getenv("DEV_MMAP_LE")), (sizeof(struct channel_buffer) * RX_BUFFER_COUNT), MMAP_LEN_ESCAPE, cp->dev_type);
   }
   get_dev_val(cp->mmap_phys_addr, getenv("DEV_MMAP_AD"), DMA_ADDR_HOST, SHM_MMAP_ADDR_HOST, cp->dev_type);
 }
