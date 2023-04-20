@@ -148,16 +148,9 @@ void *open_device(chan *cp) {
   log_trace("%s of type=%s name=%s", __func__, cp->dev_type, cp->dev_name);
   chan_print(cp);
   exit(22);
-  if (strcmp(dev_type, "dma") == 0) {
-    return (dma_open_channel(cp, TX_BUFFER_COUNT));
-  }
-  if (strcmp(dev_type, "shm") == 0) {
-    return (shm_open_channel(cp));
-  }
-  else {
-    log_fatal("Unsupported device type %s\n", dev_type);
-    exit(-1);
-  }
+  if (strcmp(cp->dev_type, "dma") == 0) return (dma_open_channel(cp, TX_BUFFER_COUNT));
+  if (strcmp(cp->dev_type, "shm") == 0) return (shm_open_channel(cp));
+  else FATAL;
 }
 
 // If new device, then open it (and remember it in local list)
