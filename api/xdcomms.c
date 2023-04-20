@@ -116,28 +116,22 @@ void dma_open_channel(chan *cp, int buffer_count) {
 
 // Open DMA channel sat given Physical address
 //   Returns file descriptor and page-aligned address/length, so can deallocate
-void *shm_open_channel(chan *cp, unsigned long phys_addr, void **pa_virt_addr, unsigned long *pa_map_length) {
-  void          *virt_addr;
-  unsigned long  pa_phys_addr;       /* page aligned physical address (offset) */
+void shm_open_channel(chan *cp) {
+  void          *pa_virt_addr;
+  unsigned long  pa_phys_addr, pa_mmap_len;       /* page aligned physical address (offset) */
   int            flags = MAP_SHARED;        // or (|) together bit flags
 
   // a) Open device
   if ((cp->fd = open(cp->dev_name, O_RDWR | O_SYNC)) == -1) FATAL;
   
   // b) mmpp device: reduce address to be a multiple of page size and add the diff to length
-   pa_phys_addr  = cp->phys_addr & ~MMAP_PAGE_MASK;
-  *pa_map_length = cp->mmap_length + cp->phys_addr - pa_phys_addr;
-  *pa_virt_addr  = mmap(0, *pa_map_length, cp->mmap_protect, cp->mmap_flags, cp->fd, pa_phys_addr);
-  if (*pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
-  virt_addr      = *pa_virt_addr + phys_addr - pa_phys_addr;   // add offset to page aligned addr
-  fprintf(stderr, "    Shared mmap'ed DDR [len=0x%lx Bytes] starts at virtual address %p\n", *pa_map_length, virt_addr);
-
-#ifdef DEBUG
-  fprintf(stderr, "Shared mmap'ed DDR [len=0x%lx Bytes] starts at virtual address %p\n", *pa_map_length, virt_addr);
-  if (phys_addr > 0) fprintf(stderr, "Using Linux Physical addr %p: up to pa=0x%lX\n",
-                                  (void *) phys_addr, phys_addr + (*pa_map_length) - 1);
-#endif
-  return (virt_addr);
+  pa_phys_addr       = cp->mmap_phys_addr & ~MMAP_PAGE_MASK;
+  pa_map_len         = cp->mmap_len + cp->mmap_phys_addr - pa_phys_addr;
+  pa_virt_addr       = mmap(0, pa_map_len, cp->mmap_protect, cp->mmap_flags, cp->fd, pa_phys_addr);
+  if (pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
+  cp->mmap_virt_addr = pa_virt_addr + phys_addr - pa_phys_addr;   // add offset to page aligned addr
+  
+  fprintf(stderr, "    Shared mmap'ed DDR [len=0x%lx Bytes] starts at virtual address %p\n", pa_map_len, cp->mmap_virt_addr);
 }
 
 // Open channel device (based on name and type) and return its channel structure
@@ -149,7 +143,7 @@ void *open_device(chan *cp) {
     return (dma_open_channel(cp, TX_BUFFER_COUNT));
   }
   if (strcmp(dev_type, "shm") == 0) {
-    return (shm_open_channel(cp, PROT_WRITE, MMAP_ADDR_HOST, dev_direction));
+    return (shm_open_channel(cp));
   }
   else {
     log_fatal("Unsupported device type %s\n", dev_type);
