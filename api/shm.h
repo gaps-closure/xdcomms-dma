@@ -3,10 +3,10 @@
 
 #include "xdcomms.h"
 
-#define MMAP_LEN_HOST      0x80000UL        // 0.5 MB
-#define MMAP_LEN_ESCAPE    0x10000000UL     // 256 MB
-#define MMAP_ADDR_ESCAPE   0x2080000000UL   // mmap physical memory address @ 130 GB
-#define MMAP_ADDR_HOST     0x0UL            // Host System selects mmap physical memory address
+#define SHM_MMAP_ADDR_HOST     0x0UL            // Host System selects mmap physical memory address
+#define SHM_MMAP_LEN_HOST      0x80000UL        // 0.5 MB
+#define SHM_MMAP_ADDR_ESCAPE   0x2080000000UL   // mmap physical memory address @ 130 GB
+#define SHM_MMAP_LEN_ESCAPE    0x10000000UL     // 256 MB
 #define MMAP_PAGE_MASK     (sysconf(_SC_PAGE_SIZE) - 1)    // Normally 4K - 1
 
 #define SHM_MAX_INDEX             16    // number of packet buffers in channel
