@@ -584,7 +584,7 @@ void *xdc_ctx(void) { return NULL; }
 void *xdc_pub_socket(void) { return NULL; }
 void *xdc_sub_socket(gaps_tag tag) { return NULL; }
 void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout) {
-  chan *cp = get_chan_info(&tag);
+  chan *cp = get_chan_info(&tag, 'r');
 
   log_trace("%s: timeout = %d ms for tag=<%d,%d,%d>", __func__, timeout, tag.mux, tag.sec, tag.typ);
 //  fprintf(stderr, "timeout = %d ms for tag=<%d,%d,%d>\n", timeout, tag.mux, tag.sec, tag.typ);
@@ -595,7 +595,7 @@ void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout) {
 void xdc_asyn_send(void *socket, void *adu, gaps_tag *tag) { asyn_send(adu, tag); }
 
 int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
-  chan *cp                = get_chan_info(tag);      // get buffer for tag (to communicate with thread)
+  chan *cp                = get_chan_info(tag, 'r');      // get buffer for tag (to communicate with thread)
   struct timespec request = {(RX_POLL_INTERVAL_NSEC/NSEC_IN_SEC), (RX_POLL_INTERVAL_NSEC % NSEC_IN_SEC) };
   int              ntries = 1 + (cp->retries);       // number of tries to rx packet
                                                       
