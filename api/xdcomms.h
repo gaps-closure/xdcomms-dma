@@ -89,7 +89,7 @@ typedef struct channel {
 /* RX thread arguments */
 typedef struct _thread_args {
   chan            *cp;               // Channel RX thread is looking for
-  void            *buffer_id_start;  // Device buffer index
+  int             buffer_id_start;  // Device buffer index
 } thread_args;
 
 void rcvr_thread_start(chan *cp);
