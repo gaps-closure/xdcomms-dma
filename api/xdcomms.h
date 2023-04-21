@@ -58,6 +58,21 @@ typedef struct _tag {
   uint32_t         typ;      /* data type */
 } gaps_tag;
 
+// mmap configuration (channel_buffer in DMA device, shm_channel in SHM device)
+typedef struct _memmap {
+  int              prot;      // Mmap protection field (e.g., Read and/or write)
+  int              flags;     // mmap'ed flags (e.g., SHARED)
+  unsigned long    phys_addr; // mmap'ed physical address
+  unsigned long    len;       // mmap'ed memory length
+  void            *virt_addr; // Mmaped virtual address of packet buffer structure
+  unsigned long    offset;    // Offset from mmap_virt_addr to channel info
+} memmap;
+
+typedef struct _rxfifo {
+  char             newd;      // RX thread received new packet (xdcomms resets after reading)
+  void            *buf_ptr;   // Data
+} rxfifo;
+
 // channel configuration (with device abstraction)
 typedef struct channel {
   uint32_t         ctag;           // Compressed tag (unique index) - used to search for channel
@@ -65,23 +80,16 @@ typedef struct channel {
   char             dev_type[4];    // device type: e.g., shm (ESCAPE) or dma (MIND)
   char             dev_name[64];   // Device name: e.g., /dev/mem or /dev/sue_dominous
   int              fd;             // Device file descriptor (set when device openned)
-  int              mmap_prot;      // Mmap protection field (e.g., Read and/or write)
-  int              mmap_flags;     // mmap'ed flags (e.g., SHARED)
-  unsigned long    mmap_phys_addr; // mmap'ed physical address
-  unsigned long    mmap_len;       // mmap'ed memory length
-  void            *mmap_virt_addr; // Mmaped virtual address of packet buffer structure
-                                   // (channel_buffer in DMA device, shm_channel in SHM device)
-  unsigned long    addr_offset;    // Offset from mmap_virt_addr to channel info
   pthread_mutex_t  lock;           // Ensure RX thread does not write while xdcomms reads
-  char             newd;           // RX thread received new packet (xdcomms resets after reading)
+  memmap           mm;             // Mmap configuration
   int              retries;        // number of RX polls (every RX_POLL_INTERVAL_NSEC) before timeout
-  int              count;          // number of RX polls (every RX_POLL_INTERVAL_NSEC) before timeout
+  rxfifo           rx;
 } chan;
 
 /* RX thread arguments */
 typedef struct _thread_args {
   chan            *cp;               // Channel RX thread is looking for
-  void            *buffer_id_start; // Device buffer index
+  void            *buffer_id_start;  // Device buffer index
 } thread_args;
 
 void rcvr_thread_start(chan *cp);

@@ -103,10 +103,9 @@ void ctag_decode(uint32_t *ctag, gaps_tag *tag) {
 /* C) THREADS   */
 /**********************************************************************/
 void chan_print(chan *cp) {
-  log_trace("channel %08x: dir=%c type=%s name=%s fd=%d new=%d lock=%d paddr=%d maplen=%d buf_ptr (mmap vaddr)=%x ret=%d every %d ns",
-            cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd,
-            cp->newd, cp->lock, cp->mmap_phys_addr, cp->mmap_len, cp->mmap_virt_addr,
-            cp->retries, RX_POLL_INTERVAL_NSEC);
+  log_trace("channel %08x: dir=%c type=%s name=%s fd=%d lock=%d\n", cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->lock);
+  log_trace("              paddr=%d maplen=%d vaddr=%x ",  cp->mm.phys_addr, cp->mm.len, cp->mm.virt_addr);
+  log_trace("              ret=%d every %d ns newd=%d rx_buf_ptr=%p\n", cp->retries, RX_POLL_INTERVAL_NSEC, cp->rx.newd, cp->rx.buf_ptr);
 }
 
 /**********************************************************************/
@@ -119,9 +118,9 @@ void dma_open_channel(chan *cp, int buffer_count) {
   if ((cp->fd = open(cp->dev_name, O_RDWR)) < 1) FATAL;
 
   // b) mmpp device
-  cp->mmap_virt_addr = mmap(NULL, sizeof(struct channel_buffer) * buffer_count, cp->mmap_prot, cp->mmap_flags, cp->fd, 0);
-  if (cp->mmap_virt_addr == MAP_FAILED) FATAL;
-  log_trace("Opened channel %s: mmap_virt_addr=%p, fd=%d", cp->dev_name, cp->mmap_virt_addr, cp->fd);
+  cp->mm.virt_addr = mmap(NULL, sizeof(struct channel_buffer) * buffer_count, cp->mm.prot, cp->mm.flags, cp->fd, 0);
+  if (cp->mm.virt_addr == MAP_FAILED) FATAL;
+  log_trace("Opened channel %s: mmap_virt_addr=%p, fd=%d", cp->dev_name, cp->mm.virt_addr, cp->fd);
 }
 
 // Open DMA channel sat given Physical address
@@ -134,13 +133,13 @@ void shm_open_channel(chan *cp) {
   if ((cp->fd = open(cp->dev_name, O_RDWR | O_SYNC)) == -1) FATAL;
   
   // b) mmpp device: reduce address to be a multiple of page size and add the diff to length
-  pa_phys_addr       = cp->mmap_phys_addr & ~MMAP_PAGE_MASK;
-  pa_mmap_len        = cp->mmap_len + cp->mmap_phys_addr - pa_phys_addr;
-  pa_virt_addr       = mmap(0, pa_mmap_len, cp->mmap_prot, cp->mmap_flags, cp->fd, pa_phys_addr);
+  pa_phys_addr       = cp->mm.phys_addr & ~MMAP_PAGE_MASK;
+  pa_mmap_len        = cp->mm.len + cp->mm.phys_addr - pa_phys_addr;
+  pa_virt_addr       = mmap(0, pa_mmap_len, cp->mm.prot, cp->mm.flags, cp->fd, pa_phys_addr);
   if (pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
-  cp->mmap_virt_addr = pa_virt_addr + cp->mmap_phys_addr - pa_phys_addr;   // add offset to page aligned addr
+  cp->mm.virt_addr = pa_virt_addr + cp->mm.phys_addr - pa_phys_addr;   // add offset to page aligned addr
   
-  fprintf(stderr, "    Shared mmap'ed DDR [len=0x%lx Bytes] starts at virtual address %p\n", pa_mmap_len, cp->mmap_virt_addr);
+  fprintf(stderr, "    Shared mmap'ed DDR [len=0x%lx Bytes] starts at virtual address %p\n", pa_mmap_len, cp->mm.virt_addr);
 }
 
 // Open channel device (based on name and type) and return its channel structure
@@ -236,16 +235,16 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
     get_dev_type(cp->dev_type, getenv("DEV_TYPE_TX"), "dma");
     get_dev_name(cp->dev_name, getenv("DEV_NAME_TX"), "dma_proxy_tx", "mem", cp->dev_type);
 // *val = (unsigned long) strtol(env_val, NULL, 16);
-    get_dev_val (&(cp->addr_offset), getenv("DEV_OFFS_TX"), 0x0, 0x0, cp->dev_type);
-    get_dev_val (&(cp->mmap_len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * TX_BUFFER_COUNT), SHM_MMAP_LEN_ESCAPE, cp->dev_type);
+    get_dev_val (&(cp->mm.offset), getenv("DEV_OFFS_TX"), 0x0, 0x0, cp->dev_type);
+    get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * TX_BUFFER_COUNT), SHM_MMAP_LEN_ESCAPE, cp->dev_type);
   }
   else {            // RX
     get_dev_type(cp->dev_type, getenv("DEV_TYPE_RX"), "dma");
     get_dev_name(cp->dev_name, getenv("DEV_NAME_RX"), "dma_proxy_rx", "mem", cp->dev_type);
-    get_dev_val (&(cp->addr_offset), getenv("DEV_OFFS_RX"), 0x0, SHM_MMAP_LEN_HOST, cp->dev_type);
-    get_dev_val (&(cp->mmap_len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * RX_BUFFER_COUNT), SHM_MMAP_LEN_ESCAPE, cp->dev_type);
+    get_dev_val (&(cp->mm.offset), getenv("DEV_OFFS_RX"), 0x0, SHM_MMAP_LEN_HOST, cp->dev_type);
+    get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * RX_BUFFER_COUNT), SHM_MMAP_LEN_ESCAPE, cp->dev_type);
   }
-  get_dev_val(&(cp->mmap_phys_addr), getenv("DEV_MMAP_AD"), DMA_ADDR_HOST, SHM_MMAP_ADDR_HOST, cp->dev_type);
+  get_dev_val(&(cp->mm.phys_addr), getenv("DEV_MMAP_AD"), DMA_ADDR_HOST, SHM_MMAP_ADDR_HOST, cp->dev_type);
 }
                   
 /* Return pointer to Rx packet buffer for specified tag */
@@ -356,14 +355,12 @@ int dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *cbuf_
   return 0;
 }
 
-void dma_send(chan *cp, void *adu) {
-  struct channel_buffer  *dma_tx_chan = (struct channel_buffer *) cp->mmap_virt_addr;
+void dma_send(chan *cp, void *adu, gaps_tag *tag) {
+  struct channel_buffer  *dma_tx_chan = (struct channel_buffer *) cp->mm.virt_addr;
   bw           *p;                        // Packet pointer
   int    buffer_id=0;               // Use only a single buffer
   size_t       packet_len, adu_len;       // encoder calculates length */
-  gaps_tag     tag;
   
-  ctag_decode(&(cp->ctag), &tag);
   p = (bw *) &(dma_tx_chan->buffer);      // point to a DMA packet buffer */
   time_trace("XDC_Tx1 ready to encode for ctag=%08x", cp->ctag);
   bw_gaps_data_encode(p, &packet_len, adu, &adu_len, &tag);  /* Put packet into channel buffer */
@@ -371,13 +368,13 @@ void dma_send(chan *cp, void *adu) {
   dma_tx_chan->length = packet_len;
   if (packet_len <= sizeof(bw)) log_buf_trace("TX_PKT", (uint8_t *) &(dma_tx_chan->buffer), packet_len);
   dma_start_to_finish(cp->fd, &buffer_id, dma_tx_chan);
-  time_trace("XDC_Tx3 sent data for tag=<%d,%d,%d> len=%ld", tag.mux, tag.sec, tag.typ, packet_len);
-  log_debug("XDCOMMS tx packet tag=<%d,%d,%d> len=%ld", tag.mux, tag.sec, tag.typ, packet_len);
+  time_trace("XDC_Tx3 sent data for tag=<%d,%d,%d> len=%ld", tag->mux, tag->sec, tag->typ, packet_len);
+  log_debug("XDCOMMS tx packet tag=<%d,%d,%d> len=%ld", tag->mux, tag->sec, tag->typ, packet_len);
 //  log_trace("%s: Buffer id = %d packet pointer=%p", buffer_id, p);
 //  time_trace("Tx packet end: tag=<%d,%d,%d> pkt-len=%d", tag->mux, tag->sec, tag->typ, packet_len);
 }
 
-void shm_send(chan *cp, void *adu) {
+void shm_send(chan *cp, void *adu, gaps_tag *tag) {
   log_warn("Must write function %s", __func__);
 }
 
@@ -389,8 +386,8 @@ void asyn_send(void *adu, gaps_tag *tag) {
   log_trace("Start of %s", __func__);
   pthread_mutex_lock(&(cp->lock));
   // b) encode packet into TX buffer and send */
-  if (strcmp(cp->dev_type, "dma") == 0) dma_send(cp, adu);
-  if (strcmp(cp->dev_type, "shm") == 0) shm_send(cp, adu);
+  if (strcmp(cp->dev_type, "dma") == 0) dma_send(cp, adu, tag);
+  if (strcmp(cp->dev_type, "shm") == 0) shm_send(cp, adu, tag);
   pthread_mutex_unlock(&(cp->lock));
 }
 
@@ -401,19 +398,16 @@ void asyn_send(void *adu, gaps_tag *tag) {
 void *rcvr_thread_function(thread_args *vargs) {
   gaps_tag     tag;
   bw          *p;
-  rx_tag_info *t;
-  chan        *c = vargs->c;
+  chan        *cp = vargs->cp;
   int          buffer_id_index = 0;
   int          buffer_id;
-  unsigned int pkt_length;
 
-  pkt_length = sizeof(bw);      /* XXX: ALl packets use buffer of Max size */
   log_debug("THREAD %s starting: fd=%d base_id=%d", __func__, c->fd, vargs->buffer_id_start);
 //  log_trace("THREAD ptrs: a=%p, b=%p, c=%p", vargs, &(c->mmap_virt_addr[0]), c);
   
   while (1) {
-    buffer_id = vargs->buffer_id_start + buffer_id_index;
-    c->mmap_virt_addr[buffer_id].length = pkt_length;
+    buffer_id = (vargs->buffer_id_start) + buffer_id_index;
+    cp->mm.virt_addr[buffer_id].length = sizeof(bw);      /* XXX: ALl packets use buffer of Max size */
     if (dma_start_to_finish(c->fd, &buffer_id, &(c->mmap_virt_addr[buffer_id])) == 0) {
       p = (bw *) &(c->mmap_virt_addr[buffer_id]);    /* XXX: DMA buffer must be larger than size of BW */
       ctag_decode(&(p->message_tag_ID), &tag);
@@ -442,7 +436,7 @@ void rcvr_thread_start(chan *cp) {
   pthread_mutex_lock(&rxlock);
   log_trace("%s: open rx channel and start receiver thread(s)", __func__);
   rxargs.cp = cp;
-  rxargs.buffer_id_start = cp->mmap_virt_addr + cp->addr_offset;
+  rxargs.buffer_id_start = cp->mm.virt_addr + cp->mm.offset;
   if (pthread_create(&tid, NULL, (void *) rcvr_thread_function, (void *)&rxargs) != 0) FATAL;
   pthread_mutex_unlock(&rxlock);
 }
@@ -457,15 +451,15 @@ int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
   log_trace("%s: Check for received packet on tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
   chan_print(cp);
   exit(24);
-  if (cp->newd != 0) {                            // get packet from buffer if available)
+  if (cp->rx.newd != 0) {                            // get packet from buffer if available)
     if (strcmp(cp->dev_type, "dma") == 0) {    // MIND DMA driver
-      pp = cp->mmap_virt_addr;                           // Point to device rx buffer
+      pp = cp->mm.virt_addr;                           // Point to device rx buffer
       time_trace("XDC_Rx2 start decode for tag=<%d,%d,%d>", tag->mux, tag->sec, tag->typ);
-      bw_gaps_data_decode(cp->mmap_virt_addr, 0, adu, &adu_len, tag);   /* Put packet into ADU */
+      bw_gaps_data_decode(cp->mm.virt_addr, 0, adu, &adu_len, tag);   /* Put packet into ADU */
       packet_len = bw_get_packet_length(pp, adu_len);
       log_trace("XDCOMMS reads from DMA channel (mmap_virt_addr=%p) len=(b=%d p=%d)", p, adu_len, packet_len);
       if (packet_len <= sizeof(bw)) log_buf_trace("RX_PKT", (uint8_t *) pp, packet_len);
-      cp->newd = 0;                      // unmark newdata
+      cp->rx.newd = 0;                      // unmark newdata
       time_trace("XDC_Rx3 packet copied to ADU: tag=<%d,%d,%d> pkt-len=%d adu-len=%d", tag->mux, tag->sec, tag->typ, packet_len, adu_len);
       log_debug("XDCOMMS rx packet tag=<%d,%d,%d> len=%d", tag->mux, tag->sec, tag->typ, packet_len);
     }
