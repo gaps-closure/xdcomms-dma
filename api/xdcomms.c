@@ -456,7 +456,7 @@ int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
       time_trace("XDC_Rx2 start decode for tag=<%d,%d,%d>", tag->mux, tag->sec, tag->typ);
       bw_gaps_data_decode(cp->mm.virt_addr, 0, adu, &adu_len, tag);   /* Put packet into ADU */
       packet_len = bw_get_packet_length(pp, adu_len);
-      log_trace("XDCOMMS reads from DMA channel (mmap_virt_addr=%p) len=(b=%d p=%d)", p, adu_len, packet_len);
+      log_trace("XDCOMMS reads from DMA channel (mmap_virt_addr=%p) len=(b=%d p=%d)", pp, adu_len, packet_len);
       if (packet_len <= sizeof(bw)) log_buf_trace("RX_PKT", (uint8_t *) pp, packet_len);
       cp->rx.newd = 0;                      // unmark newdata
       time_trace("XDC_Rx3 packet copied to ADU: tag=<%d,%d,%d> pkt-len=%d adu-len=%d", tag->mux, tag->sec, tag->typ, packet_len, adu_len);
