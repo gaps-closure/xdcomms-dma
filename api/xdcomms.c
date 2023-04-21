@@ -470,7 +470,7 @@ int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
       exit(-1);
     }
   }
-  pthread_mutex_unlock(&(t->lock));
+  pthread_mutex_unlock(&(cp->lock));
   return (adu_len > 0) ? adu_len : -1;
 }
 
