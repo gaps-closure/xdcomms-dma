@@ -401,7 +401,7 @@ void *rcvr_thread_function(thread_args *vargs) {
   chan                  *cp = vargs->cp;
   int                    buffer_id_index = 0;
   int                    buffer_id;
-  struct channel_buffer  dma_cb_ptr =  (struct channel_buffer *) cp->mm.virt_addr;
+  struct channel_buffer *dma_cb_ptr =  (struct channel_buffer *) cp->mm.virt_addr;
 
   log_debug("THREAD %s starting: fd=%d base_id=%d", __func__, cp->fd, vargs->buffer_id_start);
 //  log_trace("THREAD ptrs: a=%p, b=%p, c=%p", vargs, &(c->mmap_virt_addr[0]), c);
