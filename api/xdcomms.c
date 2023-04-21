@@ -396,23 +396,24 @@ void asyn_send(void *adu, gaps_tag *tag) {
 /**********************************************************************/
 /* Receive packets via DMA in a loop (rate controled by FINISH_XFER blocking call) */
 void *rcvr_thread_function(thread_args *vargs) {
-  gaps_tag     tag;
-  bw          *p;
-  chan        *cp = vargs->cp;
-  int          buffer_id_index = 0;
-  int          buffer_id;
+  gaps_tag               tag;
+  bw                    *p;
+  chan                  *cp = vargs->cp;
+  int                    buffer_id_index = 0;
+  int                    buffer_id;
+  struct channel_buffer  dma_cb_ptr =  (struct channel_buffer *) cp->mm.virt_addr;
 
   log_debug("THREAD %s starting: fd=%d base_id=%d", __func__, cp->fd, vargs->buffer_id_start);
 //  log_trace("THREAD ptrs: a=%p, b=%p, c=%p", vargs, &(c->mmap_virt_addr[0]), c);
   
   while (1) {
     buffer_id = (vargs->buffer_id_start) + buffer_id_index;
-    cp->mm.virt_addr[buffer_id].length = sizeof(bw);      /* XXX: ALl packets use buffer of Max size */
-    if (dma_start_to_finish(cp->fd, &buffer_id, &(cp->mm.virt_addr[buffer_id])) == 0) {
-      p = (bw *) &(cp->mm.virt_addr[buffer_id]);    /* XXX: DMA buffer must be larger than size of BW */
+    dma_cb_ptr[buffer_id].length = sizeof(bw);      /* XXX: ALl packets use buffer of Max size */
+    if (dma_start_to_finish(cp->fd, &buffer_id, &(dma_cb_ptr[buffer_id])) == 0) {
+      p = (bw *) &(dma_cb_ptr[buffer_id].buffer);    /* XXX: DMA buffer must be larger than size of BW */
       ctag_decode(&(p->message_tag_ID), &tag);
       time_trace("XDC_THRD got packet tag=<%d,%d,%d> (fd=%d id=%d)", tag.mux, tag.sec, tag.typ, cp->fd, buffer_id);
-      log_trace("THREAD rx packet tag=<%d,%d,%d> buf-id=%d st=%d", tag.mux, tag.sec, tag.typ, buffer_id, cp->mm.virt_addr[buffer_id].status);
+      log_trace("THREAD rx packet tag=<%d,%d,%d> buf-id=%d st=%d", tag.mux, tag.sec, tag.typ, buffer_id, dma_cb_ptr[buffer_id].status);
 
       pthread_mutex_lock(&(cp->lock));
 //      memcpy(&(t->p), p, sizeof(bw)); /* XXX: optimize, copy only length of actual packet received */
