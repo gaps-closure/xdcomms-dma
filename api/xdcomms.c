@@ -402,26 +402,24 @@ void *rcvr_thread_function(thread_args *vargs) {
   int          buffer_id_index = 0;
   int          buffer_id;
 
-  log_debug("THREAD %s starting: fd=%d base_id=%d", __func__, c->fd, vargs->buffer_id_start);
+  log_debug("THREAD %s starting: fd=%d base_id=%d", __func__, cp->fd, vargs->buffer_id_start);
 //  log_trace("THREAD ptrs: a=%p, b=%p, c=%p", vargs, &(c->mmap_virt_addr[0]), c);
   
   while (1) {
     buffer_id = (vargs->buffer_id_start) + buffer_id_index;
     cp->mm.virt_addr[buffer_id].length = sizeof(bw);      /* XXX: ALl packets use buffer of Max size */
-    if (dma_start_to_finish(c->fd, &buffer_id, &(c->mmap_virt_addr[buffer_id])) == 0) {
-      p = (bw *) &(c->mmap_virt_addr[buffer_id]);    /* XXX: DMA buffer must be larger than size of BW */
+    if (dma_start_to_finish(cp->fd, &buffer_id, &(cp->mm.virt_addr[buffer_id])) == 0) {
+      p = (bw *) &(cp->mm.virt_addr[buffer_id]);    /* XXX: DMA buffer must be larger than size of BW */
       ctag_decode(&(p->message_tag_ID), &tag);
-      time_trace("XDC_THRD got packet tag=<%d,%d,%d> (fd=%d id=%d)", tag.mux, tag.sec, tag.typ, c->fd, buffer_id);
-      log_trace("THREAD rx packet tag=<%d,%d,%d> buf-id=%d st=%d", tag.mux, tag.sec, tag.typ, buffer_id, c->mmap_virt_addr[buffer_id].status);
+      time_trace("XDC_THRD got packet tag=<%d,%d,%d> (fd=%d id=%d)", tag.mux, tag.sec, tag.typ, cp->fd, buffer_id);
+      log_trace("THREAD rx packet tag=<%d,%d,%d> buf-id=%d st=%d", tag.mux, tag.sec, tag.typ, buffer_id, cp->mm.virt_addr[buffer_id].status);
 
-      /* get buffer for tag, lock buffer, copy packet ptr to buffer, mark as newdata, release lock */
-      t = get_chan_info(&tag, 'r');
-      pthread_mutex_lock(&(t->lock));
+      pthread_mutex_lock(&(cp->lock));
 //      memcpy(&(t->p), p, sizeof(bw)); /* XXX: optimize, copy only length of actual packet received */
-      t->p_ptr = p;
-      t->newd = 1;
-      rx_tag_info_print(t);
-      pthread_mutex_unlock(&(t->lock));
+      cp->rx.buf_ptr = p;
+      cp->rx.newd = 1;
+      chan_print(cp);
+      pthread_mutex_unlock(&(cp->lock));
       buffer_id_index = (buffer_id_index + 1) % RX_BUFFS_PER_THREAD;
     }
   }
