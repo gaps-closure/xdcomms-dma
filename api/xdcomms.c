@@ -189,11 +189,11 @@ void chan_init_all_once(void) {
     t_in_ms = ((t_env = getenv("TIMEOUT_MS")) == NULL) ? RX_POLL_TIMEOUT_MSEC_DEFAULT : atoi(t_env);
     for(i=0; i < GAPS_TAG_MAX; i++) {
       chan_info[i].ctag       = 0;
-      chan_info[i].newd       = 0;
-      chan_info[i].count      = 0;
+      chan_info[i].mm.prot  = PROT_READ | PROT_WRITE;
+      chan_info[i].mm.flags = MAP_SHARED;
       chan_info[i].retries    = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;
-      chan_info[i].mmap_prot  = PROT_READ | PROT_WRITE;
-      chan_info[i].mmap_flags = MAP_SHARED;
+      chan_info[i].rx.newd    = 0;
+      chan_info[i].rx.buf_ptr    = NULL;
       if (pthread_mutex_init(&(chan_info[i].lock), NULL) != 0)   FATAL;
     }
     once=0;
