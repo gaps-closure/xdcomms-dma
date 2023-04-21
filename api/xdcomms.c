@@ -363,7 +363,7 @@ void dma_send(chan *cp, void *adu, gaps_tag *tag) {
   
   p = (bw *) &(dma_tx_chan->buffer);      // point to a DMA packet buffer */
   time_trace("XDC_Tx1 ready to encode for ctag=%08x", cp->ctag);
-  bw_gaps_data_encode(p, &packet_len, adu, &adu_len, &tag);  /* Put packet into channel buffer */
+  bw_gaps_data_encode(p, &packet_len, adu, &adu_len, tag);  /* Put packet into channel buffer */
   time_trace("XDC_Tx2 ready to send data for ctag=%08x len=%ld", cp->ctag, packet_len);
   dma_tx_chan->length = packet_len;
   if (packet_len <= sizeof(bw)) log_buf_trace("TX_PKT", (uint8_t *) &(dma_tx_chan->buffer), packet_len);
