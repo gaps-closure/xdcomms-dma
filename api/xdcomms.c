@@ -435,7 +435,7 @@ void rcvr_thread_start(chan *cp) {
   pthread_mutex_lock(&rxlock);
   log_trace("%s: open rx channel and start receiver thread(s)", __func__);
   rxargs.cp = cp;
-  rxargs.buffer_id_start = cp->mm.virt_addr + cp->mm.offset;
+  rxargs.buffer_id_start = 0;
   if (pthread_create(&tid, NULL, (void *) rcvr_thread_function, (void *)&rxargs) != 0) FATAL;
   pthread_mutex_unlock(&rxlock);
 }
