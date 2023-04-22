@@ -48,9 +48,6 @@ typedef struct _tag {
   uint32_t         typ;      /* data type */
 } gaps_tag;
 
-
-void rcvr_thread_start(chan *cp);
-
 //extern void tag_print     (gaps_tag *, FILE *);
 extern void tag_write     (gaps_tag *, uint32_t,   uint32_t,   uint32_t);
 extern void tag_read      (gaps_tag *, uint32_t *, uint32_t *, uint32_t *);

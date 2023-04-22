@@ -91,6 +91,8 @@ typedef struct _thread_args {
   int             buffer_id_start;  // Device buffer index
 } thread_args;
 
+void rcvr_thread_start(chan *cp);
+
 
 codec_map  cmap[DATA_TYP_MAX];       // maps data type to its data encode + decode functions
 chan       chan_info[GAPS_TAG_MAX];  // array of buffers to store channel info per tag
