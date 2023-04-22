@@ -251,7 +251,7 @@ void chan_init_all_once(void) {
 // Get channel device type
 void get_dev_type(char *dev_type, char *env_type, char *def_type) {
   strcpy(dev_type, "/dev/");        // prefix
-  (env_type == NULL) ? strcpy(dev_type, def_type) : strcpy(dev_type, env_type);
+  (env_type == NULL) ? strcat(dev_type, def_type) : strcat(dev_type, env_type);
 }
 // Get channel device name (*dev_name) from enivronment or default (for that type)
 void get_dev_name(char *dev_name, char *env_name, char *def_name_dma, char *def_name_shm, char *dev_type) {
