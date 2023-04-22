@@ -652,7 +652,7 @@ int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
 //  time_trace("XDC_Rx1 Wait for tag=<%d,%d,%d> (test %d times every %d ns)", tag->mux, tag->sec, tag->typ, ntries, RX_POLL_INTERVAL_NSEC);
   while ((ntries--) > 0)  {
     if (nonblock_recv(adu, tag, cp) > 0)  return 0;
-//    log_trace("LOOP timeout %s: tag=<%d,%d,%d>: remaining tries = %d ", __func__, tag->mux, tag->sec, tag->typ, ntries);
+    log_trace("LOOP timeout %s: tag=<%d,%d,%d>: remaining tries = %d ", __func__, tag->mux, tag->sec, tag->typ, ntries); exit(22);
     nanosleep(&request, NULL);
   }
   log_trace("%s timeout for tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
