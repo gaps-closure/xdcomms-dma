@@ -56,6 +56,42 @@
 #include "dma-proxy.h"
 #include "shm.h"
 
+
+// mmap configuration (channel_buffer in DMA device, shm_channel in SHM device)
+typedef struct _memmap {
+  int              prot;      // Mmap protection field (e.g., Read and/or write)
+  int              flags;     // mmap'ed flags (e.g., SHARED)
+  unsigned long    phys_addr; // mmap'ed physical address
+  unsigned long    len;       // mmap'ed memory length
+  void            *virt_addr; // Mmaped virtual address of packet buffer structure
+  unsigned long    offset;    // Offset from mmap_virt_addr to channel info
+} memmap;
+
+typedef struct _rxfifo {
+  char             newd;      // RX thread received new packet (xdcomms resets after reading)
+  void            *buf_ptr;   // Data
+} rxfifo;
+
+// channel configuration (with device abstraction)
+typedef struct channel {
+  uint32_t         ctag;           // Compressed tag (unique index) - used to search for channel
+  char             dir;            // Receive (from network) or Transmit (to network): 'r' or 't'
+  char             dev_type[4];    // device type: e.g., shm (ESCAPE) or dma (MIND)
+  char             dev_name[64];   // Device name: e.g., /dev/mem or /dev/sue_dominous
+  int              fd;             // Device file descriptor (set when device openned)
+  pthread_mutex_t  lock;           // Ensure RX thread does not write while xdcomms reads
+  memmap           mm;             // Mmap configuration
+  int              retries;        // number of RX polls (every RX_POLL_INTERVAL_NSEC) before timeout
+  rxfifo           rx;
+} chan;
+
+/* RX thread arguments */
+typedef struct _thread_args {
+  chan            *cp;               // Channel RX thread is looking for
+  int             buffer_id_start;  // Device buffer index
+} thread_args;
+
+
 codec_map  cmap[DATA_TYP_MAX];       // maps data type to its data encode + decode functions
 chan       chan_info[GAPS_TAG_MAX];  // array of buffers to store channel info per tag
 
@@ -442,12 +478,12 @@ void rcvr_thread_start(chan *cp) {
   static pthread_t   tid;
 
   /* Open rx channel and receive threads (only once) */
-  pthread_mutex_lock(&rxlock);
+  pthread_mutex_lock(&chan_create);
   log_trace("%s: open rx channel and start receiver thread(s)", __func__);
   rxargs.cp = cp;
   rxargs.buffer_id_start = 0;
   if (pthread_create(&tid, NULL, (void *) rcvr_thread_function, (void *)&rxargs) != 0) FATAL;
-  pthread_mutex_unlock(&rxlock);
+  pthread_mutex_unlock(&chan_create);
 }
 
 /* Receive packet from driver (via rx thread), storing data and length in ADU */
