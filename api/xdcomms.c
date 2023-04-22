@@ -281,7 +281,6 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
   // a) Set channel configuration for this tag
   cp->ctag = ctag;
   cp->dir  = dir;
-  chan_print(cp);
   if (dir == 't') { // TX
     get_dev_type(cp->dev_type, getenv("DEV_TYPE_TX"), "dma");
     get_dev_name(cp->dev_name, getenv("DEV_NAME_TX"), "dma_proxy_tx", "mem", cp->dev_type);
@@ -293,6 +292,7 @@ exit(22);
   }
   else {            // RX
     get_dev_type(cp->dev_type, getenv("DEV_TYPE_RX"), "dma");
+chan_print(cp);
     get_dev_name(cp->dev_name, getenv("DEV_NAME_RX"), "dma_proxy_rx", "mem", cp->dev_type);
 chan_print(cp);
 exit(22);
