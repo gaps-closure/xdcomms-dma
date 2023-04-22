@@ -315,6 +315,7 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
       chan_init_config_one(cp, ctag, dir); // a) Configure new tag
       dev_open_if_new(cp);                 // b) open device (if not already open)
       log_trace("%s: Start thread? i=%d", __func__, i);
+      log_trace("%s: dir=%c", cp->dir);
       if (cp->dir == 'r') rcvr_thread_start(cp);  // c) Start rx thread for new receive tag
       log_trace("%s: dir=%c", cp->dir);
       break;
