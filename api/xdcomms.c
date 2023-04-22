@@ -211,6 +211,7 @@ void dev_open_if_new(chan *cp) {
       dev_set_list[i] = 1;      // Put new device name into list
       strcpy(dev_name_list[i], cp->dev_name);
       open_device(cp);           // Open new device
+      log_trace("%s: YYY i=%d", __func__, i);
       return;
     }
     if (strcmp(cp->dev_name, dev_name_list[i]) == 0) return;  // not a new device
