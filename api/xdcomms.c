@@ -254,6 +254,7 @@ void get_dev_type(char *dev_type, char *env_type, char *def_type) {
 }
 // Get channel device name (*dev_name) from enivronment or default (for that type)
 void get_dev_name(char *dev_name, char *env_name, char *def_name_dma, char *def_name_shm, char *dev_type) {
+  log_trace("%s: type=%s", __func__, dev_type);
   strcpy(dev_type, "/dev/");        // prefix
   if (strcmp(dev_type, "dma") == 0) {
     (env_name == NULL) ? strcat(dev_name, def_name_dma) : strcat(dev_name, env_name);
@@ -281,6 +282,7 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
   cp->dir  = dir;
   if (dir == 't') { // TX
     get_dev_type(cp->dev_type, getenv("DEV_TYPE_TX"), "dma");
+    
     get_dev_name(cp->dev_name, getenv("DEV_NAME_TX"), "dma_proxy_tx", "mem", cp->dev_type);
 // *val = (unsigned long) strtol(env_val, NULL, 16);
     get_dev_val (&(cp->mm.offset), getenv("DEV_OFFS_TX"), 0x0, 0x0, cp->dev_type);
