@@ -264,8 +264,6 @@ void get_dev_name(char *dev_name, char *env_name, char *def_name_dma, char *def_
     (env_name == NULL) ? strcat(dev_name, def_name_shm) : strcat(dev_name, env_name);
   }
   else FATAL;
-  chan_print(chan *cp);
-  exit(22);
 }
 
 // Get channel device number (*val) from enivronment or default (for that type)
@@ -285,7 +283,8 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
   cp->dir  = dir;
   if (dir == 't') { // TX
     get_dev_type(cp->dev_type, getenv("DEV_TYPE_TX"), "dma");
-    
+chan_print(chan *cp);
+exit(22);
     get_dev_name(cp->dev_name, getenv("DEV_NAME_TX"), "dma_proxy_tx", "mem", cp->dev_type);
 // *val = (unsigned long) strtol(env_val, NULL, 16);
     get_dev_val (&(cp->mm.offset), getenv("DEV_OFFS_TX"), 0x0, 0x0, cp->dev_type);
