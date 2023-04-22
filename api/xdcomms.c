@@ -151,9 +151,9 @@ void ctag_decode(uint32_t *ctag, gaps_tag *tag) {
 /* C) THREADS   */
 /**********************************************************************/
 void chan_print(chan *cp) {
-  log_trace("channel %08x: dir=%c type=%s name=%s fd=%d lock=%d\n", cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->lock);
-  log_trace("              paddr=%d maplen=%d vaddr=%x ",  cp->mm.phys_addr, cp->mm.len, cp->mm.virt_addr);
-  log_trace("              ret=%d every %d ns newd=%d rx_buf_ptr=%p\n", cp->retries, RX_POLL_INTERVAL_NSEC, cp->rx.newd, cp->rx.buf_ptr);
+  log_trace("channel %08x: dir=%c type=%s name=%s fd=%d lock=%d", cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->lock);
+  log_trace("                  paddr=%d maplen=%d vaddr=%x ",  cp->mm.phys_addr, cp->mm.len, cp->mm.virt_addr);
+  log_trace("                  ret=%d every %d ns newd=%d rx_buf_ptr=%p", cp->retries, RX_POLL_INTERVAL_NSEC, cp->rx.newd, cp->rx.buf_ptr);
 }
 
 /**********************************************************************/
@@ -250,17 +250,17 @@ void chan_init_all_once(void) {
 
 // Get channel device type
 void get_dev_type(char *dev_type, char *env_type, char *def_type) {
-  strcpy(dev_type, "/dev/");        // prefix
   (env_type == NULL) ? strcat(dev_type, def_type) : strcat(dev_type, env_type);
 }
 // Get channel device name (*dev_name) from enivronment or default (for that type)
 void get_dev_name(char *dev_name, char *env_name, char *def_name_dma, char *def_name_shm, char *dev_type) {
+  strcpy(dev_name, "/dev/");        // prefix
   log_trace("%s: type=%s", __func__, dev_type);
   fprintf(stderr, "XXX %s [ptr=%p]\n", dev_type, strstr(dev_type, "dma"));
-  if      ((strstr(dev_type, "dma")) != NULL) {
+  if      ((strcmp(dev_type, "dma")) == 0) {
     (env_name == NULL) ? strcat(dev_name, def_name_dma) : strcat(dev_name, env_name);
   }
-  else if ((strstr(dev_type, "shm")) != NULL) {
+  else if ((strcmp(dev_type, "shm")) == 0) {
     (env_name == NULL) ? strcat(dev_name, def_name_shm) : strcat(dev_name, env_name);
   }
   else FATAL;
