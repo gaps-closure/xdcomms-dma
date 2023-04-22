@@ -313,6 +313,7 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
     if (cp->ctag == 0) {          // found empty slot (before tag)
       chan_init_config_one(cp, ctag, dir); // a) Configure new tag
       dev_open_if_new(cp);                 // b) open device (if not already open)
+      log_trace("%s: XXX i=%d", __func__, i);
       if (dir == 'r') rcvr_thread_start(cp);  // c) Start rx thread for new receive tag
       break;
     }
