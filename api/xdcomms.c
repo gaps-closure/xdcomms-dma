@@ -152,7 +152,7 @@ void ctag_decode(uint32_t *ctag, gaps_tag *tag) {
 /**********************************************************************/
 void chan_print(chan *cp) {
   log_trace("channel %08x: dir=%c type=%s name=%s fd=%d lock=%d", cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->lock);
-  log_trace("                  paddr=%d vaddr=%x maplen=%d offset=%d protect=0x%x flags=0x%x",  cp->mm.phys_addr, cp->mm.virt_addr, cp->mm.len, cp->mm.offset, cp->mm.prot, cp->mm.flags);
+  log_trace("                  mmap len=0x%x [paddr=0x%08x vaddr=0x%08x offset=0x%08x protect=0x%04x flags=0x%04x]",  cp->mm.phys_addr, cp->mm.virt_addr, cp->mm.len, cp->mm.offset, cp->mm.prot, cp->mm.flags);
   log_trace("                  ret=%d every %d ns newd=%d rx_buf_ptr=%p", cp->retries, RX_POLL_INTERVAL_NSEC, cp->rx.newd, cp->rx.buf_ptr);
 }
 
@@ -282,8 +282,6 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
   if (dir == 't') { // TX
     get_dev_type(cp->dev_type, getenv("DEV_TYPE_TX"), "dma");
     get_dev_name(cp->dev_name, getenv("DEV_NAME_TX"), "dma_proxy_tx", "mem", cp->dev_type);
-chan_print(cp);
-exit(22);
 // *val = (unsigned long) strtol(env_val, NULL, 16);
     get_dev_val (&(cp->mm.offset), getenv("DEV_OFFS_TX"), 0x0, 0x0, cp->dev_type);
     get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * TX_BUFFER_COUNT), SHM_MMAP_LEN_ESCAPE, cp->dev_type);
