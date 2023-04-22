@@ -40,7 +40,6 @@
 #include <sched.h>
 #include <errno.h>
 #include <sys/param.h>
-#include <pthread.h>
 
 #include <stdint.h>
 #include <string.h>

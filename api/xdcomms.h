@@ -29,6 +29,8 @@
 #define DEV_DIR_IN  0
 #define DEV_DIR_OUT 1
 
+#include <pthread.h>
+
 /* Per-tag Rx buffer stores retries (based on timeout) per tag value */
 
 /* Table of codec per data types (Max of DATA_TYP_MAX types) */
