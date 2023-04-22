@@ -254,9 +254,7 @@ void get_dev_type(char *dev_type, char *env_type, char *def_type) {
 }
 // Get channel device name (*dev_name) from enivronment or default (for that type)
 void get_dev_name(char *dev_name, char *env_name, char *def_name_dma, char *def_name_shm, char *dev_type) {
-  strcpy(dev_name, "/dev/");        // prefix
-  fprintf(stderr, "XXX %s [ptr=%p]\n", dev_type, strstr(dev_type, "dma"));
-  log_trace("%s: env_name=%p %p", __func__, env_name, getenv("DEV_TYPE_RX"));
+  strcpy(dev_name, "/dev/");        // prefix device name
   if      ((strcmp(dev_type, "dma")) == 0) {
     (env_name == NULL) ? strcat(dev_name, def_name_dma) : strcat(dev_name, env_name);
   }
@@ -292,11 +290,10 @@ exit(22);
   }
   else {            // RX
     get_dev_type(cp->dev_type, getenv("DEV_TYPE_RX"), "dma");
-chan_print(cp);
     get_dev_name(cp->dev_name, getenv("DEV_NAME_RX"), "dma_proxy_rx", "mem", cp->dev_type);
-chan_print(cp);
-exit(22);
     get_dev_val (&(cp->mm.offset), getenv("DEV_OFFS_RX"), 0x0, SHM_MMAP_LEN_HOST, cp->dev_type);
+    chan_print(cp);
+    exit(22);
     get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * RX_BUFFER_COUNT), SHM_MMAP_LEN_ESCAPE, cp->dev_type);
   }
   get_dev_val(&(cp->mm.phys_addr), getenv("DEV_MMAP_AD"), DMA_ADDR_HOST, SHM_MMAP_ADDR_HOST, cp->dev_type);
