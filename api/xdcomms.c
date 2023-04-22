@@ -237,11 +237,11 @@ void chan_init_all_once(void) {
     t_in_ms = ((t_env = getenv("TIMEOUT_MS")) == NULL) ? RX_POLL_TIMEOUT_MSEC_DEFAULT : atoi(t_env);
     for(i=0; i < GAPS_TAG_MAX; i++) {
       chan_info[i].ctag       = 0;
-      chan_info[i].mm.prot  = PROT_READ | PROT_WRITE;
-      chan_info[i].mm.flags = MAP_SHARED;
+      chan_info[i].mm.prot    = PROT_READ | PROT_WRITE;
+      chan_info[i].mm.flags   = MAP_SHARED;
       chan_info[i].retries    = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;
       chan_info[i].rx.newd    = 0;
-      chan_info[i].rx.buf_ptr    = NULL;
+      chan_info[i].rx.buf_ptr = NULL;
       if (pthread_mutex_init(&(chan_info[i].lock), NULL) != 0)   FATAL;
     }
     once=0;
@@ -292,11 +292,11 @@ exit(22);
     get_dev_type(cp->dev_type, getenv("DEV_TYPE_RX"), "dma");
     get_dev_name(cp->dev_name, getenv("DEV_NAME_RX"), "dma_proxy_rx", "mem", cp->dev_type);
     get_dev_val (&(cp->mm.offset), getenv("DEV_OFFS_RX"), 0x0, SHM_MMAP_LEN_HOST, cp->dev_type);
-    chan_print(cp);
-    exit(22);
     get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * RX_BUFFER_COUNT), SHM_MMAP_LEN_ESCAPE, cp->dev_type);
   }
   get_dev_val(&(cp->mm.phys_addr), getenv("DEV_MMAP_AD"), DMA_ADDR_HOST, SHM_MMAP_ADDR_HOST, cp->dev_type);
+  chan_print(cp);
+  exit(22);
 }
                   
 /* Return pointer to Rx packet buffer for specified tag */
