@@ -283,7 +283,7 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
   cp->dir  = dir;
   if (dir == 't') { // TX
     get_dev_type(cp->dev_type, getenv("DEV_TYPE_TX"), "dma");
-chan_print(chan *cp);
+chan_print(cp);
 exit(22);
     get_dev_name(cp->dev_name, getenv("DEV_NAME_TX"), "dma_proxy_tx", "mem", cp->dev_type);
 // *val = (unsigned long) strtol(env_val, NULL, 16);
