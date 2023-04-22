@@ -196,7 +196,7 @@ void open_device(chan *cp) {
   chan_print(cp);
   if (strcmp(cp->dev_type, "dma") == 0) dma_open_channel(cp, TX_BUFFER_COUNT);
   if (strcmp(cp->dev_type, "shm") == 0) shm_open_channel(cp);
-  else {log_warn("Unknown type=%s (name=%s)", __func__, cp->dev_type, cp->dev_name); FATAL;}
+  else {log_warn("Unknown type=%s (name=%s)", cp->dev_type, cp->dev_name); FATAL;}
 }
 
 // If new device, then open it (and remember it in local list)
