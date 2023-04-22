@@ -1,16 +1,6 @@
 #ifndef XDC_HEADER_FILE
 #define XDC_HEADER_FILE
 
-#include <stdint.h>
-#include <string.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <assert.h>
-#include "log.h"
-#include "crc.h"
-
-
 #define DATA_TYP_MAX                      50
 #define GAPS_TAG_MAX                      50
 #define CTAG_MOD                         256

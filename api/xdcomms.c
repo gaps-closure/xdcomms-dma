@@ -42,6 +42,15 @@
 #include <sys/param.h>
 #include <pthread.h>
 
+#include <stdint.h>
+#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <assert.h>
+#include "log.h"
+#include "crc.h"
+
 #include "xdcomms.h"
 #include "dma-proxy.h"
 #include "shm.h"
