@@ -235,7 +235,7 @@ void chan_init_all_once(void) {
   char      *t_env;
   if (once==1) {
     t_in_ms = ((t_env = getenv("TIMEOUT_MS")) == NULL) ? RX_POLL_TIMEOUT_MSEC_DEFAULT : atoi(t_env);
-    if (pthread_mutex_init(&chan_create), NULL) != 0)   FATAL;
+    if ((pthread_mutex_init(&chan_create), NULL) != 0)   FATAL;
     for(i=0; i < GAPS_TAG_MAX; i++) {
       chan_info[i].ctag       = 0;
       chan_info[i].mm.prot    = PROT_READ | PROT_WRITE;
