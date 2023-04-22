@@ -49,6 +49,7 @@
 #include "log.h"
 #include "crc.h"
 
+#include <pthread.h>
 #include "xdcomms.h"
 #include "dma-proxy.h"
 #include "shm.h"

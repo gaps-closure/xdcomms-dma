@@ -1,7 +1,6 @@
 #ifndef XDC_HEADER_FILE
 #define XDC_HEADER_FILE
 
-#include <pthread.h>
 #include <stdio.h>
 
 #define DATA_TYP_MAX                      50
