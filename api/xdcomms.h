@@ -1,7 +1,6 @@
 #ifndef XDC_HEADER_FILE
 #define XDC_HEADER_FILE
 
-#include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
