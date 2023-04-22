@@ -194,7 +194,6 @@ void shm_open_channel(chan *cp) {
 void open_device(chan *cp) {
   log_trace("%s of type=%s name=%s", __func__, cp->dev_type, cp->dev_name);
   chan_print(cp);
-  exit(22);
   if (strcmp(cp->dev_type, "dma") == 0) dma_open_channel(cp, TX_BUFFER_COUNT);
   if (strcmp(cp->dev_type, "shm") == 0) shm_open_channel(cp);
   else FATAL;
