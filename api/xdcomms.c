@@ -255,8 +255,8 @@ void get_dev_type(char *dev_type, char *env_type, char *def_type) {
 // Get channel device name (*dev_name) from enivronment or default (for that type)
 void get_dev_name(char *dev_name, char *env_name, char *def_name_dma, char *def_name_shm, char *dev_type) {
   strcpy(dev_name, "/dev/");        // prefix
-  log_trace("%s: type=%s", __func__, dev_type);
-  fprintf(stderr, "XXX %s [ptr=%p]\n", dev_type, strstr(dev_type, "dma"));
+//  fprintf(stderr, "XXX %s [ptr=%p]\n", dev_type, strstr(dev_type, "dma"));
+  log_trace("%s: env_name=%p", __func__, env_name);
   if      ((strcmp(dev_type, "dma")) == 0) {
     (env_name == NULL) ? strcat(dev_name, def_name_dma) : strcat(dev_name, env_name);
   }
