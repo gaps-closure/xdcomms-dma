@@ -293,8 +293,7 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
     get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * RX_BUFFER_COUNT), SHM_MMAP_LEN_ESCAPE, cp->dev_type);
   }
   get_dev_val(&(cp->mm.phys_addr), getenv("DEV_MMAP_AD"), DMA_ADDR_HOST, SHM_MMAP_ADDR_HOST, cp->dev_type);
-  chan_print(cp);
-  exit(22);
+//  chan_print(cp);
 }
                   
 /* Return pointer to Rx packet buffer for specified tag */
