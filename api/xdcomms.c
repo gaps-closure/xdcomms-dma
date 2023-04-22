@@ -316,7 +316,7 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
       dev_open_if_new(cp);                 // b) open device (if not already open)
       log_trace("%s: Start thread? i=%d", __func__, i);
       log_trace("%s: dir=%c\n", __func__, cp->dir);
-      if (cp->dir == 'r') rcvr_thread_start(cp);  // c) Start rx thread for new receive tag
+      if ((cp->dir) == 'r') rcvr_thread_start(cp);  // c) Start rx thread for new receive tag
       log_trace("%s: dir=%c", __func__, cp->dir);
       break;
     }
@@ -484,6 +484,7 @@ void rcvr_thread_start(chan *cp) {
   static pthread_t   tid;
 
   /* Open rx channel and receive threads (only once) */
+  log_trace("%s: xdir=%c", __func__, cp->dir);
   pthread_mutex_lock(&chan_create);
   log_trace("%s: open rx channel and start receiver thread(s)", __func__);
   rxargs.cp = cp;
