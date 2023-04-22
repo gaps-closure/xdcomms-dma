@@ -1,8 +1,6 @@
 #ifndef XDC_HEADER_FILE
 #define XDC_HEADER_FILE
 
-#include <stdio.h>
-
 #define DATA_TYP_MAX                      50
 #define GAPS_TAG_MAX                      50
 #define CTAG_MOD                         256
