@@ -1,6 +1,9 @@
 #ifndef XDC_HEADER_FILE
 #define XDC_HEADER_FILE
 
+#include <pthread.h>
+#include <stdio.h>
+
 #define DATA_TYP_MAX                      50
 #define GAPS_TAG_MAX                      50
 #define CTAG_MOD                         256
@@ -29,7 +32,6 @@
 #define DEV_DIR_IN  0
 #define DEV_DIR_OUT 1
 
-#include <pthread.h>
 
 /* Per-tag Rx buffer stores retries (based on timeout) per tag value */
 

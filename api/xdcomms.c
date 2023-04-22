@@ -26,7 +26,6 @@
  *  DMARXDEV=sue_donimous_rx0 DMATXDEV=sue_donimous_tx0 ./app_req_rep
  */
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/mman.h>
