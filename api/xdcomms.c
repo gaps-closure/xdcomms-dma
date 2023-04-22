@@ -211,7 +211,7 @@ void dev_open_if_new(chan *cp) {
       dev_set_list[i] = 1;      // Put new device name into list
       strcpy(dev_name_list[i], cp->dev_name);
       open_device(cp);           // Open new device
-      log_trace("%s: YYY i=%d", __func__, i);
+      log_trace("%s: Done i=%d", __func__, i);
       return;
     }
     if (strcmp(cp->dev_name, dev_name_list[i]) == 0) return;  // not a new device
@@ -314,8 +314,9 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
     if (cp->ctag == 0) {          // found empty slot (before tag)
       chan_init_config_one(cp, ctag, dir); // a) Configure new tag
       dev_open_if_new(cp);                 // b) open device (if not already open)
-      log_trace("%s: XXXY i=%d", __func__, i);
+      log_trace("%s: Start thread? i=%d", __func__, i);
       if (cp->dir == 'r') rcvr_thread_start(cp);  // c) Start rx thread for new receive tag
+      log_trace("%s: dir=%c", cp->dir);
       break;
     }
   }
