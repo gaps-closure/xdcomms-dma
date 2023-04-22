@@ -151,8 +151,8 @@ void ctag_decode(uint32_t *ctag, gaps_tag *tag) {
 /* C) THREADS   */
 /**********************************************************************/
 void chan_print(chan *cp) {
-  log_trace("channel %08x: dir=%c type=%s name=%s fd=%d lock=%d", cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->lock);
-  log_trace("                  mmap len=0x%x [paddr=0x%08x vaddr=0x%08x offset=0x%08x protect=0x%04x flags=0x%04x]",  cp->mm.phys_addr, cp->mm.virt_addr, cp->mm.len, cp->mm.offset, cp->mm.prot, cp->mm.flags);
+  log_trace("c%08x: dir=%c typ=%s nam=%s fd=%d loc=%d", cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->lock);
+  log_trace("                  mmap len=0x%x [paddr=0x%08x vaddr=0x%08x offset=0x%x protect=0x%x flags=0x%x]",  cp->mm.phys_addr, cp->mm.virt_addr, cp->mm.len, cp->mm.offset, cp->mm.prot, cp->mm.flags);
   log_trace("                  ret=%d every %d ns newd=%d rx_buf_ptr=%p", cp->retries, RX_POLL_INTERVAL_NSEC, cp->rx.newd, cp->rx.buf_ptr);
 }
 
@@ -502,12 +502,12 @@ int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
 
   pthread_mutex_lock(&(cp->lock));
   log_trace("%s: Check for received packet on tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
-  chan_print(cp);
-  exit(24);
   if (cp->rx.newd != 0) {                            // get packet from buffer if available)
     if (strcmp(cp->dev_type, "dma") == 0) {    // MIND DMA driver
       pp = cp->mm.virt_addr;                           // Point to device rx buffer
       time_trace("XDC_Rx2 start decode for tag=<%d,%d,%d>", tag->mux, tag->sec, tag->typ);
+chan_print(cp);
+exit(24);
       bw_gaps_data_decode(cp->mm.virt_addr, 0, adu, &adu_len, tag);   /* Put packet into ADU */
       packet_len = bw_get_packet_length(pp, adu_len);
       log_trace("XDCOMMS reads from DMA channel (mmap_virt_addr=%p) len=(b=%d p=%d)", pp, adu_len, packet_len);
@@ -640,7 +640,7 @@ void *xdc_sub_socket(gaps_tag tag) { return NULL; }
 void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout) {
   chan *cp = get_chan_info(&tag, 'r');
 
-  log_trace("%s: timeout = %d ms for tag=<%d,%d,%d>", __func__, timeout, tag.mux, tag.sec, tag.typ);
+  log_trace("Start of %s: timeout = %d ms for tag=<%d,%d,%d>", __func__, timeout, tag.mux, tag.sec, tag.typ);
 //  fprintf(stderr, "timeout = %d ms for tag=<%d,%d,%d>\n", timeout, tag.mux, tag.sec, tag.typ);
   if (timeout > 0) cp->retries = (timeout * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;     // Set value
   fprintf(stderr, "Number of RX retries = %d every %d ns (for ctag=%08x)\n", cp->retries, RX_POLL_INTERVAL_NSEC, cp->ctag);
@@ -653,11 +653,11 @@ int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   struct timespec request = {(RX_POLL_INTERVAL_NSEC/NSEC_IN_SEC), (RX_POLL_INTERVAL_NSEC % NSEC_IN_SEC) };
   int              ntries = 1 + (cp->retries);       // number of tries to rx packet
                                                       
-  log_trace("%s for tag=<%d,%d,%d>: ntries=%d interval=%d (%d.%09d) ns", __func__, tag->mux, tag->sec, tag->typ, ntries, RX_POLL_INTERVAL_NSEC, request.tv_sec, request.tv_nsec);
+  log_trace("Start of %s: tag=<%d,%d,%d>: ntries=%d interval=%d (%d.%09d) ns", __func__, tag->mux, tag->sec, tag->typ, ntries, RX_POLL_INTERVAL_NSEC, request.tv_sec, request.tv_nsec);
 //  time_trace("XDC_Rx1 Wait for tag=<%d,%d,%d> (test %d times every %d ns)", tag->mux, tag->sec, tag->typ, ntries, RX_POLL_INTERVAL_NSEC);
   while ((ntries--) > 0)  {
     if (nonblock_recv(adu, tag, cp) > 0)  return 0;
-    log_trace("LOOP timeout %s: tag=<%d,%d,%d>: remaining tries = %d ", __func__, tag->mux, tag->sec, tag->typ, ntries);
+//    log_trace("LOOP timeout %s: tag=<%d,%d,%d>: remaining tries = %d ", __func__, tag->mux, tag->sec, tag->typ, ntries);
     nanosleep(&request, NULL);
   }
   log_trace("%s timeout for tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
