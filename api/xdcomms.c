@@ -281,6 +281,7 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
   // a) Set channel configuration for this tag
   cp->ctag = ctag;
   cp->dir  = dir;
+  chan_print(cp);
   if (dir == 't') { // TX
     get_dev_type(cp->dev_type, getenv("DEV_TYPE_TX"), "dma");
 chan_print(cp);
