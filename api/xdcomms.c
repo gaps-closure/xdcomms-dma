@@ -487,7 +487,7 @@ void rcvr_thread_start(chan *cp) {
   pthread_mutex_lock(&chan_create);
   rxargs.cp = cp;
   rxargs.buffer_id_start = 0;
-  log_trace("%s: c=0x%08x", __func__, cp->dev_name);
+  log_trace("%s: c=0x%08x %s", __func__, cp->ctag, cp->dev_name);
   if (pthread_create(&tid, NULL, (void *) rcvr_thread_function, (void *)&rxargs) != 0) FATAL;
   pthread_mutex_unlock(&chan_create);
 }
