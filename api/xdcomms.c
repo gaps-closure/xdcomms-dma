@@ -161,7 +161,7 @@ void chan_print(chan *cp) {
 /**********************************************************************/
 /* Open channel and save virtual address of buffer pointer */
 void dma_open_channel(chan *cp) {
-  int buffer_count == TX_BUFFER_COUNT;
+  int buffer_count = TX_BUFFER_COUNT;
   int buf_len;
   
   // a) Open device
