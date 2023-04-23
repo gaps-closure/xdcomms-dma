@@ -170,7 +170,7 @@ void dma_open_channel(chan *cp) {
   cp->mm.len = sizeof(struct channel_buffer) * buffer_count;
   cp->mm.virt_addr = mmap(NULL, cp->mm.len, cp->mm.prot, cp->mm.flags, cp->fd, cp->mm.phys_addr);
   if (cp->mm.virt_addr == MAP_FAILED) FATAL;
-  
+  log_debug("size of va=%d", sizeof(cp->mm.virt_addr));
   log_debug("Opened and mmap'ed DMA channel %s: mmap_virt_addr=%p, len=0x%x fd=%d", cp->dev_name, cp->mm.virt_addr, cp->mm.len, cp->fd);
   chan_print(cp);
 }
