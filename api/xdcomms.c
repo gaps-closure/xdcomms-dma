@@ -162,19 +162,17 @@ void chan_print(chan *cp) {
 /* Open channel and save virtual address of buffer pointer */
 void dma_open_channel(chan *cp) {
   int buffer_count = TX_BUFFER_COUNT;
-  int buf_len;
-  
+  if ((cp->dir) == 'r') buffer_count = RX_BUFFER_COUNT;
+
   chan_print(cp);
   // a) Open device
   if ((cp->fd = open(cp->dev_name, O_RDWR)) < 1) FATAL;
 
   // b) mmpp device
-  if ((cp->dir) == 'r') buffer_count = RX_BUFFER_COUNT;
-  buf_len = sizeof(struct channel_buffer) * buffer_count;
-
-  cp->mm.virt_addr = mmap(NULL, buf_len, cp->mm.prot, cp->mm.flags, cp->fd, 0);
+  cp->mm.len = sizeof(struct channel_buffer) * buffer_count;
+  cp->mm.virt_addr = mmap(NULL, cp->mm.len, cp->mm.prot, cp->mm.flags, cp->fd, cp->mm.phys_addr);
   if (cp->mm.virt_addr == MAP_FAILED) FATAL;
-  log_debug("Opened and mmap'ed DMA channel %s: mmap_virt_addr=%p, len=%d fd=%d", cp->dev_name, cp->mm.virt_addr, buf_len, cp->fd);
+  log_debug("Opened and mmap'ed DMA channel %s: mmap_virt_addr=%p, len=0x%x fd=%d", cp->dev_name, cp->mm.virt_addr, cp->mm.len, cp->fd);
   chan_print(cp);
 }
 
