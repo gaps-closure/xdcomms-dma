@@ -152,7 +152,7 @@ void ctag_decode(uint32_t *ctag, gaps_tag *tag) {
 /**********************************************************************/
 void chan_print(chan *cp) {
   log_trace("c%08x: dir=%c typ=%s nam=%s fd=%d loc=%d", cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->lock);
-  log_trace("                  mmap len=0x%x [paddr=0x%08x vaddr=0x%08x offset=0x%x protect=0x%x flags=0x%x]",  cp->mm.len, cp->mm.phys_addr, cp->mm.virt_addr, cp->mm.offset, cp->mm.prot, cp->mm.flags);
+  log_trace("                  mmap len=0x%x [paddr=0x%x vaddr=0x%x offset=0x%x protect=0x%x flags=0x%x]",  cp->mm.len, cp->mm.phys_addr, cp->mm.virt_addr, cp->mm.offset, cp->mm.prot, cp->mm.flags);
   log_trace("                  ret=%d every %d ns newd=%d rx_buf_ptr=%p", cp->retries, RX_POLL_INTERVAL_NSEC, cp->rx.newd, cp->rx.buf_ptr);
 }
 
@@ -164,14 +164,13 @@ void dma_open_channel(chan *cp) {
   int buffer_count = TX_BUFFER_COUNT;
   if ((cp->dir) == 'r') buffer_count = RX_BUFFER_COUNT;
 
-  chan_print(cp);
   // a) Open device
   if ((cp->fd = open(cp->dev_name, O_RDWR)) < 1) FATAL;
-
   // b) mmpp device
   cp->mm.len = sizeof(struct channel_buffer) * buffer_count;
   cp->mm.virt_addr = mmap(NULL, cp->mm.len, cp->mm.prot, cp->mm.flags, cp->fd, cp->mm.phys_addr);
   if (cp->mm.virt_addr == MAP_FAILED) FATAL;
+  
   log_debug("Opened and mmap'ed DMA channel %s: mmap_virt_addr=%p, len=0x%x fd=%d", cp->dev_name, cp->mm.virt_addr, cp->mm.len, cp->fd);
   chan_print(cp);
 }
@@ -489,7 +488,7 @@ void rcvr_thread_start(chan *cp) {
   static pthread_t   tid;
 
   /* Open rx channel and receive threads (only once) */
-  log_trace("%s: xdir=%c", __func__, cp->dir);
+//  log_trace("%s: xdir=%c", __func__, cp->dir);
   pthread_mutex_lock(&chan_create);
   rxargs.cp = cp;
   rxargs.buffer_id_start = 0;
