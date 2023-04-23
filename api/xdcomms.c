@@ -168,7 +168,7 @@ void dma_open_channel(chan *cp, int buffer_count) {
   // b) mmpp device
   cp->mm.virt_addr = mmap(NULL, sizeof(struct channel_buffer) * buffer_count, cp->mm.prot, cp->mm.flags, cp->fd, 0);
   if (cp->mm.virt_addr == MAP_FAILED) FATAL;
-  log_trace("Opened channel %s: mmap_virt_addr=%p, fd=%d", cp->dev_name, cp->mm.virt_addr, cp->fd);
+  log_debug("Opened channel %s: mmap_virt_addr=%p, fd=%d", cp->dev_name, cp->mm.virt_addr, cp->fd);
 }
 
 // Open DMA channel sat given Physical address
@@ -205,7 +205,7 @@ void dev_open_if_new(chan *cp) {
   static int  dev_set_list[MAX_DEV_COUNT] = {0};
   int         i;
   
-  chan_print(cp);
+//  chan_print(cp);
   for(i=0; i<MAX_DEV_COUNT; i++) {
     if (dev_set_list[i] == 0) {
       dev_set_list[i] = 1;      // Put new device name into list
@@ -315,18 +315,16 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
     if (cp->ctag == 0) {          // found empty slot (before tag)
       chan_init_config_one(cp, ctag, dir); // a) Configure new tag
       dev_open_if_new(cp);                 // b) open device (if not already open)
-      log_trace("%s: Start thread? i=%d", __func__, i);
-      log_trace("%s: dir=%c\n", __func__, cp->dir);
       if ((cp->dir) == 'r') rcvr_thread_start(cp);  // c) Start rx thread for new receive tag
-      log_trace("%s: dir=%c", __func__, cp->dir);
+      log_trace("%s: Started receiver thread i=%d ctag=0x%08x %s", __func__, i, cp->ctag, cp->dir, cp->dev_name);
       break;
     }
   }
-  log_trace("%s: chan_info entry %d for ctag=%x]", __func__, i, ctag);
 
   /* c) Unlock and return chan_info pointer */
   if (i >= GAPS_TAG_MAX) FATAL;
-  chan_print(cp);
+  log_trace("%s %d: ctag=%x]", __func__, i, ctag);
+//  chan_print(cp);
   pthread_mutex_unlock(&chan_create);
   return (cp);
 }
@@ -487,7 +485,6 @@ void rcvr_thread_start(chan *cp) {
   /* Open rx channel and receive threads (only once) */
   log_trace("%s: xdir=%c", __func__, cp->dir);
   pthread_mutex_lock(&chan_create);
-  log_trace("%s: open rx channel and start receiver thread(s)", __func__);
   rxargs.cp = cp;
   rxargs.buffer_id_start = 0;
   if (pthread_create(&tid, NULL, (void *) rcvr_thread_function, (void *)&rxargs) != 0) FATAL;
@@ -501,7 +498,7 @@ int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
   size_t  adu_len=0;
 
   pthread_mutex_lock(&(cp->lock));
-  log_trace("%s: Check for received packet on tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
+//  log_trace("%s: Check for received packet on tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
   if (cp->rx.newd != 0) {                            // get packet from buffer if available)
     if (strcmp(cp->dev_type, "dma") == 0) {    // MIND DMA driver
       pp = cp->mm.virt_addr;                           // Point to device rx buffer
@@ -660,7 +657,7 @@ int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
 //    log_trace("LOOP timeout %s: tag=<%d,%d,%d>: remaining tries = %d ", __func__, tag->mux, tag->sec, tag->typ, ntries);
     nanosleep(&request, NULL);
   }
-  log_trace("%s timeout for tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
+//  log_trace("%s timeout for tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
   return -1;
 }
 
