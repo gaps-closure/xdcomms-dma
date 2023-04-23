@@ -323,7 +323,7 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
 
   /* c) Unlock and return chan_info pointer */
   if (i >= GAPS_TAG_MAX) FATAL;
-  log_trace("%s %d: ctag=%x]", __func__, i, ctag);
+  log_trace("%s %d: ctag=0x%08x", __func__, i, ctag);
 //  chan_print(cp);
   pthread_mutex_unlock(&chan_create);
   return (cp);
@@ -637,11 +637,10 @@ void *xdc_pub_socket(void) { return NULL; }
 void *xdc_sub_socket(gaps_tag tag) { return NULL; }
 void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout) {
   chan *cp = get_chan_info(&tag, 'r');
-
   log_trace("Start of %s: timeout = %d ms for tag=<%d,%d,%d>", __func__, timeout, tag.mux, tag.sec, tag.typ);
 //  fprintf(stderr, "timeout = %d ms for tag=<%d,%d,%d>\n", timeout, tag.mux, tag.sec, tag.typ);
   if (timeout > 0) cp->retries = (timeout * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;     // Set value
-  fprintf(stderr, "Number of RX retries = %d every %d ns (for ctag=%08x)\n", cp->retries, RX_POLL_INTERVAL_NSEC, cp->ctag);
+  log_debug("%s sets RX retries = %d every %d ns (for ctag=%08x)\n", __func__, cp->retries, RX_POLL_INTERVAL_NSEC, cp->ctag);
   return NULL;
 }
 void xdc_asyn_send(void *socket, void *adu, gaps_tag *tag) { asyn_send(adu, tag); }
