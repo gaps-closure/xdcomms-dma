@@ -160,15 +160,20 @@ void chan_print(chan *cp) {
 /* Device open                                               */
 /**********************************************************************/
 /* Open channel and save virtual address of buffer pointer */
-void dma_open_channel(chan *cp, int buffer_count) {
-  log_trace("%s: open DMA channel", __func__);
+void dma_open_channel(chan *cp) {
+  int buffer_count == TX_BUFFER_COUNT;
+  int buf_len;
+  
   // a) Open device
   if ((cp->fd = open(cp->dev_name, O_RDWR)) < 1) FATAL;
 
   // b) mmpp device
-  cp->mm.virt_addr = mmap(NULL, sizeof(struct channel_buffer) * buffer_count, cp->mm.prot, cp->mm.flags, cp->fd, 0);
+  if (cp->dir) == 'r') buffer_count = RX_BUFFER_COUNT;
+  buf_len = sizeof(struct channel_buffer) * buffer_count;
+
+  cp->mm.virt_addr = mmap(NULL, buf_len, cp->mm.prot, cp->mm.flags, cp->fd, 0);
   if (cp->mm.virt_addr == MAP_FAILED) FATAL;
-  log_debug("Opened channel %s: mmap_virt_addr=%p, fd=%d", cp->dev_name, cp->mm.virt_addr, cp->fd);
+  log_debug("Opened and mmap'ed DMA channel %s: mmap_virt_addr=%p, len=%d fd=%d", cp->dev_name, cp->mm.virt_addr, buf_len, cp->fd);
 }
 
 // Open DMA channel sat given Physical address
@@ -194,7 +199,7 @@ void shm_open_channel(chan *cp) {
 void open_device(chan *cp) {
   log_trace("%s of type=%s name=%s", __func__, cp->dev_type, cp->dev_name);
   chan_print(cp);
-  if      (strcmp(cp->dev_type, "dma") == 0) dma_open_channel(cp, TX_BUFFER_COUNT);
+  if      (strcmp(cp->dev_type, "dma") == 0) dma_open_channel(cp);
   else if (strcmp(cp->dev_type, "shm") == 0) shm_open_channel(cp);
   else {log_warn("Unknown type=%s (name=%s)", cp->dev_type, cp->dev_name); FATAL;}
 }
