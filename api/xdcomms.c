@@ -164,6 +164,7 @@ void dma_open_channel(chan *cp) {
   int buffer_count = TX_BUFFER_COUNT;
   int buf_len;
   
+  chan_print(cp);
   // a) Open device
   if ((cp->fd = open(cp->dev_name, O_RDWR)) < 1) FATAL;
 
