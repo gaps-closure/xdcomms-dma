@@ -211,7 +211,7 @@ void dev_open_if_new(chan *cp) {
       dev_set_list[i] = 1;      // Put new device name into list
       strcpy(dev_name_list[i], cp->dev_name);
       open_device(cp);           // Open new device
-      log_trace("%s: Done i=%d", __func__, i);
+//      log_trace("%s: Done i=%d", __func__, i);
       return;
     }
     if (strcmp(cp->dev_name, dev_name_list[i]) == 0) return;  // not a new device
@@ -315,8 +315,8 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
     if (cp->ctag == 0) {          // found empty slot (before tag)
       chan_init_config_one(cp, ctag, dir); // a) Configure new tag
       dev_open_if_new(cp);                 // b) open device (if not already open)
+      log_trace("%s: Openned device %s for ctag=0x%08x dir=%c", __func__, cp->dev_name, cp->ctag, cp->dir);
       if ((cp->dir) == 'r') rcvr_thread_start(cp);  // c) Start rx thread for new receive tag
-      log_trace("%s: Started receiver thread i=%d ctag=0x%08x %s", __func__, i, cp->ctag, cp->dir, cp->dev_name);
       break;
     }
   }
@@ -487,6 +487,7 @@ void rcvr_thread_start(chan *cp) {
   pthread_mutex_lock(&chan_create);
   rxargs.cp = cp;
   rxargs.buffer_id_start = 0;
+  log_trace("%s: c=0x%08x", __func__, cp->dev_name);
   if (pthread_create(&tid, NULL, (void *) rcvr_thread_function, (void *)&rxargs) != 0) FATAL;
   pthread_mutex_unlock(&chan_create);
 }
