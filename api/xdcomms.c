@@ -510,7 +510,6 @@ int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
       pp = cp->mm.virt_addr;                           // Point to device rx buffer
       time_trace("XDC_Rx2 start decode for tag=<%d,%d,%d>", tag->mux, tag->sec, tag->typ);
 chan_print(cp);
-exit(24);
       bw_gaps_data_decode(cp->mm.virt_addr, 0, adu, &adu_len, tag);   /* Put packet into ADU */
       packet_len = bw_get_packet_length(pp, adu_len);
       log_trace("XDCOMMS reads from DMA channel (mmap_virt_addr=%p) len=(b=%d p=%d)", pp, adu_len, packet_len);
@@ -645,7 +644,7 @@ void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout) {
   log_trace("Start of %s: timeout = %d ms for tag=<%d,%d,%d>", __func__, timeout, tag.mux, tag.sec, tag.typ);
 //  fprintf(stderr, "timeout = %d ms for tag=<%d,%d,%d>\n", timeout, tag.mux, tag.sec, tag.typ);
   if (timeout > 0) cp->retries = (timeout * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;     // Set value
-  log_debug("%s sets RX retries = %d every %d ns (for ctag=%08x)\n", __func__, cp->retries, RX_POLL_INTERVAL_NSEC, cp->ctag);
+  log_debug("%s sets RX retries = %d every %d ns (for ctag=%08x)", __func__, cp->retries, RX_POLL_INTERVAL_NSEC, cp->ctag);
   return NULL;
 }
 void xdc_asyn_send(void *socket, void *adu, gaps_tag *tag) { asyn_send(adu, tag); }
