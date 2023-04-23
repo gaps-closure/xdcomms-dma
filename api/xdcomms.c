@@ -168,7 +168,7 @@ void dma_open_channel(chan *cp) {
   if ((cp->fd = open(cp->dev_name, O_RDWR)) < 1) FATAL;
 
   // b) mmpp device
-  if (cp->dir) == 'r') buffer_count = RX_BUFFER_COUNT;
+  if ((cp->dir) == 'r') buffer_count = RX_BUFFER_COUNT;
   buf_len = sizeof(struct channel_buffer) * buffer_count;
 
   cp->mm.virt_addr = mmap(NULL, buf_len, cp->mm.prot, cp->mm.flags, cp->fd, 0);
