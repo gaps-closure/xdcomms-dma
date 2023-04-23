@@ -174,6 +174,7 @@ void dma_open_channel(chan *cp) {
   cp->mm.virt_addr = mmap(NULL, buf_len, cp->mm.prot, cp->mm.flags, cp->fd, 0);
   if (cp->mm.virt_addr == MAP_FAILED) FATAL;
   log_debug("Opened and mmap'ed DMA channel %s: mmap_virt_addr=%p, len=%d fd=%d", cp->dev_name, cp->mm.virt_addr, buf_len, cp->fd);
+  chan_print(cp);
 }
 
 // Open DMA channel sat given Physical address
@@ -198,7 +199,6 @@ void shm_open_channel(chan *cp) {
 // Open channel device (based on name and type) and return its channel structure
 void open_device(chan *cp) {
   log_trace("%s of type=%s name=%s", __func__, cp->dev_type, cp->dev_name);
-  chan_print(cp);
   if      (strcmp(cp->dev_type, "dma") == 0) dma_open_channel(cp);
   else if (strcmp(cp->dev_type, "shm") == 0) shm_open_channel(cp);
   else {log_warn("Unknown type=%s (name=%s)", cp->dev_type, cp->dev_name); FATAL;}
