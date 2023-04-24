@@ -279,7 +279,7 @@ void get_dev_val(unsigned long *val, char *env_val, unsigned long def_val_dma, u
   }
   else       *val = atoi(env_val);
   log_trace("%s: env_val=[%s %x] def=[d=%x s=%x]", __func__, env_val, *val, def_val_dma, def_val_shm);
-  log_trace("%s: Len SHM = %x", SHM_MMAP_LEN_ESCAPE);
+  log_trace("%s: Len SHM = %x", __func__, SHM_MMAP_LEN_ESCAPE);
 }
 
 // Initialize configuration for a new tag
