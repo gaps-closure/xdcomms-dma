@@ -273,8 +273,8 @@ void get_dev_name(char *dev_name, char *env_name, char *def_name_dma, char *def_
 // Get channel device number (*val) from enivronment or default (for that type)
 void get_dev_val(unsigned long *val, char *env_val, unsigned long def_val_dma, unsigned long def_val_shm, char *dev_type) {
   if (env_val == NULL) {
-    if       (strcmp(dev_type, "dma") == 0) *val = def_val_dma;
-    else if  (strcmp(dev_type, "shm") == 0) *val = def_val_shm;
+    if       (strcmp(dev_type, "dma") == 0) *val = atoi(def_val_dma);
+    else if  (strcmp(dev_type, "shm") == 0) *val = atoi(def_val_shm);
     else     FATAL;
   }
   else       *val = atoi(env_val);
@@ -286,15 +286,15 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
   cp->ctag = ctag;
   cp->dir  = dir;
   if (dir == 't') { // TX
-    get_dev_type(cp->dev_type, getenv("DEV_TYPE_TX"), "dma");
-    get_dev_name(cp->dev_name, getenv("DEV_NAME_TX"), "dma_proxy_tx", "mem", cp->dev_type);
+    get_dev_type(cp->dev_type,     getenv("DEV_TYPE_TX"), "dma");
+    get_dev_name(cp->dev_name,     getenv("DEV_NAME_TX"), "dma_proxy_tx", "mem", cp->dev_type);
 // *val = (unsigned long) strtol(env_val, NULL, 16);
     get_dev_val (&(cp->mm.offset), getenv("DEV_OFFS_TX"), 0x0, 0x0, cp->dev_type);
     get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * TX_BUFFER_COUNT), SHM_MMAP_LEN_ESCAPE, cp->dev_type);
   }
   else {            // RX
-    get_dev_type(cp->dev_type, getenv("DEV_TYPE_RX"), "dma");
-    get_dev_name(cp->dev_name, getenv("DEV_NAME_RX"), "dma_proxy_rx", "mem", cp->dev_type);
+    get_dev_type(cp->dev_type,     getenv("DEV_TYPE_RX"), "dma");
+    get_dev_name(cp->dev_name,     getenv("DEV_NAME_RX"), "dma_proxy_rx", "mem", cp->dev_type);
     get_dev_val (&(cp->mm.offset), getenv("DEV_OFFS_RX"), 0x0, SHM_MMAP_LEN_HOST, cp->dev_type);
     get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * RX_BUFFER_COUNT), SHM_MMAP_LEN_ESCAPE, cp->dev_type);
   }
