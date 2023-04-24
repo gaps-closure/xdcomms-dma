@@ -322,8 +322,8 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
       chan_init_config_one(cp, ctag, dir); // a) Configure new tag
       dev_open_if_new(cp);                 // b) open device (if not already open)
       log_trace("%s: Openned device %s for ctag=0x%08x dir=%c", __func__, cp->dev_name, cp->ctag, cp->dir);
-      exit(22);
       if ((cp->dir) == 'r') rcvr_thread_start(cp);  // c) Start rx thread for new receive tag
+      exit(22);
       break;
     }
   }
