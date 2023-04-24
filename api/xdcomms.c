@@ -301,7 +301,6 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
   }
   get_dev_val(&(cp->mm.phys_addr), getenv("DEV_MMAP_AD"), DMA_ADDR_HOST, SHM_MMAP_ADDR_HOST, cp->dev_type);
   chan_print(cp);
-  exit(22);
 }
                   
 /* Return pointer to Rx packet buffer for specified tag */
@@ -322,6 +321,7 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
     if (cp->ctag == 0) {          // found empty slot (before tag)
       chan_init_config_one(cp, ctag, dir); // a) Configure new tag
       dev_open_if_new(cp);                 // b) open device (if not already open)
+exit(22);
       log_trace("%s: Openned device %s for ctag=0x%08x dir=%c", __func__, cp->dev_name, cp->ctag, cp->dir);
       if ((cp->dir) == 'r') rcvr_thread_start(cp);  // c) Start rx thread for new receive tag
       break;
