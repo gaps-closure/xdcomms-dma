@@ -331,7 +331,6 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
   if (i >= GAPS_TAG_MAX) FATAL;
   log_trace("%s %d: ctag=0x%08x", __func__, i, ctag);
 //  chan_print(cp);
-  exit(22);
   pthread_mutex_unlock(&chan_create);
   return (cp);
 }
