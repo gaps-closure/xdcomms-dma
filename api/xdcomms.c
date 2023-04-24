@@ -278,7 +278,7 @@ void get_dev_val(unsigned long *val, char *env_val, unsigned long def_val_dma, u
     else     FATAL;
   }
   else       *val = atoi(env_val);
-  log_trace("%s: env_val = %s %x", __func__, env_val, *val);
+  log_trace("%s: env_val = %s %x def = [d=%d s=%d]", __func__, env_val, *valm def_val_dma, def_val_shm);
 }
 
 // Initialize configuration for a new tag
