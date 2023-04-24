@@ -165,7 +165,6 @@ void dma_open_channel(chan *cp) {
   if ((cp->dir) == 'r') buffer_count = RX_BUFFER_COUNT;
 
   // a) Open device
-  chan_print(cp);
   if ((cp->fd = open(cp->dev_name, O_RDWR)) < 1) FATAL;
   // b) mmpp device
   cp->mm.len = sizeof(struct channel_buffer) * buffer_count;
@@ -188,6 +187,8 @@ void shm_open_channel(chan *cp) {
   // b) mmpp device: reduce address to be a multiple of page size and add the diff to length
   pa_phys_addr       = cp->mm.phys_addr & ~MMAP_PAGE_MASK;
   pa_mmap_len        = cp->mm.len + cp->mm.phys_addr - pa_phys_addr;
+chan_print(cp);
+
   pa_virt_addr       = mmap(0, pa_mmap_len, cp->mm.prot, cp->mm.flags, cp->fd, pa_phys_addr);
   if (pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
   cp->mm.virt_addr = pa_virt_addr + cp->mm.phys_addr - pa_phys_addr;   // add offset to page aligned addr
