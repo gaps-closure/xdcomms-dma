@@ -279,7 +279,6 @@ void get_dev_val(unsigned long *val, char *env_val, unsigned long def_val_dma, u
   }
   else       *val = atoi(env_val);
   log_trace("%s: env_val=[%s %x] def=[d=%x s=%x]", __func__, env_val, *val, def_val_dma, def_val_shm);
-  log_trace("%s: Len SHM = %x", __func__, SHM_MMAP_LEN_ESCAPE);
 }
 
 // Initialize configuration for a new tag
@@ -299,6 +298,8 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
     get_dev_name(cp->dev_name,     getenv("DEV_NAME_RX"), "dma_proxy_rx", "mem", cp->dev_type);
     get_dev_val (&(cp->mm.offset), getenv("DEV_OFFS_RX"), 0x0, SHM_MMAP_LEN_HOST, cp->dev_type);
     get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * RX_BUFFER_COUNT), SHM_MMAP_LEN_ESCAPE, cp->dev_type);
+    log_trace("%s: Len SHM = %x type=%s", __func__, SHM_MMAP_LEN_ESCAPE, cp->dev_type);
+exit (22);
   }
   get_dev_val(&(cp->mm.phys_addr), getenv("DEV_MMAP_AD"), DMA_ADDR_HOST, SHM_MMAP_ADDR_HOST, cp->dev_type);
 //  chan_print(cp);
