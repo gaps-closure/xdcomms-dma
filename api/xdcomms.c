@@ -278,7 +278,6 @@ void get_dev_val(unsigned long *val, char *env_val, unsigned long def_val_dma, u
     else     FATAL;
   }
   else       *val = strtol(env_val, NULL, 16);
-log_trace("%s: env_val=[%s %x %x] def=[d=%x s=%x]", __func__, env_val, *val, strtol(env_val, NULL, 16), def_val_dma, def_val_shm);
 }
 
 // Initialize configuration for a new tag
@@ -301,7 +300,8 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
     log_trace("%s: Len SHM = %x type=%s", __func__, SHM_MMAP_LEN_ESCAPE, cp->dev_type);
   }
   get_dev_val(&(cp->mm.phys_addr), getenv("DEV_MMAP_AD"), DMA_ADDR_HOST, SHM_MMAP_ADDR_HOST, cp->dev_type);
-//  chan_print(cp);
+  chan_print(cp);
+  exit(22);
 }
                   
 /* Return pointer to Rx packet buffer for specified tag */
