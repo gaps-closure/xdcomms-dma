@@ -165,6 +165,7 @@ void dma_open_channel(chan *cp) {
   if ((cp->dir) == 'r') buffer_count = RX_BUFFER_COUNT;
 
   // a) Open device
+  chan_print(cp);
   if ((cp->fd = open(cp->dev_name, O_RDWR)) < 1) FATAL;
   // b) mmpp device
   cp->mm.len = sizeof(struct channel_buffer) * buffer_count;
