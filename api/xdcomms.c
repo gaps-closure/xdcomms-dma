@@ -273,11 +273,12 @@ void get_dev_name(char *dev_name, char *env_name, char *def_name_dma, char *def_
 // Get channel device number (*val) from enivronment or default (for that type)
 void get_dev_val(unsigned long *val, char *env_val, unsigned long def_val_dma, unsigned long def_val_shm, char *dev_type) {
   if (env_val == NULL) {
-    if       (strcmp(dev_type, "dma") == 0) *val = atoi(def_val_dma);
-    else if  (strcmp(dev_type, "shm") == 0) *val = atoi(def_val_shm);
+    if       (strcmp(dev_type, "dma") == 0) *val = def_val_dma;
+    else if  (strcmp(dev_type, "shm") == 0) *val = def_val_shm;
     else     FATAL;
   }
   else       *val = atoi(env_val);
+  log_trace("%s: env_val = %s %x", env_val, *val);
 }
 
 // Initialize configuration for a new tag
