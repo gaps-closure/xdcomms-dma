@@ -451,7 +451,6 @@ void asyn_send(void *adu, gaps_tag *tag) {
 /**********************************************************************/
 void *rcvr_thread_dma(chan *cp, int buffer_id) {
   gaps_tag               tag;
-  size_t                 len_out;
   bw                    *p;
   struct channel_buffer *dma_cb_ptr =  (struct channel_buffer *) cp->mm.virt_addr;
 
@@ -463,7 +462,7 @@ void *rcvr_thread_dma(chan *cp, int buffer_id) {
     log_trace("THREAD rx packet tag=<%d,%d,%d> buf-id=%d st=%d", tag.mux, tag.sec, tag.typ, buffer_id, dma_cb_ptr[buffer_id].status);
     pthread_mutex_lock(&(cp->lock));
     bw_len_decode(&(cp->rx.data_len), p->data_len);
-    cp->rx.buf_ptr = p;
+    cp->rx.data = p;
     cp->rx.newd = 1;
     pthread_mutex_unlock(&(cp->lock));
   }
