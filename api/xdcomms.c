@@ -143,8 +143,8 @@ void cmap_encode(uint8_t *data, uint8_t *buff_in, size_t *buff_len, gaps_tag *ta
 void cmap_decode(uint8_t *data, size_t data_len, uint8_t *buff_out, gaps_tag *tag) {
   codec_map  *cm = cmap_find(tag->typ);
   cm->decode (buff_out, data, data_len);
-  log_buf_trace("API -> raw app data:", data,     data_len);
-  log_buf_trace("    <- decoded data:", buff_out, data_len);
+  log_buf_trace("API -> raw app data:", data,     *data_len);
+  log_buf_trace("    <- decoded data:", buff_out, *data_len);
 }
 
 
