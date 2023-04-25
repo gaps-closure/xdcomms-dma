@@ -490,8 +490,8 @@ void *rcvr_thread_function(thread_args *vargs) {
       exit(-1);
     }
     if ((cp->rx.newd) == 1) {
-      ctag_decode(cp->rx.ctag, &tag)
-      time_trace("XDC_Rx2 start decode for ctag=<%d,%d,%d>", tag->mux, tag->sec, tag->typ);
+      ctag_decode(cp->rx.ctag, &tag);
+      time_trace("XDC_Rx2 start decode for ctag=<%d,%d,%d>", cp->rx.tag->mux, cp->rx.tag->sec, cp->rx.tag->typ);
       cmap_decode(cp->rx.data, cp->rx.data_len, adu, tag);   /* Put packet into ADU */
       buffer_id_index = (buffer_id_index + 1) % RX_BUFFS_PER_THREAD;
       log_trace("THREAD 4 buf-id=%d index=%d", buffer_id, buffer_id_index);
@@ -522,26 +522,16 @@ int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
   pthread_mutex_lock(&(cp->lock));
 //  log_trace("%s: Check for received packet on tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
   if (cp->rx.newd != 0) {                            // get packet from buffer if available)
-
-    if (strcmp(cp->dev_type, "dma") == 0) {    // MIND DMA driver
 chan_print(cp);
-      cmap_decode(cp->rx.data, cp->rx.data_len, adu, tag);   /* Put packet into ADU */
-      log_trace("XDCOMMS reads from DMA channel (buff=%p) len=%d", cp->rx.data, cp->rx.data_len);
-      if (cp->rx.data_len) > 0) log_buf_trace("RX_PKT", cp->rx.data, cp->rx.data_len);
-      cp->rx.newd = 0;                      // unmark newdata
-      time_trace("XDC_Rx3 packet copied to ADU: tag=<%d,%d,%d> adu-len=%d", tag->mux, tag->sec, tag->typ, cp->rx.data_len);
-      log_debug("XDCOMMS rx packet tag=<%d,%d,%d> len=%d", tag->mux, tag->sec, tag->typ, cp->rx.data_len);
-    }
-    else if (strcmp(cp->dev_type, "shm") == 0) {
-      log_fatal("%s: Not yet written>", __func__);
-    }
-    else {
-      log_fatal("Unsupported device type %s\n", cp->dev_type);
-      exit(-1);
-    }
+    cmap_decode(cp->rx.data, cp->rx.data_len, adu, &(cp->rx.tag));   /* Put packet into ADU */
+    log_trace("XDCOMMS reads from DMA channel (buff=%p) len=%d", cp->rx.data, cp->rx.data_len);
+    if (cp->rx.data_len) > 0) log_buf_trace("RX_PKT", cp->rx.data, cp->rx.data_len);
+    cp->rx.newd = 0;                      // unmark newdata
+    time_trace("XDC_Rx3 packet copied to ADU: tag=<%d,%d,%d> adu-len=%d", cp->rx.tag.mux, cp->rx.tag.sec, cp->rx.tag.typ, cp->rx.data_len);
+    log_debug("XDCOMMS rx packet tag=<%d,%d,%d> len=%d", cp->rx.tag.mux, cp->rx.tag.sec, cp->rx.tag.typ, cp->rx.data_len);
   }
   pthread_mutex_unlock(&(cp->lock));
-  return (adu_len > 0) ? cp->rx.data_len : -1;
+  return ((cp->rx.data_len) > 0) ? cp->rx.data_len : -1;
 }
 
 /**********************************************************************/
