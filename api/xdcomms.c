@@ -514,8 +514,6 @@ void rcvr_thread_start(chan *cp) {
 
 /* Receive packet from driver (via rx thread), storing data and length in ADU */
 int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
-  bw     *pp;            // packet pointer
-  size_t  packet_len=0;  // initialize to check at return
 
   pthread_mutex_lock(&(cp->lock));
 //  log_trace("%s: Check for received packet on tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
