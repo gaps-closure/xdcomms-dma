@@ -264,7 +264,7 @@ void chan_init_all_once(void) {
       chan_info[i].mm.flags   = MAP_SHARED;
       chan_info[i].retries    = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;
       chan_info[i].rx.newd    = 0;
-      chan_info[i].rx.buf_ptr = NULL;
+      chan_info[i].rx.data    = NULL;
       if (pthread_mutex_init(&(chan_info[i].lock), NULL) != 0)   FATAL;
     }
     once=0;
@@ -449,7 +449,7 @@ void asyn_send(void *adu, gaps_tag *tag) {
 /**********************************************************************/
 /* Device read functions                                              */
 /**********************************************************************/
-void *rcvr_thread_dma(chan cp, int buffer_id) {
+void *rcvr_thread_dma(chan *cp, int buffer_id) {
   gaps_tag               tag;
   size_t                 len_out;
   bw                    *p;
