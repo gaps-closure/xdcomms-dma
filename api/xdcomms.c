@@ -523,7 +523,7 @@ int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
 chan_print(cp);
     cmap_decode(cp->rx.data, cp->rx.data_len, adu, &(cp->rx.tag));   /* Put packet into ADU */
     log_trace("XDCOMMS reads from DMA channel (buff=%p) len=%d", cp->rx.data, cp->rx.data_len);
-    if (cp->rx.data_len) > 0) log_buf_trace("RX_PKT", cp->rx.data, cp->rx.data_len);
+    if ((cp->rx.data_len) > 0) log_buf_trace("RX_PKT", cp->rx.data, cp->rx.data_len);
     cp->rx.newd = 0;                      // unmark newdata
     time_trace("XDC_Rx3 packet copied to ADU: tag=<%d,%d,%d> adu-len=%d", cp->rx.tag.mux, cp->rx.tag.sec, cp->rx.tag.typ, cp->rx.data_len);
     log_debug("XDCOMMS rx packet tag=<%d,%d,%d> len=%d", cp->rx.tag.mux, cp->rx.tag.sec, cp->rx.tag.typ, cp->rx.data_len);
