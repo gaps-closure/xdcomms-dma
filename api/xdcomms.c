@@ -449,7 +449,7 @@ void asyn_send(void *adu, gaps_tag *tag) {
 /**********************************************************************/
 /* Device read functions                                              */
 /**********************************************************************/
-void *rcvr_thread_dma(chan *cp, int buffer_id) {
+void *rcvr_dma(chan *cp, int buffer_id) {
   gaps_tag               tag;
   bw                    *p;
   struct channel_buffer *dma_cb_ptr =  (struct channel_buffer *) cp->mm.virt_addr;
@@ -466,6 +466,10 @@ void *rcvr_thread_dma(chan *cp, int buffer_id) {
     cp->rx.newd = 1;
     pthread_mutex_unlock(&(cp->lock));
   }
+}
+
+void *rcvr_shm(chan *cp, int buffer_id) {
+  log_warn("%s not yet written");
 }
 
   
