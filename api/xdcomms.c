@@ -489,7 +489,7 @@ void *rcvr_thread_function(thread_args *vargs) {
       log_fatal("Unsupported device type %s\n", cp->dev_type);
       exit(-1);
     }
-    if ((cp->rx.newd = 1) {
+    if ((cp->rx.newd) == 1) {
       time_trace("XDC_Rx2 start decode for tag=<%d,%d,%d>", tag->mux, tag->sec, tag->typ);
       cmap_decode(cp->rx.data, cp->rx.data_len, adu, tag);   /* Put packet into ADU */
       buffer_id_index = (buffer_id_index + 1) % RX_BUFFS_PER_THREAD;
