@@ -450,7 +450,6 @@ void asyn_send(void *adu, gaps_tag *tag) {
 /* Device read functions                                              */
 /**********************************************************************/
 void rcvr_dma(chan *cp, int buffer_id) {
-  gaps_tag               tag;
   bw                    *p;
   struct channel_buffer *dma_cb_ptr =  (struct channel_buffer *) cp->mm.virt_addr;
 
@@ -458,8 +457,8 @@ void rcvr_dma(chan *cp, int buffer_id) {
   if (dma_start_to_finish(cp->fd, &buffer_id, &(dma_cb_ptr[buffer_id])) == 0) {
     p = (bw *) &(dma_cb_ptr[buffer_id].buffer);    /* XXX: DMA buffer must be larger than size of BW */
     ctag_decode(&(p->message_tag_ID), &(cp->rx.tag));
-    time_trace("XDC_THRD got packet tag=<%d,%d,%d> (fd=%d id=%d)", tag.mux, tag.sec, tag.typ, cp->fd, buffer_id);
-    log_trace("THREAD rx packet tag=<%d,%d,%d> buf-id=%d st=%d", tag.mux, tag.sec, tag.typ, buffer_id, dma_cb_ptr[buffer_id].status);
+    time_trace("XDC_THRD got packet tag=<%d,%d,%d> (fd=%d id=%d)", cp->rx.tag.mux, cp->rx.tag.sec, cp->rx.tag.typ, cp->fd, buffer_id);
+    log_trace("THREAD rx packet tag=<%d,%d,%d> buf-id=%d st=%d", cp->rx.tag.mux, cp->rx.tag.sec, cp->rx.tag.typ, buffer_id, dma_cb_ptr[buffer_id].status);
     pthread_mutex_lock(&(cp->lock));
     bw_len_decode(&(cp->rx.data_len), p->data_len);
     cp->rx.data = (uint8_t *) p;
