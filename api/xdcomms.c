@@ -457,7 +457,7 @@ void *rcvr_dma(chan *cp, int buffer_id) {
   dma_cb_ptr[buffer_id].length = sizeof(bw);      /* XXX: ALl packets use buffer of Max size */
   if (dma_start_to_finish(cp->fd, &buffer_id, &(dma_cb_ptr[buffer_id])) == 0) {
     p = (bw *) &(dma_cb_ptr[buffer_id].buffer);    /* XXX: DMA buffer must be larger than size of BW */
-    ctag_decode(&(p->message_tag_ID), &tag);
+    ctag_decode(ctag, &tag);
     time_trace("XDC_THRD got packet tag=<%d,%d,%d> (fd=%d id=%d)", tag.mux, tag.sec, tag.typ, cp->fd, buffer_id);
     log_trace("THREAD rx packet tag=<%d,%d,%d> buf-id=%d st=%d", tag.mux, tag.sec, tag.typ, buffer_id, dma_cb_ptr[buffer_id].status);
     pthread_mutex_lock(&(cp->lock));
@@ -490,7 +490,8 @@ void *rcvr_thread_function(thread_args *vargs) {
       exit(-1);
     }
     if ((cp->rx.newd) == 1) {
-      time_trace("XDC_Rx2 start decode for tag=<%d,%d,%d>", tag->mux, tag->sec, tag->typ);
+      ctag_decode(cp->rx.ctag, &tag)
+      time_trace("XDC_Rx2 start decode for ctag=<%d,%d,%d>", tag->mux, tag->sec, tag->typ);
       cmap_decode(cp->rx.data, cp->rx.data_len, adu, tag);   /* Put packet into ADU */
       buffer_id_index = (buffer_id_index + 1) % RX_BUFFS_PER_THREAD;
       log_trace("THREAD 4 buf-id=%d index=%d", buffer_id, buffer_id_index);
