@@ -462,7 +462,7 @@ void *rcvr_thread_dma(chan *cp, int buffer_id) {
     log_trace("THREAD rx packet tag=<%d,%d,%d> buf-id=%d st=%d", tag.mux, tag.sec, tag.typ, buffer_id, dma_cb_ptr[buffer_id].status);
     pthread_mutex_lock(&(cp->lock));
     bw_len_decode(&(cp->rx.data_len), p->data_len);
-    cp->rx.data = p;
+    cp->rx.data = (uint8_t *) p;
     cp->rx.newd = 1;
     pthread_mutex_unlock(&(cp->lock));
   }
