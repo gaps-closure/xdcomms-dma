@@ -95,15 +95,10 @@ typedef struct _thread_args {
   int             buffer_id_start;  // Device buffer index
 } thread_args;
 
-
 void rcvr_thread_start(chan *cp);
-
 
 codec_map  cmap[DATA_TYP_MAX];       // maps data type to its data encode + decode functions
 chan       chan_info[GAPS_TAG_MAX];  // array of buffers to store channel info per tag
-
-pthread_mutex_t txlock;
-pthread_mutex_t rxlock;
 pthread_mutex_t chan_create;
 
 /**********************************************************************/
@@ -175,7 +170,7 @@ void ctag_decode(uint32_t *ctag, gaps_tag *tag) {
 void chan_print(chan *cp) {
   log_trace("c%08x: dir=%c typ=%s nam=%s fd=%d loc=%d", cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->lock);
   log_trace("                  mmap len=0x%x [paddr=0x%x vaddr=%p offset=0x%x protect=0x%x flags=0x%x]",  cp->mm.len, cp->mm.phys_addr, cp->mm.virt_addr, cp->mm.offset, cp->mm.prot, cp->mm.flags);
-  log_trace("                  ret=%d every %d ns newd=%d rx_buf_ptr=%p", cp->retries, RX_POLL_INTERVAL_NSEC, cp->rx.newd, cp->rx.buf_ptr);
+  log_trace("                  ret=%d every %d ns newd=%d rx_buf_ptr=%p", cp->retries, RX_POLL_INTERVAL_NSEC, cp->rx.newd, cp->rx.data);
 }
 
 /**********************************************************************/
