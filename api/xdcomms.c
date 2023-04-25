@@ -491,7 +491,6 @@ void *rcvr_thread_function(thread_args *vargs) {
     }
     if ((cp->rx.newd) == 1) {
       time_trace("XDC_Rx2 start decode for ctag=<%d,%d,%d>", cp->rx.tag.mux, cp->rx.tag.sec, cp->rx.tag.typ);
-      cmap_decode(cp->rx.data, cp->rx.data_len, adu, &(cp->rx.tag));   /* Put packet into ADU */
       buffer_id_index = (buffer_id_index + 1) % RX_BUFFS_PER_THREAD;
       log_trace("THREAD 4 buf-id=%d index=%d", buffer_id, buffer_id_index);
     }
