@@ -68,10 +68,8 @@ typedef struct _memmap {
 } memmap;
 
 typedef struct _rxfifo {
-  char      newd;      // RX thread received new packet (xdcomms resets after reading)
-  size_t    data_len;     // length of data
-  uint8_t  *data;         // data buffer
-  int       tid;          // transaction ID
+  char             newd;      // RX thread received new packet (xdcomms resets after reading)
+  void            *buf_ptr;   // Data
 } rxfifo;
 
 // channel configuration (with device abstraction)
@@ -92,7 +90,6 @@ typedef struct _thread_args {
   chan            *cp;               // Channel RX thread is looking for
   int             buffer_id_start;  // Device buffer index
 } thread_args;
-
 
 void rcvr_thread_start(chan *cp);
 
@@ -128,31 +125,6 @@ codec_map *cmap_find(int data_type) {
   log_warn("Could not find registered data typ = %d\n", data_type);
   return (NULL);
 }
-
-/* Create packet (serialize data and add header) */
-void bw_gaps_data_encode(bw *p, size_t *p_len, uint8_t *buff_in, size_t *buff_len, gaps_tag *tag) {
-  codec_map  *cm = cmap_find(tag->typ);
-  
-  /* a) serialize data into packet */
-  cm->encode (p->data, buff_in, buff_len);
-  log_buf_trace("API <- raw app data:", buff_in, *buff_len);
-  log_buf_trace("    -> encoded data:", p->data, *buff_len);
-  /* b) Create CLOSURE packet header */
-  ctag_encode(&(p->message_tag_ID), tag);
-  bw_len_encode(&(p->data_len), *buff_len);
-  p->crc16 = htons(bw_crc_calc(p));
-  /* c) Return packet length */
-  *p_len = bw_get_packet_length(p, *buff_len);
-}
-
-/* Decode data from packet */
-void cmap_decode(uint8_t *data, size_t data_len, uint8_t *buff_out, gaps_tag *tag) {
-  codec_map  *cm = cmap_find(tag->typ);
-  cm->decode (buff_out, data, data_len);
-  log_buf_trace("API -> raw app data:", data,     data_len);
-  log_buf_trace("    <- decoded data:", buff_out, data_len);
-}
-
 
 /**********************************************************************/
 /* B) Tag Compression / Decompression                                    */
@@ -395,6 +367,35 @@ void bw_len_decode (size_t *out, uint16_t len) {
   *out = ntohs(len);
 }
 
+/* Create packet (serialize data and add header) */
+void bw_gaps_data_encode(bw *p, size_t *p_len, uint8_t *buff_in, size_t *buff_len, gaps_tag *tag) {
+  codec_map  *cm = cmap_find(tag->typ);
+  
+  /* a) serialize data into packet */
+  cm->encode (p->data, buff_in, buff_len);
+  log_buf_trace("API <- raw app data:", buff_in, *buff_len);
+  log_buf_trace("    -> encoded data:", p->data, *buff_len);
+  /* b) Create CLOSURE packet header */
+  ctag_encode(&(p->message_tag_ID), tag);
+  bw_len_encode(&(p->data_len), *buff_len);
+  p->crc16 = htons(bw_crc_calc(p));
+  /* c) Return packet length */
+  *p_len = bw_get_packet_length(p, *buff_len);
+}
+
+/* Decode data from packet */
+void bw_gaps_data_decode(bw *p, size_t p_len, uint8_t *buff_out, size_t *len_out, gaps_tag *tag) {
+  codec_map  *cm = cmap_find(tag->typ);
+  
+  ctag_decode(&(p->message_tag_ID), tag);
+  bw_len_decode(len_out, p->data_len);
+  cm->decode (buff_out, p->data, len_out);
+  log_buf_trace("API -> raw app data:", p->data,  *len_out);
+  log_buf_trace("    <- decoded data:", buff_out, *len_out);
+}
+
+
+
 /**********************************************************************/
 /* Device write functions                                              */
 /**********************************************************************/
@@ -456,7 +457,6 @@ void asyn_send(void *adu, gaps_tag *tag) {
 void *rcvr_thread_function(thread_args *vargs) {
   gaps_tag               tag;
   bw                    *p;
-  size_t                 len_out;
   chan                  *cp = vargs->cp;
   int                    buffer_id_index = 0;
   int                    buffer_id;
@@ -474,8 +474,9 @@ void *rcvr_thread_function(thread_args *vargs) {
       ctag_decode(&(p->message_tag_ID), &tag);
       time_trace("XDC_THRD got packet tag=<%d,%d,%d> (fd=%d id=%d)", tag.mux, tag.sec, tag.typ, cp->fd, buffer_id);
       log_trace("THREAD rx packet tag=<%d,%d,%d> buf-id=%d st=%d", tag.mux, tag.sec, tag.typ, buffer_id, dma_cb_ptr[buffer_id].status);
+
       pthread_mutex_lock(&(cp->lock));
-      bw_len_decode(&(cp->rx.data_len), p->data_len);
+//      memcpy(&(t->p), p, sizeof(bw)); /* XXX: optimize, copy only length of actual packet received */
       cp->rx.buf_ptr = p;
       cp->rx.newd = 1;
       chan_print(cp);
@@ -505,20 +506,22 @@ void rcvr_thread_start(chan *cp) {
 int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
   bw     *pp;            // packet pointer
   size_t  packet_len=0;  // initialize to check at return
+  size_t  adu_len=0;
 
   pthread_mutex_lock(&(cp->lock));
 //  log_trace("%s: Check for received packet on tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
   if (cp->rx.newd != 0) {                            // get packet from buffer if available)
-
     if (strcmp(cp->dev_type, "dma") == 0) {    // MIND DMA driver
+      pp = cp->mm.virt_addr;                           // Point to device rx buffer
       time_trace("XDC_Rx2 start decode for tag=<%d,%d,%d>", tag->mux, tag->sec, tag->typ);
 chan_print(cp);
-      cmap_decode(cp->rx.data, cp->rx.data_len, adu, tag);   /* Put packet into ADU */
-      log_trace("XDCOMMS reads from DMA channel (buff=%p) len=%d", cp->rx.data, cp->rx.data_len);
-      if (cp->rx.data_len) > 0) log_buf_trace("RX_PKT", cp->rx.data, cp->rx.data_len);
+      bw_gaps_data_decode(cp->mm.virt_addr, 0, adu, &adu_len, tag);   /* Put packet into ADU */
+      packet_len = bw_get_packet_length(pp, adu_len);
+      log_trace("XDCOMMS reads from DMA channel (mmap_virt_addr=%p) len=(b=%d p=%d)", pp, adu_len, packet_len);
+      if (packet_len <= sizeof(bw)) log_buf_trace("RX_PKT", (uint8_t *) pp, packet_len);
       cp->rx.newd = 0;                      // unmark newdata
-      time_trace("XDC_Rx3 packet copied to ADU: tag=<%d,%d,%d> adu-len=%d", tag->mux, tag->sec, tag->typ, cp->rx.data_len);
-      log_debug("XDCOMMS rx packet tag=<%d,%d,%d> len=%d", tag->mux, tag->sec, tag->typ, cp->rx.data_len);
+      time_trace("XDC_Rx3 packet copied to ADU: tag=<%d,%d,%d> pkt-len=%d adu-len=%d", tag->mux, tag->sec, tag->typ, packet_len, adu_len);
+      log_debug("XDCOMMS rx packet tag=<%d,%d,%d> len=%d", tag->mux, tag->sec, tag->typ, packet_len);
     }
     else if (strcmp(cp->dev_type, "shm") == 0) {
       log_fatal("%s: Not yet written>", __func__);
@@ -529,7 +532,7 @@ chan_print(cp);
     }
   }
   pthread_mutex_unlock(&(cp->lock));
-  return (adu_len > 0) ? cp->rx.data_len : -1;
+  return (adu_len > 0) ? adu_len : -1;
 }
 
 /**********************************************************************/
