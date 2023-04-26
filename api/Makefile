@@ -8,11 +8,7 @@ INCL         = -I ../log -I ../crc
 CFLAGS      ?= -O2 -Wall -Wstrict-prototypes
 SRCS        := $(wildcard *.c) $(wildcard ../log/*.c) $(wildcard ../crc/*.c)
 OBJS        := $(SRCS:%.c=%.o)
-XX := $(wildcard *.c)
-$(info XX="$(XX)")
-$(info OBJS="$(OBJS)")
-$(info SRCS="$(SRCS)")
-
+#$(info OBJS="$(OBJS)")
 
 all:	lib$(NAME).so
 
