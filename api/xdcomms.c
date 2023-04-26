@@ -440,7 +440,7 @@ void asyn_send(void *adu, gaps_tag *tag) {
   log_trace("Start of %s", __func__);
   pthread_mutex_lock(&(cp->lock));
   time_trace("XDC_Tx1 ready to encode for ctag=%08x", cp->ctag);
-  cmap_encode(data, adu, &adu_len, tag);
+  cmap_encode(cp->mm.virt_addr, adu, &adu_len, tag);
   time_trace("XDC_Tx2 ready to send data for ctag=%08x typ=%c len=%ld", cp->ctag, cp->dev_type, adu_len);
   // b) encode packet into TX buffer and send */
   if (strcmp(cp->dev_type, "dma") == 0) dma_send(cp, adu, tag);
