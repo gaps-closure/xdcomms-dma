@@ -49,7 +49,6 @@
 #include <assert.h>
 #include <pthread.h>
 
-
 #include "log.h"
 #include "crc.h"
 #include "xdcomms.h"
