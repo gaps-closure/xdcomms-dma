@@ -427,7 +427,7 @@ void dma_send(chan *cp, void *adu, size_t adu_len, gaps_tag *tag) {
 //  time_trace("Tx packet end: tag=<%d,%d,%d> pkt-len=%d", tag->mux, tag->sec, tag->typ, packet_len);
 }
 
-void shm_send(chan *cp, void *adu, gaps_tag *tag) {
+void shm_send(chan *cp, void *adu, size_t adu_len, gaps_tag *tag) {
   log_warn("Must write function %s", __func__);
 }
 
@@ -443,8 +443,8 @@ void asyn_send(void *adu, gaps_tag *tag) {
   cmap_encode(cp->mm.virt_addr, adu, &adu_len, tag);
   time_trace("XDC_Tx2 ready to send data for ctag=%08x typ=%c len=%ld", cp->ctag, cp->dev_type, adu_len);
   // b) encode packet into TX buffer and send */
-  if (strcmp(cp->dev_type, "dma") == 0) dma_send(cp, adu, tag);
-  if (strcmp(cp->dev_type, "shm") == 0) shm_send(cp, adu, tag);
+  if (strcmp(cp->dev_type, "dma") == 0) dma_send(cp, adu, adu_len, tag);
+  if (strcmp(cp->dev_type, "shm") == 0) shm_send(cp, adu, adu_len, tag);
   pthread_mutex_unlock(&(cp->lock));
 }
 
