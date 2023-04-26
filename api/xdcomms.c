@@ -167,6 +167,7 @@ void ctag_decode(uint32_t *ctag, gaps_tag *tag) {
 /* C) THREADS   */
 /**********************************************************************/
 void chan_print(chan *cp) {
+  exit(22);
   log_trace("c%08x: dir=%c typ=%s nam=%s fd=%d loc=%d", cp->ctag, cp->dev_type, cp->dev_name, cp->fd, cp->lock);
   log_trace("                  mmap len=0x%x [paddr=0x%x vaddr=%p offset=0x%x protect=0x%x flags=0x%x]",  cp->mm.len, cp->mm.phys_addr, cp->mm.virt_addr, cp->mm.offset, cp->mm.prot, cp->mm.flags);
     log_trace("                  tag=<%d,%d,%d> len=%ld rx_buf_ptr=%p ret=%d every %d ns newd=%d ", cp->pinfo.tag.mux, cp->pinfo.tag.sec, cp->pinfo.tag.typ, cp->pinfo.data_len, cp->pinfo.data, cp->retries, RX_POLL_INTERVAL_NSEC, cp->pinfo.newd);
