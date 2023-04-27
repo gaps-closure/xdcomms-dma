@@ -87,10 +87,11 @@ typedef struct channel {
   char             dev_type[4];    // device type: e.g., shm (ESCAPE) or dma (MIND)
   char             dev_name[64];   // Device name: e.g., /dev/mem or /dev/sue_dominous
   int              fd;             // Device file descriptor (set when device openned)
-  int              retries;        // number of RX polls (every RX_POLL_INTERVAL_NSEC) before timeout
+  int              retries;        // number of RX polls (everhmy RX_POLL_INTERVAL_NSEC) before timeout
   pthread_mutex_t  lock;           // Ensure RX thread does not write while xdcomms reads
   memmap           mm;             // Mmap configuration
   pkt_info         pinfo;          // Last received packet info
+  shm_channel     *shm_addr;       // Pointer to mmap'ed Shared Memory structure
 } chan;
 
 /* RX thread arguments when starting thread */
@@ -303,8 +304,6 @@ void get_dev_val(unsigned long *val, char *env_val, unsigned long def_val_dma, u
 
 // Initialize configuration for a new tag
 void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
-  // a) Set channel configuration for this tag
-  
   cp->ctag = ctag;
   cp->dir  = dir;
   if (dir == 't') { // TX
@@ -322,11 +321,19 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
     log_trace("%s: Len SHM = %x type=%s", __func__, SHM_MMAP_LEN_ESCAPE, cp->dev_type);
   }
   get_dev_val(&(cp->mm.phys_addr), getenv("DEV_MMAP_AD"), DMA_ADDR_HOST, SHM_MMAP_ADDR_HOST, cp->dev_type);
-  log_trace("%s Env Vars: type=%s name=%s off=%s mlen=%s (%", __func__, getenv("DEV_TYPE_TX"), getenv("DEV_NAME_TX"), getenv("DEV_OFFS_TX"), getenv("DEV_MMAP_LE"));
-  log_trace("%s Env Vars: type=%s name=%s off=%s mlen=%s", __func__, getenv("DEV_TYPE_RX"), getenv("DEV_NAME_RX"), getenv("DEV_OFFS_RX"), getenv("DEV_MMAP_LE"));
+//  log_trace("%s Env Vars: type=%s name=%s off=%s mlen=%s (%", __func__, getenv("DEV_TYPE_TX"), getenv("DEV_NAME_TX"), getenv("DEV_OFFS_TX"), getenv("DEV_MMAP_LE"));
+//  log_trace("%s Env Vars: type=%s name=%s off=%s mlen=%s", __func__, getenv("DEV_TYPE_RX"), getenv("DEV_NAME_RX"), getenv("DEV_OFFS_RX"), getenv("DEV_MMAP_LE"));
+}
+      
+// After openning SHM device, initialize SHM configuration
+void shm_init_config_one(chan *cp) {
+  cp->shm_addr = cp->mm.virt_addr + cp->mm.offset;
+  
+  cp->shm_addr.next_pkt_index = 0;
+  log_trace("%s: shm_addr = %x index=%d", __func__, cp->shm_addr, cp->shm_addr.next_pkt_index);
+  exit(222);
+}
 
-  }
-                  
 // Return pointer to Rx packet buffer for specified tag
 //  a) If first call, then initialize all channels
 //  b) If first call for a tag: 1) config channel info, 2) open device if new, 3) start thread
@@ -348,7 +355,8 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
       chan_init_config_one(cp, ctag, dir);          // 1) Configure new tag
       dev_open_if_new(cp);                          // 2) open device (if not already open)
       log_trace("%s: Openned device %s for ctag=0x%08x dir=%c", __func__, cp->dev_name, cp->ctag, cp->dir);
-      if ((cp->dir) == 'r') rcvr_thread_start(cp);  // 3) Start rx thread for new receive tag
+      if (strcmp(cp->dev_type, "shm") == 0) shm_init_config_one(cp);
+      if ((cp->dir) == 'r')                 rcvr_thread_start(cp);  // 3) Start rx thread for new receive tag
       break;
     }
   }
@@ -475,6 +483,11 @@ void rcvr_dma(chan *cp, int buffer_id) {
   cp->pinfo.data = (uint8_t *) p->data;
   cp->pinfo.newd = 1;
   pthread_mutex_unlock(&(cp->lock));
+}
+
+// Dumb memory copy using 8-byte words
+void naive_memcpy(unsigned long *d, const unsigned long *s, unsigned long len_in_words) {
+  for (int i = 0; i < len_in_words; i++) *d++ = *s++;
 }
 
 void rcvr_shm(chan *cp, int buffer_id) {

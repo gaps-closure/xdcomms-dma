@@ -38,7 +38,7 @@ typedef struct shm_channel {
   cinfo  cinfo;
   pinfo  pinfo[SHM_MAX_INDEX];
   pdata  pdata[SHM_MAX_INDEX];
-  int       next_pkt_index;                 // Index to next packet to be written
+  int    next_pkt_index;            // Index to next packet to be written
 } shm_channel __attribute__ ((aligned (1024)));		/*  byte alignment */
 
 #endif /* _SHM_H_ */
