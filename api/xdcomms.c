@@ -327,6 +327,7 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
       
 // After openning SHM device, initialize SHM configuration
 void shm_init_config_one(chan *cp) {
+  log_trace("%s");
   cp->shm_addr = cp->mm.virt_addr + cp->mm.offset;
   
   cp->shm_addr->next_pkt_index = 0;
