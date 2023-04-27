@@ -464,7 +464,7 @@ void rcvr_dma(chan *cp, int buffer_id) {
   log_trace("THREAD-3 rx packet tag=<%d,%d,%d> buf-id=%d st=%d", cp->pinfo.tag.mux, cp->pinfo.tag.sec, cp->pinfo.tag.typ, buffer_id, dma_cb_ptr[buffer_id].status);
   pthread_mutex_lock(&(cp->lock));
   bw_len_decode(&(cp->pinfo.data_len), p->data_len);
-  cp->pinfo.data = (uint8_t *) p;
+  cp->pinfo.data = (uint8_t *) p->data;
   cp->pinfo.newd = 1;
   pthread_mutex_unlock(&(cp->lock));
 }
@@ -518,7 +518,7 @@ int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
   if (cp->pinfo.newd != 0) {                            // get packet from buffer if available)
 chan_print(cp);
     cmap_decode(cp->pinfo.data, cp->pinfo.data_len, adu, &(cp->pinfo.tag));   /* Put packet into ADU */
-    log_trace("XDCOMMS reads from DMA channel (buff=%p) len=%d", cp->pinfo.data, cp->pinfo.data_len);
+    log_trace("XDCOMMS reads from buff=%p (len=%d)", cp->pinfo.data, cp->pinfo.data_len);
     if ((cp->pinfo.data_len) > 0) log_buf_trace("RX_PKT", cp->pinfo.data, cp->pinfo.data_len);
     cp->pinfo.newd = 0;                      // unmark newdata
 //    time_trace("XDC_Rx3 packet copied to ADU: tag=<%d,%d,%d> adu-len=%d", cp->pinfo.tag.mux, cp->pinfo.tag.sec, cp->pinfo.tag.typ, cp->pinfo.data_len);
