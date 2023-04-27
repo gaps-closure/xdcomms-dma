@@ -211,7 +211,7 @@ void shm_open_channel(chan *cp) {
   pa_mmap_len        = cp->mm.len + cp->mm.phys_addr - pa_phys_addr;
 #ifdef  XDCOMMS_PRINT_STATE
     chan_print(cp);
-#endify
+#endif
   pa_virt_addr       = mmap(0, pa_mmap_len, cp->mm.prot, cp->mm.flags, cp->fd, pa_phys_addr);
   if (pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
   cp->mm.virt_addr = pa_virt_addr + cp->mm.phys_addr - pa_phys_addr;   // add offset to page aligned addr
