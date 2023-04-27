@@ -454,7 +454,9 @@ void rcvr_dma(chan *cp, int buffer_id) {
   struct channel_buffer *dma_cb_ptr =  (struct channel_buffer *) cp->mm.virt_addr;
 
   dma_cb_ptr[buffer_id].length = sizeof(bw);      /* XXX: ALl packets use buffer of Max size */
-  if (dma_start_to_finish(cp->fd, &buffer_id, &(dma_cb_ptr[buffer_id])) == 0) {
+  while (dma_start_to_finish(cp->fd, &buffer_id, &(dma_cb_ptr[buffer_id])) == 0) {
+    ;
+  }
     p = (bw *) &(dma_cb_ptr[buffer_id].buffer);    /* XXX: DMA buffer must be larger than size of BW */
     ctag_decode(&(p->message_tag_ID), &(cp->pinfo.tag));
     time_trace("XDC_THRD got packet tag=<%d,%d,%d> (fd=%d id=%d)", cp->pinfo.tag.mux, cp->pinfo.tag.sec, cp->pinfo.tag.typ, cp->fd, buffer_id);
@@ -481,18 +483,15 @@ void *rcvr_thread_function(thread_args *vargs) {
   log_debug("THREAD %s starting: fd=%d base_id=%d", __func__, cp->fd, vargs->buffer_id_start);
   while (1) {
     buffer_id = (vargs->buffer_id_start) + buffer_id_index;
-//    log_trace("THREAD 1 buf-id=%d index=%d dma_cb_ptr=%p", buffer_id, buffer_id_index, &(dma_cb_ptr[buffer_id]));
     if      (strcmp(cp->dev_type, "dma") == 0) rcvr_dma(cp, buffer_id);
     else if (strcmp(cp->dev_type, "shm") == 0) rcvr_shm(cp, buffer_id);
     else {
       log_fatal("Unsupported device type %s\n", cp->dev_type);
       exit(-1);
     }
-    if ((cp->pinfo.newd) == 1) {
-      time_trace("XDC_Rx2 start decode for ctag=<%d,%d,%d>", cp->pinfo.tag.mux, cp->pinfo.tag.sec, cp->pinfo.tag.typ);
-      buffer_id_index = (buffer_id_index + 1) % RX_BUFFS_PER_THREAD;
-      log_trace("THREAD 4 buf-id=%d index=%d", buffer_id, buffer_id_index);
-    }
+    time_trace("XDC_Rx2 start decode for ctag=<%d,%d,%d>", cp->pinfo.tag.mux, cp->pinfo.tag.sec, cp->pinfo.tag.typ);
+    buffer_id_index = (buffer_id_index + 1) % RX_BUFFS_PER_THREAD;
+    log_trace("THREAD 4 buf-id=%d index=%d", buffer_id, buffer_id_index);
   }
 }
 
