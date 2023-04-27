@@ -454,19 +454,18 @@ void rcvr_dma(chan *cp, int buffer_id) {
   struct channel_buffer *dma_cb_ptr =  (struct channel_buffer *) cp->mm.virt_addr;
 
   dma_cb_ptr[buffer_id].length = sizeof(bw);      /* XXX: ALl packets use buffer of Max size */
-  while (dma_start_to_finish(cp->fd, &buffer_id, &(dma_cb_ptr[buffer_id])) == 0) {
+  while (dma_start_to_finish(cp->fd, &buffer_id, &(dma_cb_ptr[buffer_id])) != 0) {
     ;
   }
-    p = (bw *) &(dma_cb_ptr[buffer_id].buffer);    /* XXX: DMA buffer must be larger than size of BW */
-    ctag_decode(&(p->message_tag_ID), &(cp->pinfo.tag));
-    time_trace("XDC_THRD got packet tag=<%d,%d,%d> (fd=%d id=%d)", cp->pinfo.tag.mux, cp->pinfo.tag.sec, cp->pinfo.tag.typ, cp->fd, buffer_id);
-    log_trace("THREAD rx packet tag=<%d,%d,%d> buf-id=%d st=%d", cp->pinfo.tag.mux, cp->pinfo.tag.sec, cp->pinfo.tag.typ, buffer_id, dma_cb_ptr[buffer_id].status);
-    pthread_mutex_lock(&(cp->lock));
-    bw_len_decode(&(cp->pinfo.data_len), p->data_len);
-    cp->pinfo.data = (uint8_t *) p;
-    cp->pinfo.newd = 1;
-    pthread_mutex_unlock(&(cp->lock));
-  }
+  p = (bw *) &(dma_cb_ptr[buffer_id].buffer);    /* XXX: DMA buffer must be larger than size of BW */
+  ctag_decode(&(p->message_tag_ID), &(cp->pinfo.tag));
+  time_trace("XDC_THRD got packet tag=<%d,%d,%d> (fd=%d id=%d)", cp->pinfo.tag.mux, cp->pinfo.tag.sec, cp->pinfo.tag.typ, cp->fd, buffer_id);
+  log_trace("THREAD rx packet tag=<%d,%d,%d> buf-id=%d st=%d", cp->pinfo.tag.mux, cp->pinfo.tag.sec, cp->pinfo.tag.typ, buffer_id, dma_cb_ptr[buffer_id].status);
+  pthread_mutex_lock(&(cp->lock));
+  bw_len_decode(&(cp->pinfo.data_len), p->data_len);
+  cp->pinfo.data = (uint8_t *) p;
+  cp->pinfo.newd = 1;
+  pthread_mutex_unlock(&(cp->lock));
 }
 
 void rcvr_shm(chan *cp, int buffer_id) {
