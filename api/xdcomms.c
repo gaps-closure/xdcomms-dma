@@ -214,8 +214,8 @@ void shm_open_channel(chan *cp) {
 #endif
   pa_virt_addr       = mmap(0, pa_mmap_len, cp->mm.prot, cp->mm.flags, cp->fd, pa_phys_addr);
   log_trace("%s l=%lx p=%lx f=%lx fd=%d, pa=%lx", __func__, pa_mmap_len, cp->mm.prot, cp->mm.flags, cp->fd, pa_phys_addr);
-  exit();
   log_trace("%s va=%p", __func__, pa_virt_addr);
+  exit(22);
   if (pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
   cp->mm.virt_addr = pa_virt_addr + cp->mm.phys_addr - pa_phys_addr;   // add offset to page aligned addr
   
