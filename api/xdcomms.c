@@ -213,7 +213,7 @@ void shm_open_channel(chan *cp) {
     chan_print(cp);
 #endif
   pa_virt_addr       = mmap(0, pa_mmap_len, cp->mm.prot, cp->mm.flags, cp->fd, pa_phys_addr);
-  log_trace("%s", __func__);
+  log_trace("%s l=%lx p=%lx f=%lx fd=%d, pa=%lx", __func__, pa_mmap_len, cp->mm.prot, cp->mm.flags, cp->fd, pa_phys_addr);
   exit();
   log_trace("%s va=%p", __func__, pa_virt_addr);
   if (pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
