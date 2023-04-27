@@ -305,12 +305,13 @@ void get_dev_val(unsigned long *val, char *env_val, unsigned long def_val_dma, u
 // Initialize configuration for a new tag
 void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
   // a) Set channel configuration for this tag
+  
   cp->ctag = ctag;
   cp->dir  = dir;
   if (dir == 't') { // TX
     get_dev_type(cp->dev_type,     getenv("DEV_TYPE_TX"), "dma");
     get_dev_name(cp->dev_name,     getenv("DEV_NAME_TX"), "dma_proxy_tx", "mem", cp->dev_type);
-// *val = (unsigned long) strtol(env_val, NULL, 16);
+    // *val = (unsigned long) strtol(env_val, NULL, 16);
     get_dev_val (&(cp->mm.offset), getenv("DEV_OFFS_TX"), 0x0, 0x0, cp->dev_type);
     get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * TX_BUFFER_COUNT), SHM_MMAP_LEN_ESCAPE, cp->dev_type);
   }
@@ -322,7 +323,10 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
     log_trace("%s: Len SHM = %x type=%s", __func__, SHM_MMAP_LEN_ESCAPE, cp->dev_type);
   }
   get_dev_val(&(cp->mm.phys_addr), getenv("DEV_MMAP_AD"), DMA_ADDR_HOST, SHM_MMAP_ADDR_HOST, cp->dev_type);
-}
+  log_trace("%s Env Vars: type=%s name=%s off=%s mlen=%s (%", __func__, getenv("DEV_TYPE_TX"), getenv("DEV_NAME_TX"), getenv("DEV_OFFS_TX"), getenv("DEV_MMAP_LE"));
+  log_trace("%s Env Vars: type=%s name=%s off=%s mlen=%s", __func__, getenv("DEV_TYPE_RX"), getenv("DEV_NAME_RX"), getenv("DEV_OFFS_RX"), getenv("DEV_MMAP_LE"));
+
+  }
                   
 // Return pointer to Rx packet buffer for specified tag
 //  a) If first call, then initialize all channels
