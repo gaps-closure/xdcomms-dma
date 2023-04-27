@@ -31,7 +31,7 @@ typedef struct _pinfo {
 /* SHM data */
 typedef struct _pdata {
   //  unsigned long data[PKT_G1_ADU_SIZE_MAX];
-  unsigned long data[0x100000];
+  unsigned long data[0x10000];
 } pdata;
 
 /* SHM channel (one per TAG) */
