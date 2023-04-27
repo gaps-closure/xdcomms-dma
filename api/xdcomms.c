@@ -209,8 +209,9 @@ void shm_open_channel(chan *cp) {
   // b) mmpp device: reduce address to be a multiple of page size and add the diff to length
   pa_phys_addr       = cp->mm.phys_addr & ~MMAP_PAGE_MASK;
   pa_mmap_len        = cp->mm.len + cp->mm.phys_addr - pa_phys_addr;
-chan_print(cp);
-
+#ifdef  XDCOMMS_PRINT_STATE
+    chan_print(cp);
+#endif
   pa_virt_addr       = mmap(0, pa_mmap_len, cp->mm.prot, cp->mm.flags, cp->fd, pa_phys_addr);
   if (pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
   cp->mm.virt_addr = pa_virt_addr + cp->mm.phys_addr - pa_phys_addr;   // add offset to page aligned addr
@@ -232,7 +233,6 @@ void dev_open_if_new(chan *cp) {
   static int  dev_set_list[MAX_DEV_COUNT] = {0};
   int         i;
   
-//  chan_print(cp);
   for(i=0; i<MAX_DEV_COUNT; i++) {
     if (dev_set_list[i] == 0) {
       dev_set_list[i] = 1;      // Put new device name into list
@@ -322,7 +322,6 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
     log_trace("%s: Len SHM = %x type=%s", __func__, SHM_MMAP_LEN_ESCAPE, cp->dev_type);
   }
   get_dev_val(&(cp->mm.phys_addr), getenv("DEV_MMAP_AD"), DMA_ADDR_HOST, SHM_MMAP_ADDR_HOST, cp->dev_type);
-//  chan_print(cp);
 }
                   
 // Return pointer to Rx packet buffer for specified tag
@@ -354,7 +353,6 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
   /* c) Unlock and return chan_info pointer */
   if (i >= GAPS_TAG_MAX) FATAL;
   log_trace("%s %d: ctag=0x%08x", __func__, i, ctag);
-//  chan_print(cp);
   pthread_mutex_unlock(&chan_create);
   return (cp);
 }
@@ -523,7 +521,9 @@ int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
   pthread_mutex_lock(&(cp->lock));
 //  log_trace("%s: Check for received packet on tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
   if (cp->pinfo.newd != 0) {                            // get packet from buffer if available)
-chan_print(cp);
+#ifdef  XDCOMMS_PRINT_STATE
+    chan_print(cp);
+#endif
     cmap_decode(cp->pinfo.data, cp->pinfo.data_len, adu, &(cp->pinfo.tag));   /* Put packet into ADU */
     log_trace("XDCOMMS reads from buff=%p (len=%d)", cp->pinfo.data, cp->pinfo.data_len);
     if ((cp->pinfo.data_len) > 0) log_buf_trace("RX_PKT", cp->pinfo.data, cp->pinfo.data_len);
