@@ -330,9 +330,9 @@ void shm_init_config_one(chan *cp) {
   log_trace("%s: va=%p + off=%lx = %lx", __func__, cp->mm.virt_addr, cp->mm.offset, cp->shm_addr);
   cp->shm_addr = cp->mm.virt_addr + cp->mm.offset;
   log_trace("%s: va=%p + off=%lx = %lx", __func__, cp->mm.virt_addr, cp->mm.offset, cp->shm_addr);
-  exit(222);
 
   cp->shm_addr->next_pkt_index = 0;
+  exit(222);
   log_trace("%s: shm_addr=%p index=%d", __func__, cp->shm_addr, cp->shm_addr->next_pkt_index);
 }
 
