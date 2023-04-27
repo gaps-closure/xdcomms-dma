@@ -216,7 +216,7 @@ void shm_open_channel(chan *cp) {
   pa_virt_addr       = mmap(0, pa_mmap_len, cp->mm.prot, cp->mm.flags, cp->fd, pa_phys_addr);
   if (pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
   cp->mm.virt_addr = pa_virt_addr + cp->mm.phys_addr - pa_phys_addr;   // add offset to page aligned addr
-  log_debug("Opened and mmap'ed SHM channel %s: mmap_virt_addr=0x%x, len=0x%x (%x) fd=%d", cp->dev_name, cp->mm.virt_addr, cp->mm.len, pa_mmap_len, cp->fd);
+  log_debug("Opened and mmap'ed SHM channel %s: mmap_virt_addr=%p, len=0x%x (%x) fd=%d", cp->dev_name, cp->mm.virt_addr, cp->mm.len, pa_mmap_len, cp->fd);
 }
 
 // Open channel device (based on name and type) and return its channel structure
@@ -329,7 +329,8 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
 void shm_init_config_one(chan *cp) {
   cp->shm_addr = cp->mm.virt_addr + cp->mm.offset;
   log_trace("%s: va=%p + off=%lx = %lx", __func__, cp->mm.virt_addr, cp->mm.offset, cp->shm_addr);
-
+  log_trace("shm_channel size=%d addr=%p", sizeof(shm_channel), &(cp->shm_addr->cinfo));
+  exit (222);
   cp->shm_addr->next_pkt_index           = 0;
   log_trace("%s: index=%d", __func__, cp->shm_addr->next_pkt_index);
 

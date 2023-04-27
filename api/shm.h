@@ -34,7 +34,7 @@ typedef struct _pdata {
 } pdata;
 
 /* SHM channel (one per TAG) */
-typedef struct shm_channel {
+typedef struct _shm_channel {
   cinfo  cinfo;
   pinfo  pinfo[SHM_MAX_INDEX];
   pdata  pdata[SHM_MAX_INDEX];
