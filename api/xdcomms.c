@@ -324,7 +324,7 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
 //  log_trace("%s Env Vars: type=%s name=%s off=%s mlen=%s (%", __func__, getenv("DEV_TYPE_TX"), getenv("DEV_NAME_TX"), getenv("DEV_OFFS_TX"), getenv("DEV_MMAP_LE"));
 //  log_trace("%s Env Vars: type=%s name=%s off=%s mlen=%s", __func__, getenv("DEV_TYPE_RX"), getenv("DEV_NAME_RX"), getenv("DEV_OFFS_RX"), getenv("DEV_MMAP_LE"));
 }
-      
+
 // After openning SHM device, initialize SHM configuration
 void shm_init_config_one(chan *cp) {
   cp->shm_addr = cp->mm.virt_addr + cp->mm.offset;
