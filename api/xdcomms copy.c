@@ -22,8 +22,9 @@
  */
 
 /* Example configuration using test application (found in ../test/)
- *  DMARXDEV=sue_donimous_rx1 DMATXDEV=sue_donimous_tx1 ./app_req_rep -e 2
- *  DMARXDEV=sue_donimous_rx0 DMATXDEV=sue_donimous_tx0 ./app_req_rep
+ * a) Enclave 2 responds to a request from enclave 1 over DMA channels:
+ *    DMARXDEV=sue_donimous_rx1 DMATXDEV=sue_donimous_tx1 ./app_req_rep -e 2
+ *    DMARXDEV=sue_donimous_rx0 DMATXDEV=sue_donimous_tx0 ./app_req_rep
  */
 
 #include <stdlib.h>
@@ -56,6 +57,7 @@
 #include "dma-proxy.h"
 #include "shm.h"
 
+#define XDCOMMS_PRINT_STATE
 
 // mmap configuration (channel_buffer in DMA device, shm_channel in SHM device)
 typedef struct _memmap {
@@ -102,7 +104,7 @@ pthread_mutex_t rxlock;
 pthread_mutex_t chan_create;
 
 /**********************************************************************/
-/* A) Codec map table to store encoding and decoding function pointers   */
+/* A) Codec map table store encoding and decoding function pointers   */
 /**********************************************************************/
 void cmap_print_one(codec_map *cm) {
   fprintf(stderr, "[typ=%d ", cm->data_type);
@@ -127,7 +129,7 @@ codec_map *cmap_find(int data_type) {
 }
 
 /**********************************************************************/
-/* B) Tag Compression / Decompression                                    */
+/* B) Tag Compression / Decompression                                 */
 /**********************************************************************/
 /* Compress teg (tag -> ctag) from a 3 member stuct to a uint32_t*/
 void ctag_encode(uint32_t *ctag, gaps_tag *tag) {
@@ -151,9 +153,9 @@ void ctag_decode(uint32_t *ctag, gaps_tag *tag) {
 /* C) THREADS   */
 /**********************************************************************/
 void chan_print(chan *cp) {
-  log_trace("c%08x: dir=%c typ=%s nam=%s fd=%d loc=%d", cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->lock);
-  log_trace("                  mmap len=0x%x [paddr=0x%x vaddr=%p offset=0x%x protect=0x%x flags=0x%x]",  cp->mm.len, cp->mm.phys_addr, cp->mm.virt_addr, cp->mm.offset, cp->mm.prot, cp->mm.flags);
-  log_trace("                  ret=%d every %d ns newd=%d rx_buf_ptr=%p", cp->retries, RX_POLL_INTERVAL_NSEC, cp->rx.newd, cp->rx.buf_ptr);
+  fprintf(stderr, "c%08x: dir=%c typ=%s nam=%s fd=%d loc=%d\n", cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->lock);
+  fprintf(stderr, "  mmap len=0x%x [pa=0x%x va=%p off=0x%x prot=0x%x flag=0x%x]",  cp->mm.len, cp->mm.phys_addr, cp->mm.virt_addr, cp->mm.offset, cp->mm.prot, cp->mm.flags);
+  fprintf(stderr, "  ret=%d every %d ns newd=%d rx_buf_ptr=%p", cp->retries, RX_POLL_INTERVAL_NSEC, cp->rx.newd, cp->rx.buf_ptr);
 }
 
 /**********************************************************************/
@@ -172,7 +174,9 @@ void dma_open_channel(chan *cp) {
   if (cp->mm.virt_addr == MAP_FAILED) FATAL;
   log_debug("size of va=%d", sizeof(cp->mm.virt_addr));
   log_debug("Opened and mmap'ed DMA channel %s: mmap_virt_addr=0x%x, len=0x%x fd=%d", cp->dev_name, cp->mm.virt_addr, cp->mm.len, cp->fd);
+#ifdef  XDCOMMS_PRINT_STATE
   chan_print(cp);
+#endif
 }
 
 // Open DMA channel sat given Physical address
