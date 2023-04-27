@@ -9,7 +9,7 @@
 #define SHM_MMAP_LEN_ESCAPE    0x10000000UL     // 256 MB
 #define MMAP_PAGE_MASK     (sysconf(_SC_PAGE_SIZE) - 1)    // Normally 4K - 1
 
-#define SHM_MAX_INDEX             16    // number of packet buffers in channel
+#define SHM_MAX_INDEX             8      // number of packet buffers in channel
 #define DEFAULT_MS_GUARD_TIME_AW  5000  // Timing param to sync Tx write and Rx read
 #define DEFAULT_MS_GUARD_TIME_BW  1000  // Timing param to sync Tx write and Rx read
 //#define DEFAULT_MS_POLL_TIME      1000  // Timing param to sync Tx write and Rx read
@@ -30,7 +30,8 @@ typedef struct _pinfo {
 
 /* SHM data */
 typedef struct _pdata {
-  unsigned long data[PKT_G1_ADU_SIZE_MAX];
+  //  unsigned long data[PKT_G1_ADU_SIZE_MAX];
+  unsigned long data[0x100000];
 } pdata;
 
 /* SHM channel (one per TAG) */
