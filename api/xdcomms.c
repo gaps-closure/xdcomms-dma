@@ -211,14 +211,11 @@ void shm_open_channel(chan *cp) {
   pa_mmap_len        = cp->mm.len + cp->mm.phys_addr - pa_phys_addr;
 #ifdef  XDCOMMS_PRINT_STATE
     chan_print(cp);
-#endif
+#endify
   pa_virt_addr       = mmap(0, pa_mmap_len, cp->mm.prot, cp->mm.flags, cp->fd, pa_phys_addr);
-  log_trace("%s l=%lx p=%lx f=%lx fd=%d, pa=%lx", __func__, pa_mmap_len, cp->mm.prot, cp->mm.flags, cp->fd, pa_phys_addr);
-  log_trace("%s va=%p %p", __func__, pa_virt_addr, MAP_FAILED);
   if (pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
   cp->mm.virt_addr = pa_virt_addr + cp->mm.phys_addr - pa_phys_addr;   // add offset to page aligned addr
-  
-  fprintf(stderr, "    Shared mmap'ed DDR [len=0x%lx Bytes] starts at virtual address %p\n", pa_mmap_len, cp->mm.virt_addr);
+  log_debug("Opened and mmap'ed SHM channel %s: mmap_virt_addr=0x%x, len=0x%x (%x) fd=%d", cp->dev_name, cp->mm.virt_addr, cp->mm.len, pa_mmap_len, cp->fd);
 }
 
 // Open channel device (based on name and type) and return its channel structure
