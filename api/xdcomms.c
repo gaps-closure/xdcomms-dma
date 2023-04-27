@@ -329,7 +329,7 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
 void shm_init_config_one(chan *cp) {
   cp->shm_addr = cp->mm.virt_addr + cp->mm.offset;
   
-  cp->shm_addr.next_pkt_index = 0;
+  cp->shm_addr->next_pkt_index = 0;
   log_trace("%s: shm_addr = %x index=%d", __func__, cp->shm_addr, cp->shm_addr.next_pkt_index);
   exit(222);
 }
