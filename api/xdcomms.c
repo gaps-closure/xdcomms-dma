@@ -60,6 +60,7 @@
 #include "shm.h"
 
 #define XDCOMMS_PRINT_STATE
+#define NAME_LEN_MAX  64
 
 // Fixed mmap configuration (channel_buffer in DMA device, shm_channel in SHM device)
 typedef struct _memmap {
@@ -85,7 +86,7 @@ typedef struct channel {
   uint32_t         ctag;           // Compressed tag (unique index) - used to search for channel
   char             dir;            // Receive (from network) or Transmit (to network): 'r' or 't'
   char             dev_type[4];    // device type: e.g., shm (ESCAPE) or dma (MIND)
-  char             dev_name[64];   // Device name: e.g., /dev/mem or /dev/sue_dominous
+  char             dev_name[NAME_LEN_MAX];   // Device name: e.g., /dev/mem or /dev/sue_dominous
   int              fd;             // Device file descriptor (set when device openned)
   int              retries;        // number of RX polls (everhmy RX_POLL_INTERVAL_NSEC) before timeout
   pthread_mutex_t  lock;           // Ensure RX thread does not write while xdcomms reads
@@ -93,6 +94,14 @@ typedef struct channel {
   pkt_info         pinfo;          // Last received packet info
   shm_channel     *shm_addr;       // Pointer to mmap'ed Shared Memory structure
 } chan;
+
+// Channel list
+typedef struct _chan_list {
+  char             dev_name[NAME_LEN_MAX];
+  chan            *cp;
+  char            dir1;
+  char            dir2;
+} chan_list;
 
 /* RX thread arguments when starting thread */
 typedef struct _thread_args {
@@ -181,7 +190,7 @@ void chan_print(chan *cp) {
 /**********************************************************************/
 /* Device open                                               */
 /**********************************************************************/
-/* Open channel and save virtual address of buffer pointer */
+/* Open channel. Returns fd, mmap-va and mmap-len */
 void dma_open_channel(chan *cp) {
   int buffer_count = TX_BUFFER_COUNT;
   if ((cp->dir) == 'r') buffer_count = RX_BUFFER_COUNT;
@@ -198,8 +207,7 @@ void dma_open_channel(chan *cp) {
 #endif
 }
 
-// Open DMA channel sat given Physical address
-//   Returns file descriptor and page-aligned address/length, so can deallocate
+// Open DMA channel given Physical address and length. Returns fd, mmap-va and mmap-len
 void shm_open_channel(chan *cp) {
   void          *pa_virt_addr;
   unsigned long  pa_phys_addr, pa_mmap_len;       /* page aligned physical address (offset) */
@@ -229,20 +237,44 @@ void open_device(chan *cp) {
 
 // If new device, then open it (and remember it in local list)
 void dev_open_if_new(chan *cp) {
-  static char dev_name_list[MAX_DEV_COUNT][64];
-  static int  dev_dir_list[MAX_DEV_COUNT] = {0};      // 0 = Empty
-  int         i;
+  static chan_list  clist[MAX_DEV_COUNT];
+  static            once=1;
+  int               i;
+  
+  if (once==1) {
+    // a) initialize list
+    for (i=0; i<MAX_DEV_COUNT; i++) {
+      clist[i].cp = NULL;
+      clist[i].dir1 = (char) 0;
+      clist[i].dir2 = (char) 0;
+    }
+    once = 0;
+  }
   
   for(i=0; i<MAX_DEV_COUNT; i++) {
-    if (dev_dir_list[i] == 0) {  // Not set so put new device name into list
-      dev_dir_list[i] = 1;
-      strcpy(dev_name_list[i], cp->dev_name);
+    // b) See if device is not open
+    if (clist[i].cp == NULL) {   // Not set, so put new device name into list
+      clist[i].cp = cp;
+      clist[i].dir1 = cp->dir;
+      strcpy(clist[i].dev_name, cp->dev_name);
       open_device(cp);           // Open new device
-      log_trace("%s: Done i=%d", __func__, i);
-      return;
+      log_trace("%s: Opened new device %s: i=%d", __func__, cp->dev_name, i);
+      return;  // new device
     }
-    if (strcmp(cp->dev_name, dev_name_list[i]) == 0) {
-      return;  // not a new device or direction
+    // b2) See if device is already open
+    if (strcmp(cp->dev_name, dev_name_list[i]) == 0) {    // Already set
+      if ((clist[i].dir1) != cp->dir) {
+        if ((clist[i].dir2) != cp->dir) {
+          // Device shared for TX and RX (e.g., SHM), so copy matching device info
+          clist[i].dir2 = cp->dir;
+          cp->fd = clist[i].cp->fd;
+          cp->mm.virt_addr = clist[i].cp->mm.virt_addr;
+          log_trace("%s: %s device now shared for TX and RX (e.g., SHM) i=%s", __func__, cp->dev_name, i);
+          return;
+        }
+      }
+      log_trace("%s: %s device is not new device nor newly shared device i=%s", __func__, cp->dev_name, i);
+      return;
     }
   }
   FATAL;    // Only here if list cannot store all devices (> MAX_DEV_COUNT)
