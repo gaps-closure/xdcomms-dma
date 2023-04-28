@@ -506,7 +506,7 @@ void naive_memcpy(unsigned long *d, const unsigned long *s, unsigned long len_in
 }
 
 void rcvr_shm(chan *cp, int buffer_id) {
-  log_warn("%s not yet written". __func__);
+  log_warn("%s not yet written", __func__);
 }
 
   
@@ -681,12 +681,15 @@ void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout) {
 void xdc_asyn_send(void *socket, void *adu, gaps_tag *tag) { asyn_send(adu, tag); }
 
 int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
-  log_debug("Start of %s: tag=<%d,%d,%d>: ntries=%d interval=%d (%d.%09d) ns", __func__, tag->mux, tag->sec, tag->typ, ntries, RX_POLL_INTERVAL_NSEC, request.tv_sec, request.tv_nsec);
-  chan *cp = get_chan_info(tag, 'r');  // get buffer for tag (to communicate with thread)
-  struct timespec request = {(RX_POLL_INTERVAL_NSEC/NSEC_IN_SEC), (RX_POLL_INTERVAL_NSEC % NSEC_IN_SEC) };
-  int              ntries = 1 + (cp->retries);       // number of tries to rx packet
-                                                      
-//  time_trace("XDC_Rx1 Wait for tag=<%d,%d,%d> (test %d times every %d ns)", tag->mux, tag->sec, tag->typ, ntries, RX_POLL_INTERVAL_NSEC);
+  chan            *cp;
+  struct timespec  request;
+  int              ntries;
+
+  log_debug("Start of %s: tag=<%d,%d,%d>", tag->mux, tag->sec, tag->typ);
+  cp = get_chan_info(tag, 'r');     // get buffer for tag (to communicate with thread)
+  request = {(RX_POLL_INTERVAL_NSEC/NSEC_IN_SEC), (RX_POLL_INTERVAL_NSEC % NSEC_IN_SEC)};
+  ntries = 1 + (cp->retries);       // number of tries to rx packet
+  log_trace("%s: test %d times every %d (%d.%09d) ns", __func__, ntries, RX_POLL_INTERVAL_NSEC, request.tv_sec, request.tv_nsec);
   while ((ntries--) > 0)  {
     if (nonblock_recv(adu, tag, cp) > 0)  return 0;
 //    log_trace("LOOP timeout %s: tag=<%d,%d,%d>: remaining tries = %d ", __func__, tag->mux, tag->sec, tag->typ, ntries);
