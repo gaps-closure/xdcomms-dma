@@ -340,6 +340,7 @@ void get_dev_val(unsigned long *val, char *env_val, unsigned long def_val_dma, u
 void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
   cp->ctag = ctag;
   cp->dir  = dir;
+
   if (dir == 't') { // TX
     get_dev_type(cp->dev_type,     getenv("DEV_TYPE_TX"), "dma");
     get_dev_name(cp->dev_name,     getenv("DEV_NAME_TX"), "dma_proxy_tx", "mem", cp->dev_type);
@@ -363,7 +364,6 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
 
 void shm_init_config_one(chan *cp) {
   log_trace("%s: START cp=%p", __func__, cp);
-  cp->shm_addr = cp->mm.virt_addr + cp->mm.offset;
   log_trace("%s: va=%p + off=%lx = %lx", __func__, cp->mm.virt_addr, cp->mm.offset, cp->shm_addr);
   log_trace("shm_channel size s=%lx c=%ld i=%lx d=%lx", sizeof(shm_channel), sizeof(cinfo), sizeof(pinfo), sizeof(pdata));
   cp->shm_addr->pkt_index_next           = 0;
@@ -397,13 +397,13 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
     cp = &(chan_info[i]);
     if (cp->ctag == ctag) break;           // found existing slot for tag
     if (cp->ctag == 0) {                   // found empty slot (before tag)
-      chan_init_config_one(cp, ctag, dir);          // 1) Configure new tag
-      dev_open_if_new(cp);                          // 2) Open device (if not already open)
+      chan_init_config_one(cp, ctag, dir);              // 1) Configure new tag
+      dev_open_if_new(cp);                              // 2) Open device (if not already open)
       log_trace("%s: Using %s device %s for ctag=0x%08x dir=%c", __func__, cp->dev_type, cp->dev_name, cp->ctag, cp->dir);
-      if ((cp->dir) == 't')
-        if (strcmp(cp->dev_type, "shm") == 0)
-          shm_init_config_one(cp);                  // 3) Configure SHM structure for new channel
-      if ((cp->dir) == 'r') rcvr_thread_start(cp);  // 4) Start rx thread for new receive tag
+      if (strcmp(cp->dev_type, "shm") == 0)
+        cp->shm_addr = cp->mm.virt_addr + cp->mm.offset;
+        if ((cp->dir) == 't') shm_init_config_one(cp);  // 3) Configure SHM structure for new channel
+      if ((cp->dir) == 'r') rcvr_thread_start(cp);      // 4) Start rx thread for new receive tag
       break;
     }
   }
