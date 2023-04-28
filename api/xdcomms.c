@@ -461,11 +461,12 @@ void shm_send(chan *cp, void *adu, size_t adu_len, gaps_tag *tag) {
 
 /* Asynchronously send ADU to DMA driver in 'bw' packet */
 void asyn_send(void *adu, gaps_tag *tag) {
-  chan       *cp = get_chan_info(tag, 't'); // abstract channel struct pointer for any device type
-  size_t     adu_len;                       // encoder calculates length */
+  chan       *cp;        // abstract channel struct pointer for any device type
+  size_t     adu_len;    // encoder calculates length */
 
   // a) Open channel once (and get device type, device name and channel struct
-  log_trace("Start of %s", __func__);
+  log_debug("Start of %s", __func__);
+  cp = get_chan_info(tag, 't');
   pthread_mutex_lock(&(cp->lock));
   time_trace("XDC_Tx1 ready to encode for ctag=%08x", cp->ctag);
   cmap_encode(cp->mm.virt_addr, adu, &adu_len, tag);
@@ -505,7 +506,7 @@ void naive_memcpy(unsigned long *d, const unsigned long *s, unsigned long len_in
 }
 
 void rcvr_shm(chan *cp, int buffer_id) {
-  log_warn("%s not yet written");
+  log_warn("%s not yet written". __func__);
 }
 
   
@@ -670,21 +671,21 @@ void *xdc_ctx(void) { return NULL; }
 void *xdc_pub_socket(void) { return NULL; }
 void *xdc_sub_socket(gaps_tag tag) { return NULL; }
 void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout) {
-  log_trace("Start of %s: timeout = %d ms for tag=<%d,%d,%d>", __func__, timeout, tag.mux, tag.sec, tag.typ);
+  log_debug("Start of %s: timeout = %d ms for tag=<%d,%d,%d>", __func__, timeout, tag.mux, tag.sec, tag.typ);
   chan *cp = get_chan_info(&tag, 'r');
 //  fprintf(stderr, "timeout = %d ms for tag=<%d,%d,%d>\n", timeout, tag.mux, tag.sec, tag.typ);
   if (timeout > 0) cp->retries = (timeout * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;     // Set value
-  log_debug("%s sets RX retries = %d every %d ns (for ctag=%08x)", __func__, cp->retries, RX_POLL_INTERVAL_NSEC, cp->ctag);
+  log_trace("%s sets RX retries = %d every %d ns (for ctag=%08x)", __func__, cp->retries, RX_POLL_INTERVAL_NSEC, cp->ctag);
   return NULL;
 }
 void xdc_asyn_send(void *socket, void *adu, gaps_tag *tag) { asyn_send(adu, tag); }
 
 int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
-  chan *cp                = get_chan_info(tag, 'r');      // get buffer for tag (to communicate with thread)
+  log_debug("Start of %s: tag=<%d,%d,%d>: ntries=%d interval=%d (%d.%09d) ns", __func__, tag->mux, tag->sec, tag->typ, ntries, RX_POLL_INTERVAL_NSEC, request.tv_sec, request.tv_nsec);
+  chan *cp = get_chan_info(tag, 'r');  // get buffer for tag (to communicate with thread)
   struct timespec request = {(RX_POLL_INTERVAL_NSEC/NSEC_IN_SEC), (RX_POLL_INTERVAL_NSEC % NSEC_IN_SEC) };
   int              ntries = 1 + (cp->retries);       // number of tries to rx packet
                                                       
-  log_trace("Start of %s: tag=<%d,%d,%d>: ntries=%d interval=%d (%d.%09d) ns", __func__, tag->mux, tag->sec, tag->typ, ntries, RX_POLL_INTERVAL_NSEC, request.tv_sec, request.tv_nsec);
 //  time_trace("XDC_Rx1 Wait for tag=<%d,%d,%d> (test %d times every %d ns)", tag->mux, tag->sec, tag->typ, ntries, RX_POLL_INTERVAL_NSEC);
   while ((ntries--) > 0)  {
     if (nonblock_recv(adu, tag, cp) > 0)  return 0;
