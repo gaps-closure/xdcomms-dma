@@ -238,7 +238,7 @@ void open_device(chan *cp) {
 // If new device, then open it (and remember it in local list)
 void dev_open_if_new(chan *cp) {
   static chan_list  clist[MAX_DEV_COUNT];
-  static            once=1;
+  static int        once=1;
   int               i;
   
   if (once==1) {
@@ -262,7 +262,7 @@ void dev_open_if_new(chan *cp) {
       return;  // new device
     }
     // b2) See if device is already open
-    if (strcmp(cp->dev_name, dev_name_list[i]) == 0) {    // Already set
+    if (strcmp(cp->dev_name, clist[i].cp->dev_name) == 0) {    // Already set
       if ((clist[i].dir1) != cp->dir) {
         if ((clist[i].dir2) != cp->dir) {
           // Device shared for TX and RX (e.g., SHM), so copy matching device info
