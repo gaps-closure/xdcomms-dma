@@ -330,13 +330,13 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
 void shm_init_config_one(chan *cp) {
   cp->shm_addr = cp->mm.virt_addr + cp->mm.offset;
   log_trace("%s: va=%p + off=%lx = %lx", __func__, cp->mm.virt_addr, cp->mm.offset, cp->shm_addr);
-  log_trace("shm_channel size s=%lx c=%ld i=%lx d=%lx", sizeof(shm_channel), , sizeof(cinfo), sizeof(pinfo), sizeof(pdata));
+  log_trace("shm_channel size s=%lx c=%ld i=%lx d=%lx", sizeof(shm_channel), sizeof(cinfo), sizeof(pinfo), sizeof(pdata));
   cp->shm_addr->pkt_index_next           = 0;
   cp->shm_addr->cinfo.ctag               = cp->ctag;
   cp->shm_addr->cinfo.pkt_index_max      = PKT_INDEX_MAX;
   cp->shm_addr->cinfo.ms_guard_time_aw   = DEFAULT_MS_GUARD_TIME_AW;
   cp->shm_addr->cinfo.ms_guard_time_bw   = DEFAULT_MS_GUARD_TIME_BW;
-  log_trace("%s: shm_addr=%p index=%d guard_ms=%ld", __func__, cp->shm_addr, cp->shm_addr->next_pkt_index, cp->shm_addr->cinfo.ms_guard_time_aw);
+  log_trace("%s: shm_addr=%p index=%d guard_ms=%ld", __func__, cp->shm_addr, cp->shm_addr->pkt_index_next, cp->shm_addr->cinfo.ms_guard_time_aw);
 }
 
 // Return pointer to Rx packet buffer for specified tag

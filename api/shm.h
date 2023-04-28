@@ -38,8 +38,8 @@ typedef struct _pdata {
 /* SHM channel (one per TAG) */
 typedef struct _shm_channel {
   cinfo  cinfo;
-  pinfo  pinfo[SHM_MAX_INDEX];
-  pdata  pdata[SHM_MAX_INDEX];
+  pinfo  pinfo[PKT_INDEX_MAX];
+  pdata  pdata[PKT_INDEX_MAX];
   int    pkt_index_next;            // Index to next packet to be written
 } shm_channel __attribute__ ((aligned (1024)));		/*  byte alignment */
 
