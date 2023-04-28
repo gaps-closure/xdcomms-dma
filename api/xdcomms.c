@@ -216,7 +216,7 @@ void shm_open_channel(chan *cp) {
   pa_virt_addr       = mmap(0, pa_mmap_len, cp->mm.prot, cp->mm.flags, cp->fd, pa_phys_addr);
   if (pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
   cp->mm.virt_addr = pa_virt_addr + cp->mm.phys_addr - pa_phys_addr;   // add offset to page aligned addr
-  log_debug("Opened and mmap'ed SHM channel %s: mmap_virt_addr=%p, len=0x%x (%x) fd=%d", cp->dev_name, cp->mm.virt_addr, cp->mm.len, pa_mmap_len, cp->fd);
+  log_debug("Opened and mmap'ed SHM channel %s: mmap_virt_addr=%p, len=0x%x fd=%d", cp->dev_name, cp->mm.virt_addr, cp->mm.len, cp->fd);
 }
 
 // Open channel device (based on name and type) and return its channel structure
@@ -330,6 +330,7 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
 // After openning SHM device, initialize SHM configuration
 
 void shm_init_config_one(chan *cp) {
+  log_trace("%s: START cp=%p", __func__, cp);
   cp->shm_addr = cp->mm.virt_addr + cp->mm.offset;
   log_trace("%s: va=%p + off=%lx = %lx", __func__, cp->mm.virt_addr, cp->mm.offset, cp->shm_addr);
   log_trace("shm_channel size s=%lx c=%ld i=%lx d=%lx", sizeof(shm_channel), sizeof(cinfo), sizeof(pinfo), sizeof(pdata));
@@ -366,7 +367,7 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
     if (cp->ctag == 0) {                   // found empty slot (before tag)
       chan_init_config_one(cp, ctag, dir);          // 1) Configure new tag
       dev_open_if_new(cp);                          // 2) Open device (if not already open)
-      log_trace("%s: Openned device %s for ctag=0x%08x dir=%c", __func__, cp->dev_name, cp->ctag, cp->dir);
+      log_trace("%s: Using %s device %s for ctag=0x%08x dir=%c", __func__, cp->dev_type, cp->dev_name, cp->ctag, cp->dir);
       if ((cp->dir) == 't')
         if (strcmp(cp->dev_type, "shm") == 0)
           shm_init_config_one(cp);                  // 3) Configure SHM structure for new channel
