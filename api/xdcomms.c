@@ -230,18 +230,20 @@ void open_device(chan *cp) {
 // If new device, then open it (and remember it in local list)
 void dev_open_if_new(chan *cp) {
   static char dev_name_list[MAX_DEV_COUNT][64];
-  static int  dev_set_list[MAX_DEV_COUNT] = {0};
+  static int  dev_dir_list[MAX_DEV_COUNT] = {0};      // 0 = Empty
   int         i;
   
   for(i=0; i<MAX_DEV_COUNT; i++) {
-    if (dev_set_list[i] == 0) {
-      dev_set_list[i] = 1;      // Put new device name into list
+    if (dev_dir_list[i] == 0) {  // Not set so put new device name into list
+      dev_dir_list[i] = 1;
       strcpy(dev_name_list[i], cp->dev_name);
       open_device(cp);           // Open new device
       log_trace("%s: Done i=%d", __func__, i);
       return;
     }
-    if (strcmp(cp->dev_name, dev_name_list[i]) == 0) return;  // not a new device
+    if (strcmp(cp->dev_name, dev_name_list[i]) == 0) {
+      return;  // not a new device or direction
+    }
   }
   FATAL;    // Only here if list cannot store all devices (> MAX_DEV_COUNT)
 }
@@ -268,8 +270,8 @@ void chan_init_all_once(void) {
       chan_info[i].mm.prot    = PROT_READ | PROT_WRITE;
       chan_info[i].mm.flags   = MAP_SHARED;
       chan_info[i].retries    = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;
-      chan_info[i].pinfo.newd    = 0;
-      chan_info[i].pinfo.data    = NULL;
+      chan_info[i].pinfo.newd = 0;
+      chan_info[i].pinfo.data = NULL;
       if (pthread_mutex_init(&(chan_info[i].lock), NULL) != 0)   FATAL;
     }
     once=0;
@@ -668,8 +670,8 @@ void *xdc_ctx(void) { return NULL; }
 void *xdc_pub_socket(void) { return NULL; }
 void *xdc_sub_socket(gaps_tag tag) { return NULL; }
 void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout) {
-  chan *cp = get_chan_info(&tag, 'r');
   log_trace("Start of %s: timeout = %d ms for tag=<%d,%d,%d>", __func__, timeout, tag.mux, tag.sec, tag.typ);
+  chan *cp = get_chan_info(&tag, 'r');
 //  fprintf(stderr, "timeout = %d ms for tag=<%d,%d,%d>\n", timeout, tag.mux, tag.sec, tag.typ);
   if (timeout > 0) cp->retries = (timeout * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;     // Set value
   log_debug("%s sets RX retries = %d every %d ns (for ctag=%08x)", __func__, cp->retries, RX_POLL_INTERVAL_NSEC, cp->ctag);
