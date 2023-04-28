@@ -326,16 +326,17 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
 }
 
 // After openning SHM device, initialize SHM configuration
+
 void shm_init_config_one(chan *cp) {
   cp->shm_addr = cp->mm.virt_addr + cp->mm.offset;
   log_trace("%s: va=%p + off=%lx = %lx", __func__, cp->mm.virt_addr, cp->mm.offset, cp->shm_addr);
-  log_trace("shm_channel size_s=%lx size_d=%lx addr=%p", sizeof(shm_channel), sizeof(pdata), &(cp->shm_addr->cinfo));
+  log_trace("shm_channel size s=%lx c=%ld i=%lx d=%lx", sizeof(shm_channel), , sizeof(cinfo), sizeof(pinfo), sizeof(pdata));
+  cp->shm_addr->pkt_index_next           = 0;
   cp->shm_addr->cinfo.ctag               = cp->ctag;
-  cp->shm_addr->next_pkt_index           = 0;
-  log_trace("%s: index=%d", __func__, cp->shm_addr->next_pkt_index);
+  cp->shm_addr->cinfo.pkt_index_max      = PKT_INDEX_MAX;
   cp->shm_addr->cinfo.ms_guard_time_aw   = DEFAULT_MS_GUARD_TIME_AW;
   cp->shm_addr->cinfo.ms_guard_time_bw   = DEFAULT_MS_GUARD_TIME_BW;
-  log_trace("%s: shm_addr=%p index=%d guard_ms=ld", __func__, cp->shm_addr, cp->shm_addr->next_pkt_index, cp->shm_addr->cinfo.ms_guard_time_aw);
+  log_trace("%s: shm_addr=%p index=%d guard_ms=%ld", __func__, cp->shm_addr, cp->shm_addr->next_pkt_index, cp->shm_addr->cinfo.ms_guard_time_aw);
 }
 
 // Return pointer to Rx packet buffer for specified tag
@@ -354,13 +355,15 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
   ctag_encode(&ctag, tag);                 // Encoded ctag
   for(i=0; i < GAPS_TAG_MAX; i++) {        // Break on finding tag or empty
     cp = &(chan_info[i]);
-    if (cp->ctag == ctag) break;  // found existing slot for tag
-    if (cp->ctag == 0) {          // found empty slot (before tag)
+    if (cp->ctag == ctag) break;           // found existing slot for tag
+    if (cp->ctag == 0) {                   // found empty slot (before tag)
       chan_init_config_one(cp, ctag, dir);          // 1) Configure new tag
-      dev_open_if_new(cp);                          // 2) open device (if not already open)
+      dev_open_if_new(cp);                          // 2) Open device (if not already open)
       log_trace("%s: Openned device %s for ctag=0x%08x dir=%c", __func__, cp->dev_name, cp->ctag, cp->dir);
-      if (strcmp(cp->dev_type, "shm") == 0) shm_init_config_one(cp);
-      if ((cp->dir) == 'r')                 rcvr_thread_start(cp);  // 3) Start rx thread for new receive tag
+      if ((cp->dir) == 't')
+        if (strcmp(cp->dev_type, "shm") == 0)
+          shm_init_config_one(cp);                  // 3) Configure SHM structure for new channel
+      if ((cp->dir) == 'r') rcvr_thread_start(cp);  // 4) Start rx thread for new receive tag
       break;
     }
   }
