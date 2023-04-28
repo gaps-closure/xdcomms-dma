@@ -561,6 +561,7 @@ void *rcvr_thread_function(thread_args *vargs) {
   while (1) {
     log_debug("THREAD-1 %s: fd=%d base_id=%d index=%d", __func__, cp->fd, vargs->buffer_id_start, buffer_id_index);
     buffer_id = (vargs->buffer_id_start) + buffer_id_index;
+    log_trace("YYYYY");
     if      (strcmp(cp->dev_type, "dma") == 0) rcvr_dma(cp, buffer_id);
     else if (strcmp(cp->dev_type, "shm") == 0) rcvr_shm(cp, buffer_id);
     else {
