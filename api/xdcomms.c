@@ -336,7 +336,12 @@ void shm_init_config_one(chan *cp) {
   cp->shm_addr->cinfo.pkt_index_max      = PKT_INDEX_MAX;
   cp->shm_addr->cinfo.ms_guard_time_aw   = DEFAULT_MS_GUARD_TIME_AW;
   cp->shm_addr->cinfo.ms_guard_time_bw   = DEFAULT_MS_GUARD_TIME_BW;
-  log_trace("%s: shm_addr=%p index=%d guard_ms=%ld", __func__, cp->shm_addr, cp->shm_addr->pkt_index_next, cp->shm_addr->cinfo.ms_guard_time_aw);
+  log_trace("%s %d: va=%p vc=%p ci=%p vd=%p vn=%p", __func__, cp->ctag, cp->shm_addr, &(cp->shm_addr->cinfo), &(cp->shm_addr->pinfo), &(cp->shm_addr->pdata), &(cp->shm_addr->pkt_index_next));
+  log_trace("%s %d: guard_ms=[a=%ld b=%ld] index=%d (max=%d)", __func__, cp->ctag,
+      cp->shm_addr->cinfo.ms_guard_time_aw,
+      cp->shm_addr->cinfo.ms_guard_time_bw,
+      cp->shm_addr->pkt_index_next,
+      cp->shm_addr->cinfo.pkt_index_max);
 }
 
 // Return pointer to Rx packet buffer for specified tag
