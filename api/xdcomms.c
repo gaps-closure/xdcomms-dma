@@ -539,8 +539,10 @@ void naive_memcpy(unsigned long *d, const unsigned long *s, unsigned long len_in
 void rcvr_shm(chan *cp, int buffer_id) {
   static int pkt_index=0;
   
-  log_trace("THREAD-2 %s waiting for packet", __func__);
+  log_trace("THREAD-2 %s waiting for packet: pkt_index = {r=%d t=%d}", __func__, pkt_index, cp->shm_addr->pkt_index_next);
   chan_print (cp);
+  
+  
   
   while (pkt_index == (cp->shm_addr->pkt_index_next)) { ; }
   log_trace("THREAD-3 %s got packet", __func__);
