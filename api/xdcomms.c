@@ -519,9 +519,7 @@ void rcvr_dma(chan *cp, int buffer_id) {
 
   dma_cb_ptr[buffer_id].length = sizeof(bw);      /* XXX: ALl packets use buffer of Max size */
   log_trace("THREAD-2 %s waiting for packet", __func__);
-  while (dma_start_to_finish(cp->fd, &buffer_id, &(dma_cb_ptr[buffer_id])) != 0) {
-    ;
-  }
+  while (dma_start_to_finish(cp->fd, &buffer_id, &(dma_cb_ptr[buffer_id])) != 0) { ; }
   p = (bw *) &(dma_cb_ptr[buffer_id].buffer);    /* XXX: DMA buffer must be larger than size of BW */
   ctag_decode(&(p->message_tag_ID), &(cp->pinfo.tag));
 //  time_trace("XDC_THRD got packet tag=<%d,%d,%d> (fd=%d id=%d)", cp->pinfo.tag.mux, cp->pinfo.tag.sec, cp->pinfo.tag.typ, cp->fd, buffer_id);
@@ -539,7 +537,15 @@ void naive_memcpy(unsigned long *d, const unsigned long *s, unsigned long len_in
 }
 
 void rcvr_shm(chan *cp, int buffer_id) {
-  log_warn("%s not yet written", __func__);
+  static int pkt_index=0;
+  
+  log_trace("THREAD-2 %s waiting for packet", __func__);
+  chan_print (cp);
+  
+  while (pkt_index == (cp->shm_addr->pkt_index_next)) { ; }
+  log_trace("THREAD-3 %s got packet", __func__);
+
+  
 }
 
   
