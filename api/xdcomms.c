@@ -688,7 +688,7 @@ int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   log_debug("Start of %s: tag=<%d,%d,%d>", tag->mux, tag->sec, tag->typ);
   cp              = get_chan_info(tag, 'r');     // get buffer for tag (to communicate with thread)
   request.tv_sec  = RX_POLL_INTERVAL_NSEC/NSEC_IN_SEC;
-  request.tv_nsec = (RX_POLL_INTERVAL_NSEC % NSEC_IN_SEC)};
+  request.tv_nsec = RX_POLL_INTERVAL_NSEC % NSEC_IN_SEC;
   ntries          = 1 + (cp->retries);           // number of tries to rx packet
   log_trace("%s: test %d times every %d (%d.%09d) ns", __func__, ntries, RX_POLL_INTERVAL_NSEC, request.tv_sec, request.tv_nsec);
   while ((ntries--) > 0)  {
