@@ -554,7 +554,7 @@ void rcvr_shm(chan *cp, int buffer_id) {
   
   while (pkt_index == (cp->shm_addr->pkt_index_next)) { ; }
   chan_print (cp);
-  log_trace("THREAD-3 %s got packet. Index=%d len=%d", __func__, pkt_index, cp->shm_addr->pinfo[pkt_index].data_length);
+  log_trace("THREAD-3 %s got packet (index=%d len=%d)", __func__, pkt_index, cp->shm_addr->pinfo[pkt_index].data_length);
   cp->pinfo.data_len = cp->shm_addr->pinfo[pkt_index].data_length;
   cp->pinfo.data     = (uint8_t *) cp->shm_addr->pdata->data);
   cp->pinfo.newd     = 1;
