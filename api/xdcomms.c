@@ -545,7 +545,7 @@ void rcvr_shm(chan *cp, int buffer_id) {
   static int pkt_index=0;
   
 //  chan_print (cp);
-  log_debug("THREAD-2 waiting for packet (%d %s %s) index=(r=%d t=%d)", __func__, cp->ctag, cp->dev_type, cp->dev_name, pkt_index, cp->shm_addr->pkt_index_next);
+  log_debug("THREAD-2 waiting for packet (%d %s %s) index=(r=%d t=%d)", cp->ctag, cp->dev_type, cp->dev_name, pkt_index, cp->shm_addr->pkt_index_next);
 
   
   while (pkt_index == (cp->shm_addr->pkt_index_next)) { ; }
