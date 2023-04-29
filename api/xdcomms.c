@@ -502,7 +502,7 @@ void shm_send(chan *cp, void *adu, size_t adu_len, gaps_tag *tag) {
   log_debug("%s TX index=%d len=%ld", __func__, pkt_index, adu_len);
   cp->shm_addr->pinfo[pkt_index].data_length = adu_len;
   naive_memcpy(cp->shm_addr->pdata->data, adu, adu_len);
-  cp->shm_addr->pkt_index_next = pkt_index + 1;
+  cp->shm_addr->pkt_index_next = pkt_index + 1;     // TX tells RX about new data
 }
 
 /* Asynchronously send ADU to DMA driver in 'bw' packet */
@@ -754,7 +754,7 @@ int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
 
 /* Receive ADU from HAL - retry until a valid ADU */
 void xdc_blocking_recv(void *socket, void *adu, gaps_tag *tag) {
-  log_trace("Start of %s", __func__);
+  log_trace("Start of %s tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
   while (xdc_recv(socket, adu, tag) < 0);
 }
 
