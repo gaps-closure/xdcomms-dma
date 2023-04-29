@@ -3,6 +3,8 @@
  * and a GAP's Cross Domain Guard (CDG)
  *   v0.4, May 2023
  *
+ * TODO: Add hton and ntoh for shm operations
+ *
  * Library supports direct commicaiton between partitioned application
  * and CDGs, without a separate HAL daemon (linked with ZMQ).
  *
@@ -495,10 +497,12 @@ void naive_memcpy(unsigned long *d, const unsigned long *s, unsigned long len_in
 }
 
 void shm_send(chan *cp, void *adu, size_t adu_len, gaps_tag *tag) {
-  log_warn("%s TX index=%d", __func__, (cp->shm_addr->pkt_index_next));
+  int pkt_index = cp->shm_addr->pkt_index_next;
+  
+  log_debug("%s TX index=%d len=%ld", __func__, pkt_index, adu_len);
+  cp->shm_addr->pinfo[pkt_index].data_length = adu_len;
   naive_memcpy(cp->shm_addr->pdata->data, adu, adu_len);
-  (cp->shm_addr->pkt_index_next)++;
-  exit(22);
+  cp->shm_addr->pkt_index_next = pkt_index + 1;
 }
 
 /* Asynchronously send ADU to DMA driver in 'bw' packet */
@@ -544,13 +548,17 @@ void rcvr_dma(chan *cp, int buffer_id) {
 void rcvr_shm(chan *cp, int buffer_id) {
   static int pkt_index=0;
   
-//  chan_print (cp);
+  chan_print (cp);
   log_debug("THREAD-2 waiting for packet (%d %s %s) index=(r=%d t=%d)", cp->ctag, cp->dev_type, cp->dev_name, pkt_index, cp->shm_addr->pkt_index_next);
 
   
   while (pkt_index == (cp->shm_addr->pkt_index_next)) { ; }
-  log_trace("THREAD-3 %s got packet", __func__);
-  log_warn("%s TODO: COPY data into BUFFER", __func__);
+  chan_print (cp);
+  log_trace("THREAD-3 %s got packet. Index=%d len=%d", __func__, pkt_index, cp->shm_addr->pinfo[pkt_index].data_length);
+  cp->pinfo.data_len =
+  cp->pinfo.data     = (uint8_t *) cp->shm_addr->pdata->data);
+  cp->pinfo.newd     = 1;
+
   exit(222);
 }
 
