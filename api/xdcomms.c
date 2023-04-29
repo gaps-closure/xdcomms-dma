@@ -737,7 +737,7 @@ int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   struct timespec  request;
   int              ntries;
 
-  log_debug("Start of %s: tag=<%d,%d,%d>", tag->mux, tag->sec, tag->typ);
+  log_debug("Start of %s: tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
   cp              = get_chan_info(tag, 'r');     // get buffer for tag (to communicate with thread)
   request.tv_sec  = RX_POLL_INTERVAL_NSEC/NSEC_IN_SEC;
   request.tv_nsec = RX_POLL_INTERVAL_NSEC % NSEC_IN_SEC;
