@@ -258,7 +258,7 @@ void dev_open_if_new(chan *cp) {
       clist[i].dir1 = cp->dir;
       strcpy(clist[i].dev_name, cp->dev_name);
       open_device(cp);           // Open new device
-      log_trace("%s: Opened new device %s: i=%d", __func__, cp->dev_name, i);
+      log_debug("%s: Opened new device %s: i=%d", __func__, cp->dev_name, i);
       return;  // new device
     }
     // b2) See if device is already open
@@ -269,11 +269,11 @@ void dev_open_if_new(chan *cp) {
           clist[i].dir2 = cp->dir;
           cp->fd = clist[i].cp->fd;
           cp->mm.virt_addr = clist[i].cp->mm.virt_addr;
-          log_trace("%s: %s device now shared for TX and RX (e.g., SHM) i=%s", __func__, cp->dev_name, i);
+          log_debug("%s: %s device now shared for TX and RX (e.g., SHM) i=%d", __func__, cp->dev_name, i);
           return;
         }
       }
-      log_trace("%s: %s device is not new device nor newly shared device i=%s", __func__, cp->dev_name, i);
+      log_trace("%s: %s device is not new device nor newly shared device i=%d", __func__, cp->dev_name, i);
       return;
     }
   }
@@ -489,7 +489,10 @@ void dma_send(chan *cp, void *adu, size_t adu_len, gaps_tag *tag) {
 }
 
 void shm_send(chan *cp, void *adu, size_t adu_len, gaps_tag *tag) {
-  log_warn("Must write function %s", __func__);
+  log_warn("%s TX index=%d", __func__, (cp->shm_addr->pkt_index_next));
+  naive_memcpy(cp->shm_addr->pdata->data, adu, adu_len);
+  (cp->shm_addr->pkt_index_next)++;
+  exit(22);
 }
 
 /* Asynchronously send ADU to DMA driver in 'bw' packet */
@@ -518,7 +521,7 @@ void rcvr_dma(chan *cp, int buffer_id) {
   struct channel_buffer *dma_cb_ptr =  (struct channel_buffer *) cp->mm.virt_addr;
 
   dma_cb_ptr[buffer_id].length = sizeof(bw);      /* XXX: ALl packets use buffer of Max size */
-  log_trace("THREAD-2 %s waiting for packet", __func__);
+  log_debug("THREAD-2 waiting for packet (%d %s %s)", __func__, cp->ctag, cp->dev_type, cp->dev_name);
   while (dma_start_to_finish(cp->fd, &buffer_id, &(dma_cb_ptr[buffer_id])) != 0) { ; }
   p = (bw *) &(dma_cb_ptr[buffer_id].buffer);    /* XXX: DMA buffer must be larger than size of BW */
   ctag_decode(&(p->message_tag_ID), &(cp->pinfo.tag));
@@ -539,29 +542,25 @@ void naive_memcpy(unsigned long *d, const unsigned long *s, unsigned long len_in
 void rcvr_shm(chan *cp, int buffer_id) {
   static int pkt_index=0;
   
-  log_trace("XXXXX");
-  chan_print (cp);
-  log_trace("THREAD-2 %s waiting for packet: pkt_index = {r=%d t=%d}", __func__, pkt_index, cp->shm_addr->pkt_index_next);
+//  chan_print (cp);
+  log_debug("THREAD-2 waiting for packet (%d %s %s) index=(r=%d t=%d)", __func__, cp->ctag, cp->dev_type, cp->dev_name, pkt_index, cp->shm_addr->pkt_index_next);
 
-  
   
   while (pkt_index == (cp->shm_addr->pkt_index_next)) { ; }
   log_trace("THREAD-3 %s got packet", __func__);
-
-  
+  log_warn("%s TODO: COPY data into BUFFER", __func__);
+  exit(222);
 }
 
-  
-  /* Receive packets via DMA in a loop (rate controled by FINISH_XFER blocking call) */
+// Receive packets via DMA in a loop (rate controled by FINISH_XFER blocking call)
 void *rcvr_thread_function(thread_args *vargs) {
   chan                  *cp = vargs->cp;
   int                    buffer_id_index = 0;
   int                    buffer_id;
 
   while (1) {
-    log_debug("THREAD-1 %s: fd=%d base_id=%d index=%d", __func__, cp->fd, vargs->buffer_id_start, buffer_id_index);
+    log_trace("THREAD-1 %s: fd=%d base_id=%d index=%d", __func__, cp->fd, vargs->buffer_id_start, buffer_id_index);
     buffer_id = (vargs->buffer_id_start) + buffer_id_index;
-    log_trace("YYYYY");
     if      (strcmp(cp->dev_type, "dma") == 0) rcvr_dma(cp, buffer_id);
     else if (strcmp(cp->dev_type, "shm") == 0) rcvr_shm(cp, buffer_id);
     else {
