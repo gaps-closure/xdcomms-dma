@@ -400,9 +400,10 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
       chan_init_config_one(cp, ctag, dir);              // 1) Configure new tag
       dev_open_if_new(cp);                              // 2) Open device (if not already open)
       log_trace("%s: Using %s device %s for ctag=0x%08x dir=%c", __func__, cp->dev_type, cp->dev_name, cp->ctag, cp->dir);
-      if (strcmp(cp->dev_type, "shm") == 0)
+      if ((strcmp(cp->dev_type, "shm")) == 0) {
         cp->shm_addr = cp->mm.virt_addr + cp->mm.offset;
         if ((cp->dir) == 't') shm_init_config_one(cp);  // 3) Configure SHM structure for new channel
+      }
       if ((cp->dir) == 'r') rcvr_thread_start(cp);      // 4) Start rx thread for new receive tag
       break;
     }
@@ -488,6 +489,11 @@ void dma_send(chan *cp, void *adu, size_t adu_len, gaps_tag *tag) {
 //  time_trace("Tx packet end: tag=<%d,%d,%d> pkt-len=%d", tag->mux, tag->sec, tag->typ, packet_len);
 }
 
+// Dumb memory copy using 8-byte words
+void naive_memcpy(unsigned long *d, const unsigned long *s, unsigned long len_in_words) {
+  for (int i = 0; i < len_in_words; i++) *d++ = *s++;
+}
+
 void shm_send(chan *cp, void *adu, size_t adu_len, gaps_tag *tag) {
   log_warn("%s TX index=%d", __func__, (cp->shm_addr->pkt_index_next));
   naive_memcpy(cp->shm_addr->pdata->data, adu, adu_len);
@@ -534,10 +540,6 @@ void rcvr_dma(chan *cp, int buffer_id) {
   pthread_mutex_unlock(&(cp->lock));
 }
 
-// Dumb memory copy using 8-byte words
-void naive_memcpy(unsigned long *d, const unsigned long *s, unsigned long len_in_words) {
-  for (int i = 0; i < len_in_words; i++) *d++ = *s++;
-}
 
 void rcvr_shm(chan *cp, int buffer_id) {
   static int pkt_index=0;
