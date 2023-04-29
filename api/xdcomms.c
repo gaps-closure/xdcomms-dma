@@ -550,16 +550,15 @@ void rcvr_shm(chan *cp, int buffer_id) {
   
   chan_print (cp);
   log_debug("THREAD-2 waiting for packet (%d %s %s) index=(r=%d t=%d)", cp->ctag, cp->dev_type, cp->dev_name, pkt_index, cp->shm_addr->pkt_index_next);
-
-  
   while (pkt_index == (cp->shm_addr->pkt_index_next)) { ; }
   chan_print (cp);
   log_trace("THREAD-3 %s got packet (index=%d len=%d)", __func__, pkt_index, cp->shm_addr->pinfo[pkt_index].data_length);
+  pthread_mutex_lock(&(cp->lock));
   cp->pinfo.data_len = cp->shm_addr->pinfo[pkt_index].data_length;
   cp->pinfo.data     = (uint8_t *) (cp->shm_addr->pdata->data);
   cp->pinfo.newd     = 1;
-
-  exit(222);
+  pthread_mutex_unlock(&(cp->lock));
+  pkt_index++;
 }
 
 // Receive packets via DMA in a loop (rate controled by FINISH_XFER blocking call)
