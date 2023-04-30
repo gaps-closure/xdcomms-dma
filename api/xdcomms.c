@@ -511,7 +511,7 @@ void shm_send(chan *cp, void *adu, size_t adu_len, gaps_tag *tag) {
   int pkt_index_old = cp->shm_addr->pkt_index_next;
   int pkt_index_new = (pkt_index_old + 1) % cp->shm_addr->cinfo.pkt_index_max;
   
-  log_debug("%s TX index=%d len=%ld", __func__, pkt_index, adu_len);
+  log_debug("%s TX index=%d len=%ld", __func__, pkt_index_old, adu_len);
   shm_info_print(cp->shm_addr);
   if (cp->shm_addr->pkt_index_last == pkt_index_new) {
     cp->shm_addr->pkt_index_last = ((cp->shm_addr->pkt_index_last) + 1) % cp->shm_addr->cinfo.pkt_index_max;
