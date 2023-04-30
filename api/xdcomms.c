@@ -421,7 +421,7 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
 }
                   
 /**********************************************************************/
-/* D) BW Packet processing                                               */
+/* E) BW Packet processing                                               */
 /**********************************************************************/
 void bw_print(bw *p) {
   fprintf(stderr, "%s: ", __func__);
@@ -459,7 +459,7 @@ void bw_gaps_header_encode(bw *p, size_t *p_len, uint8_t *buff_in, size_t *buff_
 }
 
 /**********************************************************************/
-/* Device write functions                                              */
+/* F) Device write functions                                              */
 /**********************************************************************/
 /* Use DMA ioctl operations to tx or rx data */
 int dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *cbuf_ptr) {
@@ -498,15 +498,30 @@ void naive_memcpy(unsigned long *d, const unsigned long *s, unsigned long len_in
   for (int i = 0; i < len_in_words; i++) *d++ = *s++;
 }
 
+void shm_info_print(shm_channel *cip) {
+  int i;
+  
+  fprintf(stderr, "shm channel info %08x: last=%d next=%d (max=%d ga=%ld gb=%ld ut=%lx crc=%x)\n", cip->cinfo.ctag, cip->pkt_index_last, cip->pkt_index_next, cip->cinfo.pkt_index_max, cip->cinfo.ms_guard_time_aw, cip->cinfo.ms_guard_time_bw, cip->cinfo.unix_seconds, cip->cinfo.crc16);
+  for (i==0; i<PKT_INDEX_MAX; i++) {
+    fprintf(stderr, "   i=%d: len=0x%lx tid=0x%lx\n", cip->pinfo.data_length, transaction_ID);
+  }
+}
+
 void shm_send(chan *cp, void *adu, size_t adu_len, gaps_tag *tag) {
-  int pkt_index = cp->shm_addr->pkt_index_next;
+  int pkt_index_old = cp->shm_addr->pkt_index_next;
+  int pkt_index_new = (pkt_index_old + 1) % cp->shm_addr->cinfo.pkt_index_max;
   
   log_debug("%s TX index=%d len=%ld", __func__, pkt_index, adu_len);
+  shm_info_print(cp->shm_addr);
+  if (cp->shm_addr->pkt_index_last == pkt_index_new) {
+    cp->shm_addr->pkt_index_last = ((cp->shm_addr->pkt_index_last) + 1) % cp->shm_addr->cinfo.pkt_index_max;
+    // XXX: Wait ms_guard_time_bw
+  }
   cp->shm_addr->pinfo[pkt_index].data_length = adu_len;
-  naive_memcpy(cp->shm_addr->pdata->data, adu, adu_len);
-  cp->shm_addr->pkt_index_next = (pkt_index + 1) % pkt_index_max;     // TX tells RX about new data
-  if (cp->shm_addr->pkt_index_last < 0)                              cp->shm_addr->pkt_index_last = pkt_index;
-  if (cp->shm_addr->pkt_index_last == cp->shm_addr->pkt_index_next) (cp->shm_addr->pkt_index_last)++
+  naive_memcpy(cp->shm_addr->pdata->data, adu, adu_len);  // TX adds new data
+  cp->shm_addr->pkt_index_next = pkt_index_new;           // TX updates RX
+  if (cp->shm_addr->pkt_index_last < 0) cp->shm_addr->pkt_index_last = pkt_index_old;
+  shm_info_print(cp->shm_addr);
 }
 
 /* Asynchronously send ADU to DMA driver in 'bw' packet */
