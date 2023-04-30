@@ -517,8 +517,8 @@ void shm_send(chan *cp, void *adu, size_t adu_len, gaps_tag *tag) {
     cp->shm_addr->pkt_index_last = ((cp->shm_addr->pkt_index_last) + 1) % cp->shm_addr->cinfo.pkt_index_max;
     // XXX: Wait ms_guard_time_bw
   }
-  cp->shm_addr->pinfo[pkt_index].data_length = adu_len;
-  naive_memcpy(cp->shm_addr->pdata->data, adu, adu_len);  // TX adds new data
+  cp->shm_addr->pinfo[pkt_index_new].data_length = adu_len;
+  naive_memcpy(cp->shm_addr->pdata[pkt_index_new].data, adu, adu_len);  // TX adds new data
   cp->shm_addr->pkt_index_next = pkt_index_new;           // TX updates RX
   if (cp->shm_addr->pkt_index_last < 0) cp->shm_addr->pkt_index_last = pkt_index_old;
   shm_info_print(cp->shm_addr);
