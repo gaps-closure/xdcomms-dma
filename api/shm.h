@@ -14,12 +14,14 @@
 #define DEFAULT_MS_GUARD_TIME_BW  1000  // Timing param to sync Tx write and Rx read
 //#define DEFAULT_MS_POLL_TIME      1000  // Timing param to sync Tx write and Rx read
 
-/* Static SHM channel structure (created when channel is initialized) */
+/* Static SHM Channel Information (created when channel is initialized at TX) */
 typedef struct _cinfo {
   uint32_t      ctag;
   int           pkt_index_max;
-  unsigned long ms_guard_time_aw;  // After write min data duration (5000 ms)
-  unsigned long ms_guard_time_bw;  // Before write min guard time (1000 ms)
+  unsigned long ms_guard_time_aw;    // After write min data duration (5000 ms)
+  unsigned long ms_guard_time_bw;    // Before write min guard time (1000 ms)
+  time_t        unix_seconds;        // Transmitter start time (seconds since 1970)
+  uint16_t      crc16;               // cinfo error detection field
 //  unsigned long ms_poll_time;      // How often to check SHM (1000 ms)
 } cinfo;
 
@@ -40,6 +42,7 @@ typedef struct _shm_channel {
   cinfo  cinfo;
   pinfo  pinfo[PKT_INDEX_MAX];
   pdata  pdata[PKT_INDEX_MAX];
+  int    pkt_index_last;            // Index to last valid packet
   int    pkt_index_next;            // Index to next packet to be written
 } shm_channel __attribute__ ((aligned (1024)));		/*  byte alignment */
 

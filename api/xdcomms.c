@@ -158,7 +158,6 @@ void cmap_decode(uint8_t *data, size_t data_len, uint8_t *buff_out, gaps_tag *ta
   log_buf_trace("    <- decoded data:", buff_out, data_len);
 }
 
-
 /**********************************************************************/
 /* B) Tag Compression / Decompression                                    */
 /**********************************************************************/
@@ -172,7 +171,7 @@ void ctag_encode(uint32_t *ctag, gaps_tag *tag) {
   *ctag = htonl(ctag_h);
 }
 
-/* Decode compressed teg (ctag -> tag) */
+/* Decompress teg (ctag -> tag) */
 void ctag_decode(uint32_t *ctag, gaps_tag *tag) {
   uint32_t ctag_h = ntohl(*ctag);
   tag->mux = (ctag_h & 0xff0000) >> 16 ;
@@ -181,16 +180,7 @@ void ctag_decode(uint32_t *ctag, gaps_tag *tag) {
 }
 
 /**********************************************************************/
-/* C) THREADS   */
-/**********************************************************************/
-void chan_print(chan *cp) {
-  fprintf(stderr, "  chan info %08x: dir=%c typ=%s nam=%s fd=%d\n", cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd);
-  fprintf(stderr, "  mmap len=0x%lx [pa=0x%lx va=%p off=0x%lx prot=0x%x flag=0x%x]\n",  cp->mm.len, cp->mm.phys_addr, cp->mm.virt_addr, cp->mm.offset, cp->mm.prot, cp->mm.flags);
-  fprintf(stderr, "  ret=%d every %d ns newd=%d rx_buf_ptr=%p len=%lx tid=%d tag=<%d,%d,%d>\n", cp->retries, RX_POLL_INTERVAL_NSEC, cp->pinfo.newd, cp->pinfo.data, cp->pinfo.data_len, cp->pinfo.tid, cp->pinfo.tag.mux, cp->pinfo.tag.sec, cp->pinfo.tag.typ);
-}
-
-/**********************************************************************/
-/* Device open                                               */
+/* C) Device open                                               */
 /**********************************************************************/
 /* Open channel. Returns fd, mmap-va and mmap-len */
 void dma_open_channel(chan *cp) {
@@ -204,9 +194,6 @@ void dma_open_channel(chan *cp) {
   cp->mm.virt_addr = mmap(NULL, cp->mm.len, cp->mm.prot, cp->mm.flags, cp->fd, cp->mm.phys_addr);
   if (cp->mm.virt_addr == MAP_FAILED) FATAL;
   log_debug("Opened and mmap'ed DMA channel %s: mmap_virt_addr=0x%x, len=0x%x fd=%d", cp->dev_name, cp->mm.virt_addr, cp->mm.len, cp->fd);
-#ifdef  XDCOMMS_PRINT_STATE
-    chan_print(cp);
-#endif
 }
 
 // Open DMA channel given Physical address and length. Returns fd, mmap-va and mmap-len
@@ -220,9 +207,6 @@ void shm_open_channel(chan *cp) {
   // b) mmpp device: reduce address to be a multiple of page size and add the diff to length
   pa_phys_addr       = cp->mm.phys_addr & ~MMAP_PAGE_MASK;
   pa_mmap_len        = cp->mm.len + cp->mm.phys_addr - pa_phys_addr;
-#ifdef  XDCOMMS_PRINT_STATE
-    chan_print(cp);
-#endif
   pa_virt_addr       = mmap(0, pa_mmap_len, cp->mm.prot, cp->mm.flags, cp->fd, pa_phys_addr);
   if (pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
   cp->mm.virt_addr = pa_virt_addr + cp->mm.phys_addr - pa_phys_addr;   // add offset to page aligned addr
@@ -283,8 +267,14 @@ void dev_open_if_new(chan *cp) {
 }
 
 /**********************************************************************/
-/* C) Channel Info: Print, Create, Find (for all devices and TX/RX)   */
+/* D) Channel Info: Print, Create, Find (for all devices and TX/RX)   */
 /**********************************************************************/
+void chan_print(chan *cp) {
+  fprintf(stderr, "  chan info %08x: dir=%c typ=%s nam=%s fd=%d\n", cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd);
+  fprintf(stderr, "  mmap len=0x%lx [pa=0x%lx va=%p off=0x%lx prot=0x%x flag=0x%x]\n",  cp->mm.len, cp->mm.phys_addr, cp->mm.virt_addr, cp->mm.offset, cp->mm.prot, cp->mm.flags);
+  fprintf(stderr, "  ret=%d every %d ns newd=%d rx_buf_ptr=%p len=%lx tid=%d tag=<%d,%d,%d>\n", cp->retries, RX_POLL_INTERVAL_NSEC, cp->pinfo.newd, cp->pinfo.data, cp->pinfo.data_len, cp->pinfo.tid, cp->pinfo.tag.mux, cp->pinfo.tag.sec, cp->pinfo.tag.typ);
+}
+
 // Initialize channel information for all (GAPS_TAG_MAX) possible tags
 //   Set retries from one of three possible timeout values (in msecs).
 //   In order of precedence (highest first) they are the:
@@ -365,20 +355,29 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
 // After openning SHM device, initialize SHM configuration
 
 void shm_init_config_one(chan *cp) {
+  cinfo  *cip = &(cp->shm_addr->cinfo);
+
   log_trace("%s: START cp=%p", __func__, cp);
   log_trace("%s: va=%p + off=%lx = %lx", __func__, cp->mm.virt_addr, cp->mm.offset, cp->shm_addr);
   log_trace("shm_channel size s=%lx c=%ld i=%lx d=%lx", sizeof(shm_channel), sizeof(cinfo), sizeof(pinfo), sizeof(pdata));
+
   cp->shm_addr->pkt_index_next           = 0;
-  cp->shm_addr->cinfo.ctag               = cp->ctag;
-  cp->shm_addr->cinfo.pkt_index_max      = PKT_INDEX_MAX;
-  cp->shm_addr->cinfo.ms_guard_time_aw   = DEFAULT_MS_GUARD_TIME_AW;
-  cp->shm_addr->cinfo.ms_guard_time_bw   = DEFAULT_MS_GUARD_TIME_BW;
-  log_trace("%s %d: va=%p vc=%p ci=%p vd=%p vn=%p", __func__, cp->ctag, cp->shm_addr, &(cp->shm_addr->cinfo), &(cp->shm_addr->pinfo), &(cp->shm_addr->pdata), &(cp->shm_addr->pkt_index_next));
-  log_trace("%s %d: guard_ms=[a=%ld b=%ld] index=%d (max=%d)", __func__, cp->ctag,
-      cp->shm_addr->cinfo.ms_guard_time_aw,
-      cp->shm_addr->cinfo.ms_guard_time_bw,
+  
+  cip->ctag               = cp->ctag;
+  cip->pkt_index_max      = PKT_INDEX_MAX;
+  cip->ms_guard_time_aw   = DEFAULT_MS_GUARD_TIME_AW;
+  cip->ms_guard_time_bw   = DEFAULT_MS_GUARD_TIME_BW;
+  cip->unix_seconds       = time(NULL);
+  cip->crc16              = 0;
+  cip->crc16              = crc16((uint8_t *) &cip, sizeof(cinfo));
+  log_trace("%s %d Pointers: va=%p vc=%p ci=%p vd=%p vn=%p", __func__, cp->ctag, cp->shm_addr, cip, &(cp->shm_addr->pinfo), &(cp->shm_addr->pdata), &(cp->shm_addr->pkt_index_next));
+  log_trace("%s %d Params (i=%d): guard_ms=[a=%ld b=%ld] max=%d time=%lx crc=%d", __func__, cp->ctag,
       cp->shm_addr->pkt_index_next,
-      cp->shm_addr->cinfo.pkt_index_max);
+      cip->ms_guard_time_aw,
+      cip->ms_guard_time_bw,
+      cip->pkt_index_max,
+      cip->unix_seconds,
+      cip->crc16);
 }
 
 // Return pointer to Rx packet buffer for specified tag
@@ -409,6 +408,9 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
       if ((cp->dir) == 'r') rcvr_thread_start(cp);      // 4) Start rx thread for new receive tag
       break;
     }
+#ifdef  XDCOMMS_PRINT_STATE
+    chan_print(cp);
+#endif
   }
 
   /* c) Unlock and return chan_info pointer */
@@ -502,7 +504,9 @@ void shm_send(chan *cp, void *adu, size_t adu_len, gaps_tag *tag) {
   log_debug("%s TX index=%d len=%ld", __func__, pkt_index, adu_len);
   cp->shm_addr->pinfo[pkt_index].data_length = adu_len;
   naive_memcpy(cp->shm_addr->pdata->data, adu, adu_len);
-  cp->shm_addr->pkt_index_next = pkt_index + 1;     // TX tells RX about new data
+  cp->shm_addr->pkt_index_next = (pkt_index + 1) % pkt_index_max;     // TX tells RX about new data
+  if (cp->shm_addr->pkt_index_last < 0)                              cp->shm_addr->pkt_index_last = pkt_index;
+  if (cp->shm_addr->pkt_index_last == cp->shm_addr->pkt_index_next) (cp->shm_addr->pkt_index_last)++
 }
 
 /* Asynchronously send ADU to DMA driver in 'bw' packet */
