@@ -502,8 +502,8 @@ void shm_info_print(shm_channel *cip) {
   int i;
   
   fprintf(stderr, "shm channel info %08x: last=%d next=%d (max=%d ga=%ld gb=%ld ut=%lx crc=%x)\n", cip->cinfo.ctag, cip->pkt_index_last, cip->pkt_index_next, cip->cinfo.pkt_index_max, cip->cinfo.ms_guard_time_aw, cip->cinfo.ms_guard_time_bw, cip->cinfo.unix_seconds, cip->cinfo.crc16);
-  for (i==0; i<PKT_INDEX_MAX; i++) {
-    fprintf(stderr, "   i=%d: len=0x%lx tid=0x%lx\n", cip->pinfo.data_length, transaction_ID);
+  for (i=0; i<PKT_INDEX_MAX; i++) {
+    fprintf(stderr, "   i=%d: len=0x%lx tid=0x%lx\n", i, cip->pinfo[i].data_length, cip->pinfo[i].transaction_ID);
   }
 }
 
