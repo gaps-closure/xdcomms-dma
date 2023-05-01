@@ -360,7 +360,7 @@ void shm_info_print(shm_channel *cip) {
   for (i=0; i<PKT_INDEX_MAX; i++) {
     len_bytes = cip->pinfo[i].data_length;
     fprintf(stderr, "  %d: len=%ld tid=0x%lx data=", i, len_bytes, cip->pinfo[i].transaction_ID);
-    for (j=0; j<(len_bytes/4); j++) fprintf(stderr, "%04x ", cip->pdata[i].data[j]);
+    for (j=0; j<(len_bytes/4); j++) fprintf(stderr, "%08x ", cip->pdata[i].data[j]);
     fprintf(stderr, "\n");
   }
 }
