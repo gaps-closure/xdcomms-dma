@@ -381,13 +381,6 @@ void shm_init_config_one(chan *cp) {
   cip->crc16              = 0;
   cip->crc16              = crc16((uint8_t *) &cip, sizeof(cinfo));
 //  log_trace("%s %08x %c Pnters: va=%p vc=%p ci=%p vd=%p vn=%p", __func__, cp->ctag, cp->dir, cp->shm_addr, cip, &(cp->shm_addr->pinfo), &(cp->shm_addr->pdata), &(cp->shm_addr->pkt_index_next));
-  log_trace("%s %08x %c Params (i=%d): guard_ms=[a=%ld b=%ld] max=%d time=0x%lx crc=0x%04x", __func__, cp->ctag,
-      cp->dir, cp->shm_addr->pkt_index_next,
-      cip->ms_guard_time_aw,
-      cip->ms_guard_time_bw,
-      cip->pkt_index_max,
-      cip->unix_seconds,
-      cip->crc16);
   
   for (i=0; i<PKT_INDEX_MAX; i++) {
     cp->shm_addr->pinfo[i].data_length    = 0;
@@ -432,6 +425,7 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
   /* c) Unlock and return chan_info pointer */
   if (i >= GAPS_TAG_MAX) FATAL;
   log_trace("%s %d: ctag=0x%08x", __func__, i, ctag);
+  shm_info_print(cp->shm_addr);
   pthread_mutex_unlock(&chan_create);
   return (cp);
 }
