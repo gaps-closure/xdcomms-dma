@@ -355,9 +355,9 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
 void shm_info_print(shm_channel *cip) {
   int i;
   
-  fprintf(stderr, "shm channel info %08x (%p): last=%d next=%d (max=%d ga=%ld gb=%ld ut=0x%lx crc=0x%04x)\n", cip->cinfo.ctag, cip, cip->pkt_index_last, cip->pkt_index_next, cip->cinfo.pkt_index_max, cip->cinfo.ms_guard_time_aw, cip->cinfo.ms_guard_time_bw, cip->cinfo.unix_seconds, cip->cinfo.crc16);
+  fprintf(stderr, "  shm channel info %08x (%p): last=%d next=%d (max=%d ga=%ld gb=%ld ut=0x%lx crc=0x%04x)\n", cip->cinfo.ctag, cip, cip->pkt_index_last, cip->pkt_index_next, cip->cinfo.pkt_index_max, cip->cinfo.ms_guard_time_aw, cip->cinfo.ms_guard_time_bw, cip->cinfo.unix_seconds, cip->cinfo.crc16);
   for (i=0; i<PKT_INDEX_MAX; i++) {
-    fprintf(stderr, "   i=%d: len=0x%lx tid=0x%lx\n", i, cip->pinfo[i].data_length, cip->pinfo[i].transaction_ID);
+    fprintf(stderr, "  %d: len=0x%lx tid=0x%lx\n", i, cip->pinfo[i].data_length, cip->pinfo[i].transaction_ID);
   }
 }
 
@@ -425,7 +425,6 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
   /* c) Unlock and return chan_info pointer */
   if (i >= GAPS_TAG_MAX) FATAL;
   log_trace("%s %d: ctag=0x%08x", __func__, i, ctag);
-  shm_info_print(cp->shm_addr);
   pthread_mutex_unlock(&chan_create);
   return (cp);
 }
@@ -517,22 +516,22 @@ void shm_send(chan *cp, void *adu, gaps_tag *tag) {
   int     pkt_index_nxt = (pkt_index_now + 1) % cp->shm_addr->cinfo.pkt_index_max;
   size_t  adu_len;    // encoder calculates length */
 
-  time_trace("XDC_Tx1 ready to encode for ctag=%08x", cp->ctag);
-  cmap_encode((uint8_t *) &(cp->shm_addr->pdata->data[pkt_index_now]), adu, &adu_len, tag);
-  time_trace("XDC_Tx2 ready to send data for ctag=%08x typ=%s len=%ld", cp->ctag, cp->dev_type, adu_len);
   log_debug("%s TX index=%d len=%ld", __func__, pkt_index_now, adu_len);
   chan_print(cp);
-  shm_info_print(cp->shm_addr);
-  exit(22);
   if (cp->shm_addr->pkt_index_last == pkt_index_nxt) {
     cp->shm_addr->pkt_index_last = ((cp->shm_addr->pkt_index_last) + 1) % cp->shm_addr->cinfo.pkt_index_max;
     // XXX: Wait ms_guard_time_bw
   }
   cp->shm_addr->pinfo[pkt_index_nxt].data_length = adu_len;
-  naive_memcpy(cp->shm_addr->pdata[pkt_index_nxt].data, adu, adu_len);  // TX adds new data
+  time_trace("XDC_Tx1 ready to encode for ctag=%08x", cp->ctag);
+  cmap_encode((uint8_t *) &(cp->shm_addr->pdata->data[pkt_index_now]), adu, &adu_len, tag);
+//  naive_memcpy(cp->shm_addr->pdata[pkt_index_nxt].data, adu, adu_len);  // TX adds new data
+
+  time_trace("XDC_Tx2 ready to send data for ctag=%08x typ=%s len=%ld", cp->ctag, cp->dev_type, adu_len);
   cp->shm_addr->pkt_index_next = pkt_index_nxt;           // TX updates RX
   if (cp->shm_addr->pkt_index_last < 0) cp->shm_addr->pkt_index_last = pkt_index_now;
   shm_info_print(cp->shm_addr);
+  exit(22);
 }
 
 /* Asynchronously send ADU to DMA driver in 'bw' packet */
