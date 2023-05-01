@@ -518,7 +518,7 @@ void shm_send(chan *cp, void *adu, gaps_tag *tag) {
   size_t  adu_len;    // encoder calculates length */
 
   time_trace("XDC_Tx1 ready to encode for ctag=%08x", cp->ctag);
-  cmap_encode(cp->shm_addr->pdata->data[pkt_index_now], adu, &adu_len, tag);
+  cmap_encode(&(cp->shm_addr->pdata->data[pkt_index_now]), adu, &adu_len, tag);
   time_trace("XDC_Tx2 ready to send data for ctag=%08x typ=%s len=%ld", cp->ctag, cp->dev_type, adu_len);
   log_debug("%s TX index=%d len=%ld", __func__, pkt_index_now, adu_len);
   chan_print(cp);
