@@ -370,9 +370,9 @@ void shm_init_config_one(chan *cp) {
   cip->unix_seconds       = time(NULL);
   cip->crc16              = 0;
   cip->crc16              = crc16((uint8_t *) &cip, sizeof(cinfo));
-  log_trace("%s %d Pointers: va=%p vc=%p ci=%p vd=%p vn=%p", __func__, cp->ctag, cp->shm_addr, cip, &(cp->shm_addr->pinfo), &(cp->shm_addr->pdata), &(cp->shm_addr->pkt_index_next));
-  log_trace("%s %d Params (i=%d): guard_ms=[a=%ld b=%ld] max=%d time=%lx crc=%d", __func__, cp->ctag,
-      cp->shm_addr->pkt_index_next,
+  log_trace("%s %08x %c Pnters: va=%p vc=%p ci=%p vd=%p vn=%p", __func__, cp->ctag, cp->dir, cp->shm_addr, cip, &(cp->shm_addr->pinfo), &(cp->shm_addr->pdata), &(cp->shm_addr->pkt_index_next));
+  log_trace("%s %08x %c Params (i=%d): guard_ms=[a=%ld b=%ld] max=%d time=0x%lx crc=0x%04x", __func__, cp->ctag,
+      cp->dir, cp->shm_addr->pkt_index_next,
       cip->ms_guard_time_aw,
       cip->ms_guard_time_bw,
       cip->pkt_index_max,
