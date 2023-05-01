@@ -363,6 +363,7 @@ void shm_info_print(shm_channel *cip) {
 
 // After openning SHM device, initialize SHM configuration
 void shm_init_config_one(chan *cp) {
+  int i;
   cinfo  *cip = &(cp->shm_addr->cinfo);
 
   log_trace("%s: START cp=%p", __func__, cp);
@@ -387,6 +388,11 @@ void shm_init_config_one(chan *cp) {
       cip->pkt_index_max,
       cip->unix_seconds,
       cip->crc16);
+  
+  for (i=0; i<PKT_INDEX_MAX; i++) {
+    cp->shm_addr->pinfo[i].data_length    = 0;
+    cp->shm_addr->pinfo[i].transaction_ID = 0;
+  }
   shm_info_print(cp->shm_addr);
 }
 
