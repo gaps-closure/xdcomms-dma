@@ -352,8 +352,16 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
 //  log_trace("%s Env Vars: type=%s name=%s off=%s mlen=%s", __func__, getenv("DEV_TYPE_RX"), getenv("DEV_NAME_RX"), getenv("DEV_OFFS_RX"), getenv("DEV_MMAP_LE"));
 }
 
-// After openning SHM device, initialize SHM configuration
+void shm_info_print(shm_channel *cip) {
+  int i;
+  
+  fprintf(stderr, "shm channel info %08x: last=%d next=%d (max=%d ga=%ld gb=%ld ut=%lx crc=%x)\n", cip->cinfo.ctag, cip->pkt_index_last, cip->pkt_index_next, cip->cinfo.pkt_index_max, cip->cinfo.ms_guard_time_aw, cip->cinfo.ms_guard_time_bw, cip->cinfo.unix_seconds, cip->cinfo.crc16);
+  for (i=0; i<PKT_INDEX_MAX; i++) {
+    fprintf(stderr, "   i=%d: len=0x%lx tid=0x%lx\n", i, cip->pinfo[i].data_length, cip->pinfo[i].transaction_ID);
+  }
+}
 
+// After openning SHM device, initialize SHM configuration
 void shm_init_config_one(chan *cp) {
   cinfo  *cip = &(cp->shm_addr->cinfo);
 
@@ -361,8 +369,9 @@ void shm_init_config_one(chan *cp) {
   log_trace("%s: va=%p + off=%lx = %lx", __func__, cp->mm.virt_addr, cp->mm.offset, cp->shm_addr);
   log_trace("shm_channel size s=%lx c=%ld i=%lx d=%lx", sizeof(shm_channel), sizeof(cinfo), sizeof(pinfo), sizeof(pdata));
 
-  cp->shm_addr->pkt_index_next           = 0;
-  
+  cp->shm_addr->pkt_index_next = 0;
+  cp->shm_addr->pkt_index_last = -1;
+
   cip->ctag               = cp->ctag;
   cip->pkt_index_max      = PKT_INDEX_MAX;
   cip->ms_guard_time_aw   = DEFAULT_MS_GUARD_TIME_AW;
@@ -378,6 +387,7 @@ void shm_init_config_one(chan *cp) {
       cip->pkt_index_max,
       cip->unix_seconds,
       cip->crc16);
+  shm_info_print(cip);
 }
 
 // Return pointer to Rx packet buffer for specified tag
@@ -496,15 +506,6 @@ void dma_send(chan *cp, void *adu, size_t adu_len, gaps_tag *tag) {
 // Dumb memory copy using 8-byte words
 void naive_memcpy(unsigned long *d, const unsigned long *s, unsigned long len_in_words) {
   for (int i = 0; i < len_in_words; i++) *d++ = *s++;
-}
-
-void shm_info_print(shm_channel *cip) {
-  int i;
-  
-  fprintf(stderr, "shm channel info %08x: last=%d next=%d (max=%d ga=%ld gb=%ld ut=%lx crc=%x)\n", cip->cinfo.ctag, cip->pkt_index_last, cip->pkt_index_next, cip->cinfo.pkt_index_max, cip->cinfo.ms_guard_time_aw, cip->cinfo.ms_guard_time_bw, cip->cinfo.unix_seconds, cip->cinfo.crc16);
-  for (i=0; i<PKT_INDEX_MAX; i++) {
-    fprintf(stderr, "   i=%d: len=0x%lx tid=0x%lx\n", i, cip->pinfo[i].data_length, cip->pinfo[i].transaction_ID);
-  }
 }
 
 void shm_send(chan *cp, void *adu, size_t adu_len, gaps_tag *tag) {
