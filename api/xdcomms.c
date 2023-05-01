@@ -354,7 +354,7 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
 
 void shm_info_print(shm_channel *cip) {
   int            i, j;
-  unsigned long  len;
+  unsigned long  len_bytes;
   
   fprintf(stderr, "  shm channel info %08x (%p): last=%d next=%d (max=%d ga=%ld gb=%ld ut=0x%lx crc=0x%04x)\n", cip->cinfo.ctag, cip, cip->pkt_index_last, cip->pkt_index_next, cip->cinfo.pkt_index_max, cip->cinfo.ms_guard_time_aw, cip->cinfo.ms_guard_time_bw, cip->cinfo.unix_seconds, cip->cinfo.crc16);
   for (i=0; i<PKT_INDEX_MAX; i++) {
