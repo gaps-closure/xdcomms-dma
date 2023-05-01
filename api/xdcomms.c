@@ -427,7 +427,6 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
   log_trace("%s %d: ctag=0x%08x", __func__, i, ctag);
   shm_info_print(cp->shm_addr);
   pthread_mutex_unlock(&chan_create);
-  fprintf(stderr, "%s QQQQQQQQQ shm=%p Max=%p (%d)\n", __func__, cp->shm_addr, &(cp->shm_addr->cinfo.pkt_index_max), cp->shm_addr->cinfo.pkt_index_max);
   return (cp);
 }
                   
@@ -487,12 +486,16 @@ int dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *cbuf_
   return 0;
 }
 
-void dma_send(chan *cp, void *adu, size_t adu_len, gaps_tag *tag) {
+void dma_send(chan *cp, void *adu, gaps_tag *tag) {
   struct channel_buffer  *dma_tx_chan = (struct channel_buffer *) cp->mm.virt_addr;
   bw        *p;               // Packet pointer
   int       buffer_id=0;      // Use only a single buffer
+  size_t    adu_len;    // encoder calculates length */
   size_t    packet_len;
   
+  time_trace("XDC_Tx1 ready to encode for ctag=%08x", cp->ctag);
+  cmap_encode(cp->mm.virt_addr, adu, &adu_len, tag);
+  time_trace("XDC_Tx2 ready to send data for ctag=%08x typ=%s len=%ld", cp->ctag, cp->dev_type, adu_len);
   p = (bw *) &(dma_tx_chan->buffer);      // point to a DMA packet buffer */
   bw_gaps_header_encode(p, &packet_len, adu, &adu_len, tag);  /* Put packet into channel buffer */
   dma_tx_chan->length = packet_len;
@@ -509,39 +512,37 @@ void naive_memcpy(unsigned long *d, const unsigned long *s, unsigned long len_in
   for (int i = 0; i < len_in_words; i++) *d++ = *s++;
 }
 
-void shm_send(chan *cp, void *adu, size_t adu_len, gaps_tag *tag) {
-  int pkt_index_old = cp->shm_addr->pkt_index_next;
-  int pkt_index_new = (pkt_index_old + 1) % cp->shm_addr->cinfo.pkt_index_max;
-  
-  fprintf(stderr, "%s QQQQQQQQQ shm=%p Max=%p (%d)\n", __func__, cp->shm_addr, &(cp->shm_addr->cinfo.pkt_index_max), cp->shm_addr->cinfo.pkt_index_max);
-  log_debug("%s TX index=%d len=%ld", __func__, pkt_index_old, adu_len);
+void shm_send(chan *cp, void *adu, gaps_tag *tag) {
+  int     pkt_index_now = cp->shm_addr->pkt_index_next;
+  int     pkt_index_nxt = (pkt_index_now + 1) % cp->shm_addr->cinfo.pkt_index_max;
+  size_t  adu_len;    // encoder calculates length */
+
+  time_trace("XDC_Tx1 ready to encode for ctag=%08x", cp->ctag);
+  cmap_encode(cp->shm_addr->pdata[pkt_index_now], adu, &adu_len, tag);
+  time_trace("XDC_Tx2 ready to send data for ctag=%08x typ=%s len=%ld", cp->ctag, cp->dev_type, adu_len);
+  log_debug("%s TX index=%d len=%ld", __func__, pkt_index_now, adu_len);
   chan_print(cp);
   shm_info_print(cp->shm_addr);
   exit(22);
-  if (cp->shm_addr->pkt_index_last == pkt_index_new) {
+  if (cp->shm_addr->pkt_index_last == pkt_index_nxt) {
     cp->shm_addr->pkt_index_last = ((cp->shm_addr->pkt_index_last) + 1) % cp->shm_addr->cinfo.pkt_index_max;
     // XXX: Wait ms_guard_time_bw
   }
-  cp->shm_addr->pinfo[pkt_index_new].data_length = adu_len;
-  naive_memcpy(cp->shm_addr->pdata[pkt_index_new].data, adu, adu_len);  // TX adds new data
-  cp->shm_addr->pkt_index_next = pkt_index_new;           // TX updates RX
-  if (cp->shm_addr->pkt_index_last < 0) cp->shm_addr->pkt_index_last = pkt_index_old;
+  cp->shm_addr->pinfo[pkt_index_nxt].data_length = adu_len;
+  naive_memcpy(cp->shm_addr->pdata[pkt_index_nxt].data, adu, adu_len);  // TX adds new data
+  cp->shm_addr->pkt_index_next = pkt_index_nxt;           // TX updates RX
+  if (cp->shm_addr->pkt_index_last < 0) cp->shm_addr->pkt_index_last = pkt_index_now;
   shm_info_print(cp->shm_addr);
 }
 
 /* Asynchronously send ADU to DMA driver in 'bw' packet */
 void asyn_send(void *adu, gaps_tag *tag) {
   chan       *cp;        // abstract channel struct pointer for any device type
-  size_t     adu_len;    // encoder calculates length */
 
   // a) Open channel once (and get device type, device name and channel struct
   log_debug("Start of %s", __func__);
   cp = get_chan_info(tag, 't');
-fprintf(stderr, "%s QQQQQQQQQ shm=%p Max=%p (%d)\n", __func__, cp->shm_addr, &(cp->shm_addr->cinfo.pkt_index_max), cp->shm_addr->cinfo.pkt_index_max);
   pthread_mutex_lock(&(cp->lock));
-  time_trace("XDC_Tx1 ready to encode for ctag=%08x", cp->ctag);
-  cmap_encode(cp->mm.virt_addr, adu, &adu_len, tag);
-  time_trace("XDC_Tx2 ready to send data for ctag=%08x typ=%s len=%ld", cp->ctag, cp->dev_type, adu_len);
   // b) encode packet into TX buffer and send */
   if (strcmp(cp->dev_type, "dma") == 0) dma_send(cp, adu, adu_len, tag);
   if (strcmp(cp->dev_type, "shm") == 0) shm_send(cp, adu, adu_len, tag);
