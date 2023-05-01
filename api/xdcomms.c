@@ -544,8 +544,8 @@ void asyn_send(void *adu, gaps_tag *tag) {
   cp = get_chan_info(tag, 't');
   pthread_mutex_lock(&(cp->lock));
   // b) encode packet into TX buffer and send */
-  if (strcmp(cp->dev_type, "dma") == 0) dma_send(cp, adu, adu_len, tag);
-  if (strcmp(cp->dev_type, "shm") == 0) shm_send(cp, adu, adu_len, tag);
+  if (strcmp(cp->dev_type, "dma") == 0) dma_send(cp, adu, tag);
+  if (strcmp(cp->dev_type, "shm") == 0) shm_send(cp, adu, tag);
   pthread_mutex_unlock(&(cp->lock));
 }
 
