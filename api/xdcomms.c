@@ -514,7 +514,7 @@ void naive_memcpy(unsigned long *d, const unsigned long *s, unsigned long len_in
 void shm_send(chan *cp, void *adu, gaps_tag *tag) {
   int     pkt_index_now = cp->shm_addr->pkt_index_next;
   int     pkt_index_nxt = (pkt_index_now + 1) % cp->shm_addr->cinfo.pkt_index_max;
-  size_t  adu_len;    // encoder calculates length */
+  size_t  adu_len=0;    // encoder calculates length */
 
   log_debug("%s TX index=%d len=%ld", __func__, pkt_index_now, adu_len);
   chan_print(cp);
