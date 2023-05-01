@@ -427,6 +427,7 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
   log_trace("%s %d: ctag=0x%08x", __func__, i, ctag);
   shm_info_print(cp->shm_addr);
   pthread_mutex_unlock(&chan_create);
+  fprintf(stderr, "X*********** cp=%p", cp);
   return (cp);
 }
                   
@@ -535,10 +536,11 @@ void asyn_send(void *adu, gaps_tag *tag) {
   // a) Open channel once (and get device type, device name and channel struct
   log_debug("Start of %s", __func__);
   cp = get_chan_info(tag, 't');
+fprintf(stderr, "*********** cp=%p", cp);
   pthread_mutex_lock(&(cp->lock));
   time_trace("XDC_Tx1 ready to encode for ctag=%08x", cp->ctag);
   cmap_encode(cp->mm.virt_addr, adu, &adu_len, tag);
-  time_trace("XDC_Tx2 ready to send data for ctag=%08x typ=%c len=%ld", cp->ctag, cp->dev_type, adu_len);
+  time_trace("XDC_Tx2 ready to send data for ctag=%08x typ=%s len=%ld", cp->ctag, cp->dev_type, adu_len);
   // b) encode packet into TX buffer and send */
   if (strcmp(cp->dev_type, "dma") == 0) dma_send(cp, adu, adu_len, tag);
   if (strcmp(cp->dev_type, "shm") == 0) shm_send(cp, adu, adu_len, tag);
