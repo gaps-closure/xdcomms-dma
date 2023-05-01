@@ -370,8 +370,7 @@ void shm_init_config_one(chan *cp) {
   cip->unix_seconds       = time(NULL);
   cip->crc16              = 0;
   cip->crc16              = crc16((uint8_t *) &cip, sizeof(cinfo));
-  chan_print(cp);
-  log_trace("%s %08x %c Pnters: va=%p vc=%p ci=%p vd=%p vn=%p", __func__, cp->ctag, cp->dir, cp->shm_addr, cip, &(cp->shm_addr->pinfo), &(cp->shm_addr->pdata), &(cp->shm_addr->pkt_index_next));
+//  log_trace("%s %08x %c Pnters: va=%p vc=%p ci=%p vd=%p vn=%p", __func__, cp->ctag, cp->dir, cp->shm_addr, cip, &(cp->shm_addr->pinfo), &(cp->shm_addr->pdata), &(cp->shm_addr->pkt_index_next));
   log_trace("%s %08x %c Params (i=%d): guard_ms=[a=%ld b=%ld] max=%d time=0x%lx crc=0x%04x", __func__, cp->ctag,
       cp->dir, cp->shm_addr->pkt_index_next,
       cip->ms_guard_time_aw,
@@ -513,6 +512,7 @@ void shm_send(chan *cp, void *adu, size_t adu_len, gaps_tag *tag) {
   int pkt_index_new = (pkt_index_old + 1) % cp->shm_addr->cinfo.pkt_index_max;
   
   log_debug("%s TX index=%d len=%ld", __func__, pkt_index_old, adu_len);
+  chan_print(cp);
   shm_info_print(cp->shm_addr);
   if (cp->shm_addr->pkt_index_last == pkt_index_new) {
     cp->shm_addr->pkt_index_last = ((cp->shm_addr->pkt_index_last) + 1) % cp->shm_addr->cinfo.pkt_index_max;
