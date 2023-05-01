@@ -360,7 +360,7 @@ void shm_info_print(shm_channel *cip) {
   for (i=0; i<PKT_INDEX_MAX; i++) {
     len_bytes = cip->pinfo[i].data_length;
     fprintf(stderr, "  %d: len=%ld tid=0x%lx data=", i, len_bytes, cip->pinfo[i].transaction_ID);
-    for (j=0; j<(len_bytes/4); j++) fprintf(stderr, "%04x", cip->pdata[i].data[j]);
+    for (j=0; j<(len_bytes/4); j++) fprintf(stderr, "%04x ", cip->pdata[i].data[j]);
     fprintf(stderr, "\n");
   }
 }
@@ -529,7 +529,7 @@ void shm_send(chan *cp, void *adu, gaps_tag *tag) {
   time_trace("XDC_Tx1 ready to encode for ctag=%08x", cp->ctag);
   cmap_encode((uint8_t *) &(cp->shm_addr->pdata->data[pkt_index_now]), adu, &adu_len, tag);
 //  naive_memcpy(cp->shm_addr->pdata[pkt_index_nxt].data, adu, adu_len);  // TX adds new data
-  cp->shm_addr->pinfo[pkt_index_nxt].data_length = adu_len;
+  cp->shm_addr->pinfo[pkt_index_now].data_length = adu_len;
 
   time_trace("XDC_Tx2 ready to send data for ctag=%08x typ=%s len=%ld", cp->ctag, cp->dev_type, adu_len);
   cp->shm_addr->pkt_index_next = pkt_index_nxt;           // TX updates RX
