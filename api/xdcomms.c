@@ -387,7 +387,7 @@ void shm_init_config_one(chan *cp) {
       cip->pkt_index_max,
       cip->unix_seconds,
       cip->crc16);
-  shm_info_print(cip);
+  shm_info_print(cp->shm_addr);
 }
 
 // Return pointer to Rx packet buffer for specified tag
