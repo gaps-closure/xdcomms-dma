@@ -114,7 +114,7 @@ typedef struct _thread_args {
 void rcvr_thread_start(chan *cp);
 
 codec_map  cmap[DATA_TYP_MAX];       // maps data type to its data encode + decode functions
-chan       chan_info[GAPS_TAG_MAX];  // array of buffers to store channel info per tag
+chan       chan_info[GAPS_TAG_MAX];  // array of buffers to store local channel info per tag
 pthread_mutex_t chan_create;
 
 /**********************************************************************/
@@ -427,7 +427,7 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
   log_trace("%s %d: ctag=0x%08x", __func__, i, ctag);
   shm_info_print(cp->shm_addr);
   pthread_mutex_unlock(&chan_create);
-fprintf(stderr, "1*********** cp=%p\n", cp);
+fprintf(stderr, "%s *********** shm=%p Max=%p\n", __func__, cp->shm_addr, cp->shm_addr->cinfo.pkt_index_max);
   return (cp);
 }
                   
@@ -513,7 +513,7 @@ void shm_send(chan *cp, void *adu, size_t adu_len, gaps_tag *tag) {
   int pkt_index_old = cp->shm_addr->pkt_index_next;
   int pkt_index_new = (pkt_index_old + 1) % cp->shm_addr->cinfo.pkt_index_max;
   
-  fprintf(stderr, "3*********** cp=%p\n", cp);
+fprintf(stderr, "%s *********** shm=%p Max=%p\n", __func__, cp->shm_addr, cp->shm_addr->cinfo.pkt_index_max);
   log_debug("%s TX index=%d len=%ld", __func__, pkt_index_old, adu_len);
   chan_print(cp);
   shm_info_print(cp->shm_addr);
@@ -537,7 +537,7 @@ void asyn_send(void *adu, gaps_tag *tag) {
   // a) Open channel once (and get device type, device name and channel struct
   log_debug("Start of %s", __func__);
   cp = get_chan_info(tag, 't');
-fprintf(stderr, "2*********** cp=%p\n", cp);
+fprintf(stderr, "%s *********** shm=%p Max=%p\n", __func__, cp->shm_addr, cp->shm_addr->cinfo.pkt_index_max);
   pthread_mutex_lock(&(cp->lock));
   time_trace("XDC_Tx1 ready to encode for ctag=%08x", cp->ctag);
   cmap_encode(cp->mm.virt_addr, adu, &adu_len, tag);
