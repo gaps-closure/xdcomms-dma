@@ -359,7 +359,7 @@ void shm_info_print(shm_channel *cip) {
   for (i=0; i<PKT_INDEX_MAX; i++) {
     fprintf(stderr, "  %d: len=%ld tid=0x%lx", i, len, cip->pinfo[i].transaction_ID);
     for (j=0; j<len; j++) fprintf(stderr, "%04x", cip->pdata[i].data[j]);
-    fprintf(stderr, "\n");
+    fprintf(stderr, "\n"); 
   }
 }
 
