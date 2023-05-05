@@ -419,7 +419,7 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
       chan_init_config_one(cp, ctag, dir);              // 1) Configure new tag
       dev_open_if_new(cp);                              // 2) Open device (if not already open)
       log_trace("%s: Using %s device %s for ctag=0x%08x dir=%c", __func__, cp->dev_type, cp->dev_name, cp->ctag, cp->dir);
-      if (((cp->dev_type, "shm")) == 0) {
+      if ((strcmp(cp->dev_type, "shm")) == 0) {
         cp->shm_addr = cp->mm.virt_addr + cp->mm.offset;
         if ((cp->dir) == 't') shm_init_config_one(cp);  // 3) Configure SHM structure for new channel
       }
