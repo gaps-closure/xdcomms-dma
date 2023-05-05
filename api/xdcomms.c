@@ -361,7 +361,7 @@ void shm_info_print(shm_channel *cip) {
     len_bytes = cip->pinfo[i].data_length;
     fprintf(stderr, "  %d: len=%ld tid=0x%lx", i, len_bytes, cip->pinfo[i].transaction_ID);
     if (len_bytes > 0) {
-      fprintf(stderr, " data=")
+      fprintf(stderr, " data=");
       for (j=0; j<(len_bytes/4); j++) fprintf(stderr, "%08x ", cip->pdata[i].data[j]);
     }
     fprintf(stderr, "\n");
