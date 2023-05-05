@@ -424,11 +424,11 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
         if ((cp->dir) == 't') shm_init_config_one(cp);  // 3) Configure SHM structure for new channel
       }
       if ((cp->dir) == 'r') rcvr_thread_start(cp);      // 4) Start rx thread for new receive tag
+#if LOG_DEBUG >= LOG_LEVEL_MIN
+  chan_print (cp);
+#endif  // LOG_LEVEL_MIN
       break;
     }
-#ifdef  XDCOMMS_PRINT_STATE
-    chan_print(cp);
-#endif
   }
 
   /* c) Unlock and return chan_info pointer */
@@ -605,7 +605,7 @@ void *rcvr_thread_function(thread_args *vargs) {
   while (1) {
     log_trace("THREAD-1 %s: fd=%d base_id=%d index=%d", __func__, cp->fd, vargs->buffer_id_start, buffer_id_index);
 #if LOG_TRACE >= LOG_LEVEL_MIN
-  chan_print (cp);
+  chan_print(cp);
 #endif  // LOG_LEVEL_MIN
     buffer_id = (vargs->buffer_id_start) + buffer_id_index;
     if      (strcmp(cp->dev_type, "dma") == 0) rcvr_dma(cp, buffer_id);
