@@ -424,6 +424,7 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
         if ((cp->dir) == 't') shm_init_config_one(cp);  // 3) Configure SHM structure for new channel
       }
       if ((cp->dir) == 'r') rcvr_thread_start(cp);      // 4) Start rx thread for new receive tag
+fprintf(stderr, "D=%d L=%d", G_DEBUG, PRINT_STATE_LEVEL)
 #if LOG_DEBUG >= PRINT_STATE_LEVEL
       chan_print(cp);
 #endif  // LOG_LEVEL_MIN
@@ -605,8 +606,6 @@ void *rcvr_thread_function(thread_args *vargs) {
 
   while (1) {
     log_trace("THREAD-1 %s: fd=%d base_id=%d index=%d", __func__, cp->fd, vargs->buffer_id_start, buffer_id_index);
-    fprintf(stderr, "%s logt=%d lev=%d\n", __func__, LOG_TRACE, PRINT_STATE_LEVEL);
-    fprintf(stderr, "%s logt=%d lev=%d", __func__, LOG_TRACE, PRINT_STATE_LEVEL);
 #if LOG_TRACE >= PRINT_STATE_LEVEL
     chan_print(cp);
 #endif  // PRINT_STATE_LEVEL
