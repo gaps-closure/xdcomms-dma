@@ -393,7 +393,7 @@ void shm_init_config_one(chan *cp) {
     cp->shm_addr->pinfo[i].transaction_ID = 0;
   }
 #if LOG_DEBUG >= LOG_LEVEL_MIN
-  shm_info_print(cip);
+  shm_info_print(cp->shm_addr);
 #endif  // LOG_LEVEL_MIN
 }
 
