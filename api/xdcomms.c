@@ -605,8 +605,9 @@ void *rcvr_thread_function(thread_args *vargs) {
 
   while (1) {
     log_trace("THREAD-1 %s: fd=%d base_id=%d index=%d", __func__, cp->fd, vargs->buffer_id_start, buffer_id_index);
+    fprintf(stderr, "%s logt=%d lev=%d\n", __func__, LOG_TRACE, PRINT_STATE_LEVEL);
+    fprintf(stderr, "%s logt=%d lev=%d", __func__, LOG_TRACE, PRINT_STATE_LEVEL);
 #if LOG_TRACE >= PRINT_STATE_LEVEL
-    fprintf(stderr, "%s logt=%d logm=%d", __func__, LOG_TRACE, PRINT_STATE_LEVEL);
     chan_print(cp);
 #endif  // PRINT_STATE_LEVEL
     buffer_id = (vargs->buffer_id_start) + buffer_id_index;
