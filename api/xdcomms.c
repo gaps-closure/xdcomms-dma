@@ -424,7 +424,7 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
         if ((cp->dir) == 't') shm_init_config_one(cp);  // 3) Configure SHM structure for new channel
       }
       if ((cp->dir) == 'r') rcvr_thread_start(cp);      // 4) Start rx thread for new receive tag
-      fprintf(stderr, "D=%d L=%d", G_DEBUG, PRINT_STATE_LEVEL);
+      fprintf(stderr, "D=%d L=%d", LOG_DEBUG, PRINT_STATE_LEVEL);
 #if LOG_DEBUG >= PRINT_STATE_LEVEL
       chan_print(cp);
 #endif  // LOG_LEVEL_MIN
