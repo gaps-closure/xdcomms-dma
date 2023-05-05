@@ -424,7 +424,8 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
       }
       if ((cp->dir) == 'r') rcvr_thread_start(cp);      // 4) Start rx thread for new receive tag
 #if LOG_DEBUG >= LOG_LEVEL_MIN
-  chan_print(cp);
+      fprintf(stderr, "%s", __func__);
+      chan_print(cp);
 #endif  // LOG_LEVEL_MIN
       break;
     }
@@ -526,6 +527,7 @@ void shm_send(chan *cp, void *adu, gaps_tag *tag) {
 
   log_debug("%s TX index=%d len=%ld", __func__, pkt_index_now, adu_len);
 #if LOG_DEBUG >= LOG_LEVEL_MIN
+  fprintf(stderr, "%s", __func__);
   chan_print(cp);
 #endif  // LOG_LEVEL_MIN
   if (cp->shm_addr->pkt_index_last == pkt_index_nxt) {
@@ -605,7 +607,8 @@ void *rcvr_thread_function(thread_args *vargs) {
   while (1) {
     log_trace("THREAD-1 %s: fd=%d base_id=%d index=%d", __func__, cp->fd, vargs->buffer_id_start, buffer_id_index);
 #if LOG_TRACE >= LOG_LEVEL_MIN
-  chan_print(cp);
+    fprintf(stderr, "%s", __func__);
+    chan_print(cp);
 #endif  // LOG_LEVEL_MIN
     buffer_id = (vargs->buffer_id_start) + buffer_id_index;
     if      (strcmp(cp->dev_type, "dma") == 0) rcvr_dma(cp, buffer_id);
@@ -642,6 +645,7 @@ int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
 //  log_trace("%s: Check for received packet on tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
   if (cp->pinfo.newd != 0) {                            // get packet from buffer if available)
 #if LOG_TRACE >= LOG_LEVEL_MIN
+    fprintf(stderr, "%s", __func__);
     chan_print(cp);
 #endif  // LOG_LEVEL_MIN
     cmap_decode(cp->pinfo.data, cp->pinfo.data_len, adu, &(cp->pinfo.tag));   /* Put packet into ADU */
