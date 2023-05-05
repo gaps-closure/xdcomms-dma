@@ -62,6 +62,7 @@
 #include "shm.h"
 
 #define NAME_LEN_MAX  64
+#define PRINT_STATE_LEVEL LOG_DEBUG
 
 // Fixed mmap configuration (channel_buffer in DMA device, shm_channel in SHM device)
 typedef struct _memmap {
@@ -392,9 +393,9 @@ void shm_init_config_one(chan *cp) {
     cp->shm_addr->pinfo[i].data_length    = 0;
     cp->shm_addr->pinfo[i].transaction_ID = 0;
   }
-#if LOG_DEBUG >= LOG_LEVEL_MIN
+#if LOG_TRACE >= PRINT_STATE_LEVEL
   shm_info_print(cp->shm_addr);
-#endif  // LOG_LEVEL_MIN
+#endif  // PRINT_STATE
 }
 
 // Return pointer to Rx packet buffer for specified tag
@@ -423,8 +424,7 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
         if ((cp->dir) == 't') shm_init_config_one(cp);  // 3) Configure SHM structure for new channel
       }
       if ((cp->dir) == 'r') rcvr_thread_start(cp);      // 4) Start rx thread for new receive tag
-#if LOG_DEBUG >= LOG_LEVEL_MIN
-      fprintf(stderr, "%s", __func__);
+#if LOG_DEBUG >= PRINT_STATE_LEVEL
       chan_print(cp);
 #endif  // LOG_LEVEL_MIN
       break;
@@ -526,8 +526,7 @@ void shm_send(chan *cp, void *adu, gaps_tag *tag) {
   size_t  adu_len=0;    // encoder calculates length */
 
   log_debug("%s TX index=%d len=%ld", __func__, pkt_index_now, adu_len);
-#if LOG_DEBUG >= LOG_LEVEL_MIN
-  fprintf(stderr, "%s", __func__);
+#if LOG_DEBUG >= PRINT_STATE_LEVEL
   chan_print(cp);
 #endif  // LOG_LEVEL_MIN
   if (cp->shm_addr->pkt_index_last == pkt_index_nxt) {
@@ -542,9 +541,9 @@ void shm_send(chan *cp, void *adu, gaps_tag *tag) {
   time_trace("XDC_Tx2 ready to send data for ctag=%08x typ=%s len=%ld", cp->ctag, cp->dev_type, adu_len);
   cp->shm_addr->pkt_index_next = pkt_index_nxt;           // TX updates RX
   if (cp->shm_addr->pkt_index_last < 0) cp->shm_addr->pkt_index_last = pkt_index_now;
-#if LOG_DEBUG >= LOG_LEVEL_MIN
+#if LOG_DEBUG >= PRINT_STATE_LEVEL
   shm_info_print(cp->shm_addr);
-#endif  // LOG_LEVEL_MIN
+#endif  // PRINT_STATE
   exit(22);
 }
 
@@ -606,10 +605,10 @@ void *rcvr_thread_function(thread_args *vargs) {
 
   while (1) {
     log_trace("THREAD-1 %s: fd=%d base_id=%d index=%d", __func__, cp->fd, vargs->buffer_id_start, buffer_id_index);
-#if LOG_TRACE >= LOG_LEVEL_MIN
+#if LOG_TRACE >= PRINT_STATE_LEVEL
     fprintf(stderr, "%s logt=%d logm=%d", __func__, LOG_TRACE, LOG_LEVEL_MIN);
     chan_print(cp);
-#endif  // LOG_LEVEL_MIN
+#endif  // PRINT_STATE_LEVEL
     buffer_id = (vargs->buffer_id_start) + buffer_id_index;
     if      (strcmp(cp->dev_type, "dma") == 0) rcvr_dma(cp, buffer_id);
     else if (strcmp(cp->dev_type, "shm") == 0) rcvr_shm(cp, buffer_id);
@@ -644,7 +643,7 @@ int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
   pthread_mutex_lock(&(cp->lock));
 //  log_trace("%s: Check for received packet on tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
   if (cp->pinfo.newd != 0) {                            // get packet from buffer if available)
-#if LOG_TRACE >= LOG_LEVEL_MIN
+##if LOG_TRACE >= PRINT_STATE_LEVEL
     fprintf(stderr, "%s", __func__);
     chan_print(cp);
 #endif  // LOG_LEVEL_MIN
