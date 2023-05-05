@@ -62,7 +62,7 @@
 #include "shm.h"
 
 #define NAME_LEN_MAX  64
-#define PRINT_STATE_LEVEL 4
+#define PRINT_STATE_LEVEL (LOG_DEBUG)
 
 // Fixed mmap configuration (channel_buffer in DMA device, shm_channel in SHM device)
 typedef struct _memmap {
