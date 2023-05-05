@@ -372,6 +372,7 @@ void shm_init_config_one(chan *cp) {
   int i;
   cinfo  *cip = &(cp->shm_addr->cinfo);
 
+  log_trace("%s: START cp=%p", __func__, cp);
   log_trace("%s: va=%p + off=%lx = %lx", __func__, cp->mm.virt_addr, cp->mm.offset, cp->shm_addr);
   log_trace("shm_channel size s=%lx c=%ld i=%lx d=%lx", sizeof(shm_channel), sizeof(cinfo), sizeof(pinfo), sizeof(pdata));
 
@@ -392,7 +393,7 @@ void shm_init_config_one(chan *cp) {
     cp->shm_addr->pinfo[i].transaction_ID = 0;
   }
 #if LOG_DEBUG >= LOG_LEVEL_MIN
-  chan_print(cp);
+  shm_info_print(cip);
 #endif  // LOG_LEVEL_MIN
 }
 
@@ -540,7 +541,7 @@ void shm_send(chan *cp, void *adu, gaps_tag *tag) {
   cp->shm_addr->pkt_index_next = pkt_index_nxt;           // TX updates RX
   if (cp->shm_addr->pkt_index_last < 0) cp->shm_addr->pkt_index_last = pkt_index_now;
 #if LOG_DEBUG >= LOG_LEVEL_MIN
-  chan_print(cp);
+  shm_info_print(cp->shm_addr);
 #endif  // LOG_LEVEL_MIN
   exit(22);
 }
