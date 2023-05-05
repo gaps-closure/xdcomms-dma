@@ -61,7 +61,6 @@
 #include "dma-proxy.h"
 #include "shm.h"
 
-#define XDCOMMS_PRINT_STATE
 #define NAME_LEN_MAX  64
 
 // Fixed mmap configuration (channel_buffer in DMA device, shm_channel in SHM device)
@@ -373,7 +372,6 @@ void shm_init_config_one(chan *cp) {
   int i;
   cinfo  *cip = &(cp->shm_addr->cinfo);
 
-  log_trace("%s: START cp=%p", __func__, cp);
   log_trace("%s: va=%p + off=%lx = %lx", __func__, cp->mm.virt_addr, cp->mm.offset, cp->shm_addr);
   log_trace("shm_channel size s=%lx c=%ld i=%lx d=%lx", sizeof(shm_channel), sizeof(cinfo), sizeof(pinfo), sizeof(pdata));
 
@@ -393,9 +391,9 @@ void shm_init_config_one(chan *cp) {
     cp->shm_addr->pinfo[i].data_length    = 0;
     cp->shm_addr->pinfo[i].transaction_ID = 0;
   }
-#ifdef  XDCOMMS_PRINT_STATE
-  shm_info_print(cp->shm_addr);
-#endif  // XDCOMMS_PRINT_STATE
+#if LOG_DEBUG >= LOG_LEVEL_MIN
+  chan_print(cp);
+#endif  // LOG_LEVEL_MIN
 }
 
 // Return pointer to Rx packet buffer for specified tag
@@ -425,7 +423,7 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
       }
       if ((cp->dir) == 'r') rcvr_thread_start(cp);      // 4) Start rx thread for new receive tag
 #if LOG_DEBUG >= LOG_LEVEL_MIN
-  chan_print (cp);
+  chan_print(cp);
 #endif  // LOG_LEVEL_MIN
       break;
     }
@@ -526,7 +524,9 @@ void shm_send(chan *cp, void *adu, gaps_tag *tag) {
   size_t  adu_len=0;    // encoder calculates length */
 
   log_debug("%s TX index=%d len=%ld", __func__, pkt_index_now, adu_len);
+#if LOG_DEBUG >= LOG_LEVEL_MIN
   chan_print(cp);
+#endif  // LOG_LEVEL_MIN
   if (cp->shm_addr->pkt_index_last == pkt_index_nxt) {
     cp->shm_addr->pkt_index_last = ((cp->shm_addr->pkt_index_last) + 1) % cp->shm_addr->cinfo.pkt_index_max;
     // XXX: Wait ms_guard_time_bw
@@ -539,9 +539,9 @@ void shm_send(chan *cp, void *adu, gaps_tag *tag) {
   time_trace("XDC_Tx2 ready to send data for ctag=%08x typ=%s len=%ld", cp->ctag, cp->dev_type, adu_len);
   cp->shm_addr->pkt_index_next = pkt_index_nxt;           // TX updates RX
   if (cp->shm_addr->pkt_index_last < 0) cp->shm_addr->pkt_index_last = pkt_index_now;
-#ifdef  XDCOMMS_PRINT_STATE
-  shm_info_print(cp->shm_addr);
-#endif  // XDCOMMS_PRINT_STATE
+#if LOG_DEBUG >= LOG_LEVEL_MIN
+  chan_print(cp);
+#endif  // LOG_LEVEL_MIN
   exit(22);
 }
 
@@ -586,7 +586,6 @@ void rcvr_shm(chan *cp, int buffer_id) {
   
   log_debug("THREAD-2 waiting for packet (%d %s %s) index=(r=%d t=%d)", cp->ctag, cp->dev_type, cp->dev_name, pkt_index, cp->shm_addr->pkt_index_next);
   while (pkt_index == (cp->shm_addr->pkt_index_next)) { ; }
-  chan_print (cp);
   log_trace("THREAD-3 %s got packet (index=%d len=%d)", __func__, pkt_index, cp->shm_addr->pinfo[pkt_index].data_length);
   pthread_mutex_lock(&(cp->lock));
   cp->pinfo.data_len = cp->shm_addr->pinfo[pkt_index].data_length;
@@ -641,9 +640,9 @@ int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
   pthread_mutex_lock(&(cp->lock));
 //  log_trace("%s: Check for received packet on tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
   if (cp->pinfo.newd != 0) {                            // get packet from buffer if available)
-#ifdef  XDCOMMS_PRINT_STATE
+#if LOG_TRACE >= LOG_LEVEL_MIN
     chan_print(cp);
-#endif
+#endif  // LOG_LEVEL_MIN
     cmap_decode(cp->pinfo.data, cp->pinfo.data_len, adu, &(cp->pinfo.tag));   /* Put packet into ADU */
     log_trace("XDCOMMS reads from buff=%p (len=%d)", cp->pinfo.data, cp->pinfo.data_len);
     if ((cp->pinfo.data_len) > 0) log_buf_trace("RX_PKT", cp->pinfo.data, cp->pinfo.data_len);
