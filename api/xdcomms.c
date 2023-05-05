@@ -359,8 +359,11 @@ void shm_info_print(shm_channel *cip) {
   fprintf(stderr, "  shm channel info %08x (%p): last=%d next=%d (max=%d ga=%ld gb=%ld ut=0x%lx crc=0x%04x)\n", cip->cinfo.ctag, cip, cip->pkt_index_last, cip->pkt_index_next, cip->cinfo.pkt_index_max, cip->cinfo.ms_guard_time_aw, cip->cinfo.ms_guard_time_bw, cip->cinfo.unix_seconds, cip->cinfo.crc16);
   for (i=0; i<PKT_INDEX_MAX; i++) {
     len_bytes = cip->pinfo[i].data_length;
-    fprintf(stderr, "  %d: len=%ld tid=0x%lx data=", i, len_bytes, cip->pinfo[i].transaction_ID);
-    for (j=0; j<(len_bytes/4); j++) fprintf(stderr, "%08x ", cip->pdata[i].data[j]);
+    fprintf(stderr, "  %d: len=%ld tid=0x%lx", i, len_bytes, cip->pinfo[i].transaction_ID);
+    if (len_bytes > 0) {
+      fprintf(stderr, " data=")
+      for (j=0; j<(len_bytes/4); j++) fprintf(stderr, "%08x ", cip->pdata[i].data[j]);
+    }
     fprintf(stderr, "\n");
   }
 }
@@ -390,7 +393,9 @@ void shm_init_config_one(chan *cp) {
     cp->shm_addr->pinfo[i].data_length    = 0;
     cp->shm_addr->pinfo[i].transaction_ID = 0;
   }
+#ifdef  XDCOMMS_PRINT_STATE
   shm_info_print(cp->shm_addr);
+#endif  // XDCOMMS_PRINT_STATE
 }
 
 // Return pointer to Rx packet buffer for specified tag
@@ -534,7 +539,9 @@ void shm_send(chan *cp, void *adu, gaps_tag *tag) {
   time_trace("XDC_Tx2 ready to send data for ctag=%08x typ=%s len=%ld", cp->ctag, cp->dev_type, adu_len);
   cp->shm_addr->pkt_index_next = pkt_index_nxt;           // TX updates RX
   if (cp->shm_addr->pkt_index_last < 0) cp->shm_addr->pkt_index_last = pkt_index_now;
+#ifdef  XDCOMMS_PRINT_STATE
   shm_info_print(cp->shm_addr);
+#endif  // XDCOMMS_PRINT_STATE
   exit(22);
 }
 
