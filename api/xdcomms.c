@@ -244,7 +244,7 @@ void dev_open_if_new(chan *cp) {
       clist[i].dir1 = cp->dir;
       strcpy(clist[i].dev_name, cp->dev_name);
       open_device(cp);           // Open new device
-      log_debug("%s: Opened new device %s: i=%d", __func__, cp->dev_name, i);
+      log_debug("%s: Opened new device %s dir=%c ctag=0x%08x i=%d", __func__, cp->dev_name, cp->dir, cp->ctag, i);
       return;  // new device
     }
     // b2) See if device is already open
@@ -584,7 +584,6 @@ void rcvr_dma(chan *cp, int buffer_id) {
 void rcvr_shm(chan *cp, int buffer_id) {
   static int pkt_index=0;
   
-  chan_print (cp);
   log_debug("THREAD-2 waiting for packet (%d %s %s) index=(r=%d t=%d)", cp->ctag, cp->dev_type, cp->dev_name, pkt_index, cp->shm_addr->pkt_index_next);
   while (pkt_index == (cp->shm_addr->pkt_index_next)) { ; }
   chan_print (cp);
@@ -605,6 +604,9 @@ void *rcvr_thread_function(thread_args *vargs) {
 
   while (1) {
     log_trace("THREAD-1 %s: fd=%d base_id=%d index=%d", __func__, cp->fd, vargs->buffer_id_start, buffer_id_index);
+#if LOG_TRACE >= LOG_LEVEL_MIN
+  chan_print (cp);
+#endif  // LOG_LEVEL_MIN
     buffer_id = (vargs->buffer_id_start) + buffer_id_index;
     if      (strcmp(cp->dev_type, "dma") == 0) rcvr_dma(cp, buffer_id);
     else if (strcmp(cp->dev_type, "shm") == 0) rcvr_shm(cp, buffer_id);
