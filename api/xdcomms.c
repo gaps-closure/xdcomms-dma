@@ -762,8 +762,19 @@ char *xdc_set_out(char *addr_in) { return NULL; }
 void *xdc_ctx(void) { return NULL; }
 void *xdc_pub_socket(void) {
   gaps_tag   tag;
-  tag.mux=1; tag.sec=1; tag.typ=1;
+  char      *mp = getenv("TAG_MUX");
+  char      *sp = getenv("TAG_MUX");
+  char      *tp = getenv("TAG_MUX");
+
+  if (mp != NULL) tag.mux=atoi(mp);
+  else            return NULL;
+  if (sp != NULL) tag.mux=atoi(sp);
+  else            return NULL;
+  if (tp != NULL) tag.mux=atoi(tp);
+  else            return NULL;
+
   log_debug("Start of %s: for tag=<%d,%d,%d>", __func__, tag.mux, tag.sec, tag.typ);
+  get_chan_info(&tag, 't');
   exit(22);
   return NULL;
 }
