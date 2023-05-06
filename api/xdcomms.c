@@ -768,9 +768,9 @@ void *xdc_pub_socket(void) {
 
   if (mp != NULL) tag.mux=strtol(mp, NULL, 10);
   else            return NULL;
-  if (sp != NULL) tag.mux=atoi(sp, NULL, 10);
+  if (sp != NULL) tag.mux=strtol(sp, NULL, 10);
   else            return NULL;
-  if (tp != NULL) tag.mux=atoi(tp, NULL, 10);
+  if (tp != NULL) tag.mux=strtol(tp, NULL, 10);
   else            return NULL;
 
   log_debug("Start of %s: for tag=<%d,%d,%d>", __func__, tag.mux, tag.sec, tag.typ);
