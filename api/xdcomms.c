@@ -760,8 +760,17 @@ void set_address(char *xdc_addr, char *addr_in, const char *addr_default, int *d
 char *xdc_set_in(char *addr_in) { return NULL; }
 char *xdc_set_out(char *addr_in) { return NULL; }
 void *xdc_ctx(void) { return NULL; }
-void *xdc_pub_socket(void) { return NULL; }
-void *xdc_sub_socket(gaps_tag tag) { return NULL; }
+void *xdc_pub_socket(void) {
+  log_debug("Start of %s: for tag=<%d,%d,%d>", __func__, tag.mux, tag.sec, tag.typ);
+  exit(22);
+  return NULL;
+}
+void *xdc_sub_socket(gaps_tag tag) {
+  log_debug("Start of %s: for tag=<%d,%d,%d>", __func__, tag.mux, tag.sec, tag.typ);
+  chan *cp = get_chan_info(&tag, 'r');
+  return NULL;
+}
+
 void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout) {
   log_debug("Start of %s: timeout = %d ms for tag=<%d,%d,%d>", __func__, timeout, tag.mux, tag.sec, tag.typ);
   chan *cp = get_chan_info(&tag, 'r');
