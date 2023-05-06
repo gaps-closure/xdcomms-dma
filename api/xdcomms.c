@@ -1,12 +1,7 @@
 /*
- * Cross Domain (XD) Communication API between Partitioned Applicaitons
- * and a GAP's Cross Domain Guard (CDG)
- *   v0.4, May 2023
+ * Cross Domain (XD) Communication API Library between Partitioned Apps
+ * and a GAP's Cross Domain Guard (CDG), without a HAL daemon and ZMQ.
  *
- * TODO: Add hton and ntoh for shm operations
- *
- * Library supports direct commicaiton between partitioned application
- * and CDGs, without a separate HAL daemon (linked with ZMQ).
  *
  * v0.4 MAY 2023: adds hardware abstractions layer that defines
  * abstracted one-way channels defined in 'xdcomms.h'. To relect this
@@ -15,20 +10,23 @@
  *   - MIND-DMA: with Direct Memory Access specific structures in 'dma-proxy.h'
  *   - ESCAPE-SHM: with Shared Memory specific structures in 'shm-h'
  * Configuration is done using environment variables. Example below
+ * TODO: Add hton and ntoh for shm operations
  *
  * v0.3 OCTOBER 2022: Supprts direct transfers between CLOSURE and the
- * MIND-DMA CDG. The app connect to the MIND proxy DMA driver, which
- * uses kernel space DMA control to the XILINX AXI DMA / MCDMA driver
- * on the GE MIND ZCU102 FPGA board. For testing, it can also
- * communicate without FPGA hardware using a Pseudo driver emulation
- */
-
-/* Example configuration using test application (found in ../test/)
- * a) Enclave 2 responds to a request from enclave 1 over DMA channels:
- *   DMARXDEV=sue_donimous_rx1 DMATXDEV=sue_donimous_tx1 ./app_req_rep -e 2
- *   DMARXDEV=sue_donimous_rx0 DMATXDEV=sue_donimous_tx0 ./app_req_rep
- * b)Enclave 2 responds to a request from enclave 1 over SHM channels:
+ * MIND-DMA CDG. The app connect to the MIND proxy DMA driver, which uses
+ * kernel space DMA control to the XILINX AXI DMA / MCDMA driver on the
+ * GE MIND ZCU102 FPGA board. For testing, it can also communicate without
+ * a XDG using a Pseudo driver emulation
  *
+ *
+ * Example commands using the test request-reply application (found in ../test/)
+ *   a) Enclave 2 responds to a request from enclave 1 over pseudo DMA channels:
+ *     DEV_NAME_RX=sue_donimous_rx1 DEV_NAME_TX=sue_donimous_tx1 ./app_req_rep -e 2
+ *     DEV_NAME_RX=sue_donimous_rx0 DEV_NAME_TX=sue_donimous_tx0 ./app_req_rep
+ *
+ *   b) Enclave 2 responds to a request from enclave 1 over host DRAM SHM channels:
+ *     sudo DEV_NAME_RX=mem DEV_NAME_TX=mem DEV_TYPE_RX=shm DEV_TYPE_TX=shm DEV_OFFS_TX=0x40000 DEV_MMAP_LE=0x80000 ./app_req_rep -e 2
+ *     sudo DEV_NAME_RX=mem DEV_NAME_TX=mem DEV_TYPE_RX=shm DEV_TYPE_TX=shm DEV_OFFS_RX=0x40000 DEV_MMAP_LE=0x80000 ./app_req_rep
  *
  */
 
@@ -306,6 +304,7 @@ void chan_init_all_once(void) {
 void get_dev_type(char *dev_type, char *env_type, char *def_type) {
   (env_type == NULL) ? strcat(dev_type, def_type) : strcat(dev_type, env_type);
 }
+
 // Get channel device name (*dev_name) from enivronment or default (for that type)
 void get_dev_name(char *dev_name, char *env_name, char *def_name_dma, char *def_name_shm, char *dev_type) {
   strcpy(dev_name, "/dev/");        // prefix device name
@@ -343,9 +342,8 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
   else {            // RX
     get_dev_type(cp->dev_type,     getenv("DEV_TYPE_RX"), "dma");
     get_dev_name(cp->dev_name,     getenv("DEV_NAME_RX"), "dma_proxy_rx", "mem", cp->dev_type);
-    get_dev_val (&(cp->mm.offset), getenv("DEV_OFFS_RX"), 0x0, SHM_MMAP_LEN_HOST, cp->dev_type);
+    get_dev_val (&(cp->mm.offset), getenv("DEV_OFFS_RX"), 0x0, 0x0, cp->dev_type);
     get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * RX_BUFFER_COUNT), SHM_MMAP_LEN_ESCAPE, cp->dev_type);
-    log_trace("%s: Len SHM = %x type=%s", __func__, SHM_MMAP_LEN_ESCAPE, cp->dev_type);
   }
   get_dev_val(&(cp->mm.phys_addr), getenv("DEV_MMAP_AD"), DMA_ADDR_HOST, SHM_MMAP_ADDR_HOST, cp->dev_type);
 //  log_trace("%s Env Vars: type=%s name=%s off=%s mlen=%s (%", __func__, getenv("DEV_TYPE_TX"), getenv("DEV_NAME_TX"), getenv("DEV_OFFS_TX"), getenv("DEV_MMAP_LE"));
@@ -527,7 +525,7 @@ void shm_send(chan *cp, void *adu, gaps_tag *tag) {
   size_t  adu_len=0;    // encoder calculates length */
 
   log_debug("%s TX index=%d len=%ld", __func__, pkt_index_now, adu_len);
-#if 1 >= PRINT_STATE_LEVEL
+#if 0 >= PRINT_STATE_LEVEL
   chan_print(cp);
 #endif  // LOG_LEVEL_MIN
   if (cp->shm_addr->pkt_index_last == pkt_index_nxt) {
