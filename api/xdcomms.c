@@ -761,7 +761,7 @@ char *xdc_set_in(char *addr_in) { return NULL; }
 char *xdc_set_out(char *addr_in) { return NULL; }
 void *xdc_ctx(void) { return NULL; }
 void *xdc_pub_socket(void) {
-  gaps_tag   tag;
+  gaps_tag   tag=ctag_decode(0x01010100);
   log_debug("Start of %s: for tag=<%d,%d,%d>", __func__, tag.mux, tag.sec, tag.typ);
   exit(22);
   return NULL;
