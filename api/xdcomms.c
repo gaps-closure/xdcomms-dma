@@ -763,14 +763,14 @@ void *xdc_ctx(void) { return NULL; }
 void *xdc_pub_socket(void) {
   gaps_tag   tag;
   char      *mp = getenv("TAG_MUX");
-  char      *sp = getenv("TAG_MUX");
-  char      *tp = getenv("TAG_MUX");
+  char      *sp = getenv("TAG_SEC");
+  char      *tp = getenv("TAG_TYP");
 
-  if (mp != NULL) tag.mux=atoi(mp);
+  if (mp != NULL) tag.mux=strtol(mp, NULL, 10);
   else            return NULL;
-  if (sp != NULL) tag.mux=atoi(sp);
+  if (sp != NULL) tag.mux=atoi(sp, NULL, 10);
   else            return NULL;
-  if (tp != NULL) tag.mux=atoi(tp);
+  if (tp != NULL) tag.mux=atoi(tp, NULL, 10);
   else            return NULL;
 
   log_debug("Start of %s: for tag=<%d,%d,%d>", __func__, tag.mux, tag.sec, tag.typ);
