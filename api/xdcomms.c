@@ -765,13 +765,10 @@ void *xdc_pub_socket(void) {
   char      *mp = getenv("TAG_MUX");
   char      *sp = getenv("TAG_SEC");
   char      *tp = getenv("TAG_TYP");
-
-  if (mp != NULL) tag.mux=strtol(mp, NULL, 10);
-  else            return NULL;
-  if (sp != NULL) tag.sec=strtol(sp, NULL, 10);
-  else            return NULL;
-  if (tp != NULL) tag.typ=strtol(tp, NULL, 10);
-  else            return NULL;
+  if ((mp == NULL) || (sp == NULL) || (tp != NULL)) return NULL;
+  tag.mux=strtol(mp, NULL, 10);
+  tag.sec=strtol(sp, NULL, 10);
+  tag.typ=strtol(tp, NULL, 10);
 
   log_debug("Start of %s: for tag=<%d,%d,%d>", __func__, tag.mux, tag.sec, tag.typ);
   get_chan_info(&tag, 't');
