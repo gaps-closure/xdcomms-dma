@@ -766,8 +766,7 @@ void *xdc_pub_socket(void) {
   char      *sp = getenv("TAG_SEC");
   char      *tp = getenv("TAG_TYP");
 
-  if (mp != NULL) tag.mux=strtol(mp, NULL, 10);
-  else            return NULL;
+  (mp != NULL) ? tag.mux=strtol(mp, NULL, 10) : return NULL;
   if (sp != NULL) tag.sec=strtol(sp, NULL, 10);
   else            return NULL;
   if (tp != NULL) tag.typ=strtol(tp, NULL, 10);
@@ -775,7 +774,6 @@ void *xdc_pub_socket(void) {
 
   log_debug("Start of %s: for tag=<%d,%d,%d>", __func__, tag.mux, tag.sec, tag.typ);
   get_chan_info(&tag, 't');
-  exit(22);
   return NULL;
 }
 void *xdc_sub_socket(gaps_tag tag) {
