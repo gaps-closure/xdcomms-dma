@@ -91,7 +91,7 @@ typedef struct channel {
   int              retries;        // number of RX polls (everhmy RX_POLL_INTERVAL_NSEC) before timeout
   pthread_mutex_t  lock;           // Ensure RX thread does not write while xdcomms reads
   memmap           mm;             // Mmap configuration
-  pkt_info         pinfo;          // Last received packet info
+  pkt_info         pinfo;          // Received packet info stored by a RX thread
   shm_channel     *shm_addr;       // Pointer to mmap'ed Shared Memory structure
 } chan;
 
@@ -170,7 +170,7 @@ void ctag_encode(uint32_t *ctag, gaps_tag *tag) {
 }
 
 /* Decompress teg (ctag -> tag) */
-void ctag_decode(uint32_t *ctag, gaps_tag *tag) {
+void ctag_decode(gaps_tag *tag, uint32_t *ctag) {
   uint32_t ctag_h = ntohl(*ctag);
   tag->mux = (ctag_h & 0xff0000) >> 16 ;
   tag->sec = (ctag_h &   0xff00) >> 8;
@@ -571,10 +571,10 @@ void rcvr_dma(chan *cp, int buffer_id) {
   log_debug("THREAD-2 waiting for packet (%d %s %s)", __func__, cp->ctag, cp->dev_type, cp->dev_name);
   while (dma_start_to_finish(cp->fd, &buffer_id, &(dma_cb_ptr[buffer_id])) != 0) { ; }
   p = (bw *) &(dma_cb_ptr[buffer_id].buffer);    /* XXX: DMA buffer must be larger than size of BW */
-  ctag_decode(&(p->message_tag_ID), &(cp->pinfo.tag));
+  pthread_mutex_lock(&(cp->lock));
+  ctag_decode(&(cp->pinfo.tag), &(p->message_tag_ID));
 //  time_trace("XDC_THRD got packet tag=<%d,%d,%d> (fd=%d id=%d)", cp->pinfo.tag.mux, cp->pinfo.tag.sec, cp->pinfo.tag.typ, cp->fd, buffer_id);
   log_trace("THREAD-3 rx packet tag=<%d,%d,%d> buf-id=%d st=%d", cp->pinfo.tag.mux, cp->pinfo.tag.sec, cp->pinfo.tag.typ, buffer_id, dma_cb_ptr[buffer_id].status);
-  pthread_mutex_lock(&(cp->lock));
   bw_len_decode(&(cp->pinfo.data_len), p->data_len);
   cp->pinfo.data = (uint8_t *) p->data;
   cp->pinfo.newd = 1;
@@ -589,6 +589,8 @@ void rcvr_shm(chan *cp, int buffer_id) {
   while (pkt_index == (cp->shm_addr->pkt_index_next)) { ; }
   log_trace("THREAD-3 %s got packet (index=%d len=%d)", __func__, pkt_index, cp->shm_addr->pinfo[pkt_index].data_length);
   pthread_mutex_lock(&(cp->lock));
+  ctag_decode(&(cp->pinfo.tag), &(cp->shm_addr->cinfo.ctag));
+  log_trace("THREAD-3 rx packet tag=<%d,%d,%d> buf-id=%d", cp->pinfo.tag.mux, cp->pinfo.tag.sec, cp->pinfo.tag.typ, buffer_id);
   cp->pinfo.data_len = cp->shm_addr->pinfo[pkt_index].data_length;
   cp->pinfo.data     = (uint8_t *) (cp->shm_addr->pdata->data);
   cp->pinfo.newd     = 1;
