@@ -768,7 +768,7 @@ void *xdc_pub_socket(void) {
 }
 void *xdc_sub_socket(gaps_tag tag) {
   log_debug("Start of %s: for tag=<%d,%d,%d>", __func__, tag.mux, tag.sec, tag.typ);
-  chan *cp = get_chan_info(&tag, 'r');
+  get_chan_info(&tag, 'r');
   return NULL;
 }
 
