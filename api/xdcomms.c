@@ -368,15 +368,15 @@ void shm_info_print(shm_channel *cip) {
 
 // After openning SHM device, initialize SHM configuration
 void shm_init_config_one(chan *cp) {
-  int i;
+  int           i;
   shm_channel  *shm_ptr = cp->shm_addr;
   cinfo        *cip = &(shm_ptr->cinfo);
 
-  log_trace("%s:  cp=%p va=%p + off=%lx = %lx", __func__, cp, cp->mm.virt_addr, cp->mm.offset, cp->shm_addr);
+  log_trace("%s:  cp=%p va=%p + off=%lx = %lx", __func__, cp, cp->mm.virt_addr, cp->mm.offset, shm_ptr);
   log_trace("shm_channel size s=%lx c=%ld i=%lx d=%lx", sizeof(shm_channel), sizeof(cinfo), sizeof(pinfo), sizeof(pdata));
 
-  cp->shm_addr->pkt_index_next = 0;
-  cp->shm_addr->pkt_index_last = -1;
+  shm_ptr->pkt_index_next = 0;
+  shm_ptr->pkt_index_last = -1;
 
   cip->ctag               = cp->ctag;
   cip->pkt_index_max      = PKT_INDEX_MAX;
@@ -385,14 +385,14 @@ void shm_init_config_one(chan *cp) {
   cip->unix_seconds       = time(NULL);
   cip->crc16              = 0;
   cip->crc16              = crc16((uint8_t *) &cip, sizeof(cinfo));
-//  log_trace("%s %08x %c Pnters: va=%p vc=%p ci=%p vd=%p vn=%p", __func__, cp->ctag, cp->dir, cp->shm_addr, cip, &(cp->shm_addr->pinfo), &(cp->shm_addr->pdata), &(cp->shm_addr->pkt_index_next));
+//  log_trace("%s %08x %c Pnters: va=%p vc=%p ci=%p vd=%p vn=%p", __func__, cp->ctag, cp->dir, shm_ptr, cip, &(shm_ptr->pinfo), &(shm_ptr->pdata), &(shm_ptr->pkt_index_next));
   
   for (i=0; i<PKT_INDEX_MAX; i++) {
-    cp->shm_addr->pinfo[i].data_length    = 0;
-    cp->shm_addr->pinfo[i].transaction_ID = 0;
+    shm_ptr->pinfo[i].data_length    = 0;
+    shm_ptr->pinfo[i].transaction_ID = 0;
   }
 #if 1 >= PRINT_STATE_LEVEL
-  shm_info_print(cp->shm_addr);
+  shm_info_print(shm_ptr);
 #endif  // PRINT_STATE
 }
 
@@ -418,6 +418,7 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
       dev_open_if_new(cp);                              // 2) Open device (if not already open)
       log_trace("%s: Using %s device %s for ctag=0x%08x dir=%c", __func__, cp->dev_type, cp->dev_name, cp->ctag, cp->dir);
       if ((strcmp(cp->dev_type, "shm")) == 0) {
+        cp->shm_addr = cp->mm.virt_addr + cp->mm.offset;
         log_trace("XXX %s:", __func__);
         if ((cp->dir) == 't') shm_init_config_one(cp);  // 3) Configure SHM structure for new channel
       }
