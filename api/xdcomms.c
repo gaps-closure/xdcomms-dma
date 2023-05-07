@@ -369,10 +369,10 @@ void shm_info_print(shm_channel *cip) {
 // After openning SHM device, initialize SHM configuration
 void shm_init_config_one(chan *cp) {
   int i;
-  cinfo  *cip = &(cp->shm_addr->cinfo);
+  shm_channel  *shm_ptr = cp->shm_addr;
+  cinfo        *cip = &(shm_ptr->cinfo);
 
-  log_trace("%s: START cp=%p", __func__, cp);
-  log_trace("%s: va=%p + off=%lx = %lx", __func__, cp->mm.virt_addr, cp->mm.offset, cp->shm_addr);
+  log_trace("%s:  cp=%p va=%p + off=%lx = %lx", __func__, cp, cp->mm.virt_addr, cp->mm.offset, cp->shm_addr);
   log_trace("shm_channel size s=%lx c=%ld i=%lx d=%lx", sizeof(shm_channel), sizeof(cinfo), sizeof(pinfo), sizeof(pdata));
 
   cp->shm_addr->pkt_index_next = 0;
