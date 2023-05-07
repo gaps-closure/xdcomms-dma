@@ -761,11 +761,12 @@ char *xdc_set_in(char *addr_in) { return NULL; }
 char *xdc_set_out(char *addr_in) { return NULL; }
 void *xdc_ctx(void) { return NULL; }
 void *xdc_pub_socket(void) {
-  log_debug(" %s", __func__);
   gaps_tag   tag;
   char      *mp = getenv("TAG_MUX");
   char      *sp = getenv("TAG_SEC");
   char      *tp = getenv("TAG_TYP");
+  log_debug(" %s ptr=<%p %p %p> tag=<%s,%s,%s>", __func__. mp, sp, tp, mp, sp, tp);
+
   if ((mp == NULL) || (sp == NULL) || (tp != NULL)) return NULL;
   tag.mux=strtol(mp, NULL, 10);
   tag.sec=strtol(sp, NULL, 10);
