@@ -631,12 +631,12 @@ void rcvr_thread_start(chan *cp) {
 
   /* Open rx channel and receive threads (only once) */
   log_trace("%s: xdir=%c", __func__, cp->dir);
-  pthread_mutex_lock(&chan_create);
+// Moved into get_channel_info  pthread_mutex_lock(&chan_create);
   rxargs.cp = cp;
   rxargs.buffer_id_start = 0;
   log_trace("%s: c=0x%08x %s", __func__, cp->ctag, cp->dev_name);
   if (pthread_create(&tid, NULL, (void *) rcvr_thread_function, (void *)&rxargs) != 0) FATAL;
-  pthread_mutex_unlock(&chan_create);
+//  pthread_mutex_unlock(&chan_create);
 }
 
 /* Receive packet from driver (via rx thread), storing data and length in ADU */
