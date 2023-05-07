@@ -418,9 +418,10 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
       dev_open_if_new(cp);                              // 2) Open device (if not already open)
       log_trace("%s: Using %s device %s for ctag=0x%08x dir=%c", __func__, cp->dev_type, cp->dev_name, cp->ctag, cp->dir);
       if ((strcmp(cp->dev_type, "shm")) == 0) {
-        cp->shm_addr = cp->mm.virt_addr + cp->mm.offset;
+        log_trace("XXX %s:", __func__);
         if ((cp->dir) == 't') shm_init_config_one(cp);  // 3) Configure SHM structure for new channel
       }
+      log_trace("YYY %s:", __func__);
       if ((cp->dir) == 'r') rcvr_thread_start(cp);      // 4) Start rx thread for new receive tag
 //fprintf(stderr, "D=%d L=%d\n", LOG_DEBUG, PRINT_STATE_LEVEL);
 #if 1 >= PRINT_STATE_LEVEL
