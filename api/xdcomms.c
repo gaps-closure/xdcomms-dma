@@ -630,7 +630,7 @@ void rcvr_thread_start(chan *cp) {
   static pthread_t   tid;
 
   /* Open rx channel and receive threads (only once) */
-//  log_trace("%s: xdir=%c", __func__, cp->dir);
+  log_trace("%s: xdir=%c", __func__, cp->dir);
   pthread_mutex_lock(&chan_create);
   rxargs.cp = cp;
   rxargs.buffer_id_start = 0;
