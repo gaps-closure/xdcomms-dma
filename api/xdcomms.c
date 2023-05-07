@@ -767,7 +767,7 @@ void *xdc_pub_socket(void) {
   char      *tp = getenv("TAG_TYP");
   log_debug(" %s ptr=<%p %p %p> tag=<%s,%s,%s>", __func__, mp, sp, tp, mp, sp, tp);
 
-  if ((mp == NULL) || (sp == NULL) || (tp != NULL)) return NULL;
+  if ((mp == NULL) || (sp == NULL) || (tp == NULL)) return NULL;
   tag.mux=strtol(mp, NULL, 10);
   tag.sec=strtol(sp, NULL, 10);
   tag.typ=strtol(tp, NULL, 10);
