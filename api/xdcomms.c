@@ -593,7 +593,7 @@ void rcvr_shm(chan *cp, int buffer_id, int index_buf) {
   
   log_debug("THREAD-2 waiting for packet (%d %s %s) chan_index=(r=%d t=%d) buff_index=(id=%d index=%d)", cp->ctag, cp->dev_type, cp->dev_name, pkt_index, cp->shm_addr->pkt_index_next, buffer_id, index_buf);
   while (pkt_index == (cp->shm_addr->pkt_index_next)) { ; }
-  log_trace("THREAD-3 %s got packet (index=%d len=%d time(r=0x%lx - t=0x%lx = 0x%lx))", __func__, pkt_index, cp->shm_addr->pinfo[pkt_index].data_length, cp->shm_addr->cinfo.unix_seconds, cp->unix_seconds, (cp->shm_addr->cinfo.unix_seconds) - (cp->unix_seconds), cp->shm_addr->cinfo.unix_seconds);
+  log_trace("THREAD-3 %s got packet (index=%d len=%d time(r=0x%lx t=0x%lx = 0x%lx))", __func__, pkt_index, cp->shm_addr->pinfo[pkt_index].data_length, cp->shm_addr->cinfo.unix_seconds, cp->unix_seconds, (cp->unix_seconds) -(cp->shm_addr->cinfo.unix_seconds), cp->shm_addr->cinfo.unix_seconds);
   pthread_mutex_lock(&(cp->lock));
   log_trace("THREAD-3b rx packet ctag=0x%08x buf-id=%d", cp->ctag, buffer_id);
   cp->rx[index_buf].data_len = cp->shm_addr->pinfo[pkt_index].data_length;
