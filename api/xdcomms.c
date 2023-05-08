@@ -273,7 +273,7 @@ void chan_print(chan *cp) {
   fprintf(stderr, "  mmap len=0x%lx [pa=0x%lx va=%p off=0x%lx prot=0x%x flag=0x%x]\n",  cp->mm.len, cp->mm.phys_addr, cp->mm.virt_addr, cp->mm.offset, cp->mm.prot, cp->mm.flags);
   fprintf(stderr, "  ret=%d every %d ns", cp->retries, RX_POLL_INTERVAL_NSEC);
   for (index_buf=0; index_buf<RX_BUFFS_PER_THREAD; index_buf++) {
-    fprintf(stderr, "    i=%d: newd=%d rx_buf_ptr=%p len=%lx tid=%d tag=<%d,%d,%d>\n", index_buf, cp->rx[index_buf].newd, cp->rx[index_buf].data, cp->rx[index_buf].data_len, cp->rx[index_buf].tid, cp->rx[index_buf].tag.mux, cp->rx[index_buf].tag.sec, cp->rx[index_buf].tag.typ);
+    fprintf(stderr, "    i=%d: newd=%d rx_buf_ptr=%p len=%lx tid=%d\n", index_buf, cp->rx[index_buf].newd, cp->rx[index_buf].data, cp->rx[index_buf].data_len, cp->rx[index_buf].tid);
   }
 }
 
