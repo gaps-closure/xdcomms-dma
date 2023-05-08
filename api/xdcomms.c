@@ -440,7 +440,7 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
 
   /* c) Unlock and return chan_info pointer */
   if (chan_index >= GAPS_TAG_MAX) FATAL;
-  log_trace("%s chan_index=%d: ctag=0x%08x", __func__, chan_index, ctag);
+//  log_trace("%s chan_index=%d: ctag=0x%08x", __func__, chan_index, ctag);
   pthread_mutex_unlock(&chan_create);
   return (cp);
 }
@@ -587,12 +587,15 @@ void rcvr_dma(chan *cp, int buffer_id, int index_buf) {
   pthread_mutex_unlock(&(cp->lock));
 }
 
+void rxwait(shm_channel *cip) {
+  shm_info_print(cip);
+}
 
 void rcvr_shm(chan *cp, int buffer_id, int index_buf) {
   static int pkt_index=0;
   
   log_debug("THREAD-2 waiting for packet (%d %s %s) chan_index=(r=%d t=%d) buff_index=(id=%d index=%d)", cp->ctag, cp->dev_type, cp->dev_name, pkt_index, cp->shm_addr->pkt_index_next, buffer_id, index_buf);
-  while ((cp->unix_seconds) > (cp->shm_addr->cinfo.unix_seconds)) { ; }
+  while ((cp->unix_seconds) > (cp->shm_addr->cinfo.unix_seconds)) { rxwait(cp->shm_addr); }
   log_trace("XXXX");
   while (pkt_index == (cp->shm_addr->pkt_index_next)) { ; }
   log_trace("THREAD-3 %s got packet (index=%d len=%d tr=0x%lx - tt=0x%lx = 0x%lx))", __func__, pkt_index, cp->shm_addr->pinfo[pkt_index].data_length, cp->shm_addr->cinfo.unix_seconds, cp->unix_seconds, (cp->unix_seconds) -(cp->shm_addr->cinfo.unix_seconds), cp->shm_addr->cinfo.unix_seconds);
