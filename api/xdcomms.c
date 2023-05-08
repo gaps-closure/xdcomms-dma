@@ -655,7 +655,7 @@ int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
     log_trace("XDCOMMS reads from buff=%p (len=%d)", cp->rx[index_buf].data, cp->rx[index_buf].data_len);
     if ((cp->rx[index_buf].data_len) > 0) log_buf_trace("RX_PKT", cp->rx[index_buf].data, cp->rx[index_buf].data_len);
     cp->rx[index_buf].newd = 0;                      // unmark newdata
-    log_debug("XDCOMMS rx packet tag=<%d,%d,%d> len=%d", tag.mux, tag.sec, tag.typ, cp->rx[index_buf].data_len);
+    log_debug("XDCOMMS rx packet tag=<%d,%d,%d> len=%d", tag->mux, tag->sec, tag->typ, cp->rx[index_buf].data_len);
   }
   pthread_mutex_unlock(&(cp->lock));
   return ((cp->rx[index_buf].data_len) > 0) ? cp->rx[index_buf].data_len : -1;
