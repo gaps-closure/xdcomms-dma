@@ -89,6 +89,7 @@ typedef struct channel {
   char             dev_name[NAME_LEN_MAX];   // Device name: e.g., /dev/mem or /dev/sue_dominous
   int              fd;             // Device file descriptor (set when device openned)
   int              retries;        // number of RX polls (everhmy RX_POLL_INTERVAL_NSEC) before timeout
+  time_t           unix_seconds;   // When process was started
   pthread_mutex_t  lock;           // Ensure RX thread does not write while xdcomms reads
   memmap           mm;             // Mmap configuration
   pkt_info         rx[RX_BUFFS_PER_THREAD];   // RX packet info from RX thread (use mutex lock)
@@ -269,7 +270,7 @@ void dev_open_if_new(chan *cp) {
 /**********************************************************************/
 void chan_print(chan *cp) {
   int index_buf;
-  fprintf(stderr, "  chan info %08x: dir=%c typ=%s nam=%s fd=%d ret=%d every %d ns buffers/thread=%d\n", cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->retries, RX_POLL_INTERVAL_NSEC, RX_BUFFS_PER_THREAD);
+  fprintf(stderr, "  chan info %08x: dir=%c typ=%s nam=%s fd=%d ut=0x%lx ret=%d every %d ns buffers/thread=%d\n", cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->unix_seconds, cp->retries, RX_POLL_INTERVAL_NSEC, RX_BUFFS_PER_THREAD);
   fprintf(stderr, "  mmap len=0x%lx [pa=0x%lx va=%p off=0x%lx prot=0x%x flag=0x%x]\n",  cp->mm.len, cp->mm.phys_addr, cp->mm.virt_addr, cp->mm.offset, cp->mm.prot, cp->mm.flags);
   for (index_buf=0; index_buf<2; index_buf++) {  // RX_BUFFS_PER_THREAD
     fprintf(stderr, "    i=%d: newd=%d rx_buf_ptr=%p len=%lx tid=%d\n", index_buf, cp->rx[index_buf].newd, cp->rx[index_buf].data, cp->rx[index_buf].data_len, cp->rx[index_buf].tid);
@@ -291,12 +292,15 @@ void chan_init_all_once(void) {
     t_in_ms = ((t_env = getenv("TIMEOUT_MS")) == NULL) ? RX_POLL_TIMEOUT_MSEC_DEFAULT : atoi(t_env);
     if (pthread_mutex_init(&chan_create, NULL) != 0)   FATAL;
     for(i=0; i < GAPS_TAG_MAX; i++) {
-      chan_info[i].ctag       = 0;
-      chan_info[i].mm.prot    = PROT_READ | PROT_WRITE;
-      chan_info[i].mm.flags   = MAP_SHARED;
-      chan_info[i].retries    = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;
+      chan_info[i].ctag         = 0;
+      chan_info[i].mm.prot      = PROT_READ | PROT_WRITE;
+      chan_info[i].mm.flags     = MAP_SHARED;
+      chan_info[i].retries      = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;
+      chan_info[i].unix_seconds = time(NULL);
+
       for (index_buf=0; index_buf<RX_BUFFS_PER_THREAD; index_buf++) {
         chan_info[i].rx[index_buf].newd = 0;
+        chan_info[i].rx[index_buf].data_len = 0;
         chan_info[i].rx[index_buf].data = NULL;
       }
       if (pthread_mutex_init(&(chan_info[i].lock), NULL) != 0)   FATAL;
@@ -587,9 +591,9 @@ void rcvr_dma(chan *cp, int buffer_id, int index_buf) {
 void rcvr_shm(chan *cp, int buffer_id, int index_buf) {
   static int pkt_index=0;
   
-  log_debug("THREAD-2 waiting for packet (%d %s %s) index=(r=%d t=%d)", cp->ctag, cp->dev_type, cp->dev_name, pkt_index, cp->shm_addr->pkt_index_next);
+  log_debug("THREAD-2 waiting for packet (%d %s %s) chan_index=(r=%d t=%d) buff_index=(id=%d index=%d)", cp->ctag, cp->dev_type, cp->dev_name, pkt_index, cp->shm_addr->pkt_index_next, buffer_id, index_buf);
   while (pkt_index == (cp->shm_addr->pkt_index_next)) { ; }
-  log_trace("THREAD-3 %s got packet (index=%d len=%d)", __func__, pkt_index, cp->shm_addr->pinfo[pkt_index].data_length);
+  log_trace("THREAD-3 %s got packet (index=%d len=%d time+(r=))", __func__, pkt_index, cp->shm_addr->pinfo[pkt_index].data_length, cp->shm_addr->cinfo.unix_seconds, cp->shm_addr->cinfo.unix_seconds);
   pthread_mutex_lock(&(cp->lock));
   log_trace("THREAD-3b rx packet ctag=0x%08x buf-id=%d", cp->ctag, buffer_id);
   cp->rx[index_buf].data_len = cp->shm_addr->pinfo[pkt_index].data_length;
