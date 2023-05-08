@@ -568,7 +568,7 @@ void asyn_send(void *adu, gaps_tag *tag) {
 /**********************************************************************/
 /* Device read functions                                              */
 /**********************************************************************/
-void rcvr_dma(chan *cp, int buffer_id) {
+void rcvr_dma(chan *cp, int buffer_id, int index_buf) {
   bw                    *p;
   struct channel_buffer *dma_cb_ptr =  (struct channel_buffer *) cp->mm.virt_addr;
 
@@ -577,28 +577,25 @@ void rcvr_dma(chan *cp, int buffer_id) {
   while (dma_start_to_finish(cp->fd, &buffer_id, &(dma_cb_ptr[buffer_id])) != 0) { ; }
   p = (bw *) &(dma_cb_ptr[buffer_id].buffer);    /* XXX: DMA buffer must be larger than size of BW */
   pthread_mutex_lock(&(cp->lock));
-//  ctag_decode(&(cp->pinfo.tag), &(p->message_tag_ID));
-//  time_trace("XDC_THRD got packet tag=<%d,%d,%d> (fd=%d id=%d)", cp->pinfo.tag.mux, cp->pinfo.tag.sec, cp->pinfo.tag.typ, cp->fd, buffer_id);
   log_trace("THREAD-3 rx packet ctag=0x%08x buf-id=%d st=%d", cp->ctag, buffer_id, dma_cb_ptr[buffer_id].status);
-  bw_len_decode(&(cp->pinfo.data_len), p->data_len);
-  cp->pinfo.data = (uint8_t *) p->data;
-  cp->pinfo.newd = 1;
+  bw_len_decode(&(cp->rx[index_buf].data_len), p->data_len);
+  cp->rx[index_buf].data = (uint8_t *) p->data;
+  cp->rx[index_buf].newd = 1;
   pthread_mutex_unlock(&(cp->lock));
 }
 
 
-void rcvr_shm(chan *cp, int buffer_id, int buffer_id_index) {
+void rcvr_shm(chan *cp, int buffer_id, int index_buf) {
   static int pkt_index=0;
   
   log_debug("THREAD-2 waiting for packet (%d %s %s) index=(r=%d t=%d)", cp->ctag, cp->dev_type, cp->dev_name, pkt_index, cp->shm_addr->pkt_index_next);
   while (pkt_index == (cp->shm_addr->pkt_index_next)) { ; }
   log_trace("THREAD-3 %s got packet (index=%d len=%d)", __func__, pkt_index, cp->shm_addr->pinfo[pkt_index].data_length);
   pthread_mutex_lock(&(cp->lock));
-//  ctag_decode(&(cp->pinfo.tag), &(cp->shm_addr->cinfo.ctag));
-  log_trace("THREAD-3b rx packet tag=<%d,%d,%d> buf-id=%d", cp->pinfo.tag.mux, cp->pinfo.tag.sec, cp->pinfo.tag.typ, buffer_id);
-  cp->pinfo[buffer_id_index].data_len = cp->shm_addr->pinfo[pkt_index].data_length;
-  cp->pinfo[buffer_id_index].data     = (uint8_t *) (cp->shm_addr->pdata->data);
-  cp->pinfo[buffer_id_index].newd     = 1;
+  log_trace("THREAD-3b rx packet ctag=0x%08x buf-id=%d", cp->ctag, buffer_id);
+  cp->pinfo[index_buf].data_len = cp->shm_addr->pinfo[pkt_index].data_length;
+  cp->pinfo[index_buf].data     = (uint8_t *) (cp->shm_addr->pdata->data);
+  cp->pinfo[index_buf].newd     = 1;
   pthread_mutex_unlock(&(cp->lock));
   pkt_index++;
 }
@@ -621,7 +618,6 @@ void *rcvr_thread_function(thread_args *vargs) {
       log_fatal("Unsupported device type %s\n", cp->dev_type);
       exit(-1);
     }
-//    time_trace("XDC_Rx2 start decode for ctag=<%d,%d,%d>", cp->pinfo.tag.mux, cp->pinfo.tag.sec, cp->pinfo.tag.typ);
     buffer_id_index = (buffer_id_index + 1) % RX_BUFFS_PER_THREAD;
     log_trace("THREAD-4 buf-id=%d index=%d", buffer_id, buffer_id_index);
   }
@@ -645,25 +641,25 @@ void rcvr_thread_start(chan *cp) {
 /* Receive packet from driver (via rx thread), storing data and length in ADU */
 int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
   gaps_tag  tag;
+  int       index_buf;
   
   pthread_mutex_lock(&(cp->lock));
 //  log_trace("%s: Check for received packet on tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
-  if (cp->pinfo.newd != 0) {                            // get packet from buffer if available)
+  if ((index_buf=buf_get_newd(cp)) >= 0) {                            // get packet from buffer if available)
 #if 1 >= PRINT_STATE_LEVEL
     fprintf(stderr, "%s", __func__);
     chan_print(cp);
 #endif
     
     ctag_decode(&tag, &(cp->ctag));
-    cmap_decode(cp->pinfo.data, cp->pinfo.data_len, adu, &tag);   /* Put packet into ADU */
-    log_trace("XDCOMMS reads from buff=%p (len=%d)", cp->pinfo.data, cp->pinfo.data_len);
-    if ((cp->pinfo.data_len) > 0) log_buf_trace("RX_PKT", cp->pinfo.data, cp->pinfo.data_len);
-    cp->pinfo.newd = 0;                      // unmark newdata
-//    time_trace("XDC_Rx3 packet copied to ADU: tag=<%d,%d,%d> adu-len=%d", cp->pinfo.tag.mux, cp->pinfo.tag.sec, cp->pinfo.tag.typ, cp->pinfo.data_len);
-    log_debug("XDCOMMS rx packet tag=<%d,%d,%d> len=%d", tag.mux, tag.sec, tag.typ, cp->pinfo.data_len);
+    cmap_decode(cp->rx[index_buf].data, cp->rx[index_buf].data_len, adu, &tag);   /* Put packet into ADU */
+    log_trace("XDCOMMS reads from buff=%p (len=%d)", cp->rx[index_buf].data, cp->rx[index_buf].data_len);
+    if ((cp->rx[index_buf].data_len) > 0) log_buf_trace("RX_PKT", cp->rx[index_buf].data, cp->rx[index_buf].data_len);
+    cp->rx[index_buf].newd = 0;                      // unmark newdata
+    log_debug("XDCOMMS rx packet tag=<%d,%d,%d> len=%d", tag.mux, tag.sec, tag.typ, cp->rx[index_buf].data_len);
   }
   pthread_mutex_unlock(&(cp->lock));
-  return ((cp->pinfo.data_len) > 0) ? cp->pinfo.data_len : -1;
+  return ((cp->rx[index_buf].data_len) > 0) ? cp->rx[index_buf].data_len : -1;
 }
 
 /**********************************************************************/
