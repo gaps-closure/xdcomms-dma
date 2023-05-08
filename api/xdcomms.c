@@ -638,19 +638,21 @@ void rcvr_thread_start(chan *cp) {
 //  pthread_mutex_unlock(&chan_create);
 }
 
+)
+
 /* Receive packet from driver (via rx thread), storing data and length in ADU */
 int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
-  int       index_buf;
+  static int  index_buf=0;
   
   pthread_mutex_lock(&(cp->lock));
 //  log_trace("%s: Check for received packet on tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
-  if ((index_buf=buf_get_newd(cp)) >= 0) {                            // get packet from buffer if available)
+  if (cp->rx[index_buf].newd == 1) {                            // get packet from buffer if available)
 #if 1 >= PRINT_STATE_LEVEL
     fprintf(stderr, "%s", __func__);
     chan_print(cp);
 #endif
     
-    ctag_decode(&tag, &(cp->ctag));
+//    ctag_decode(tag, &(cp->ctag));
     cmap_decode(cp->rx[index_buf].data, cp->rx[index_buf].data_len, adu, tag);   /* Put packet into ADU */
     log_trace("XDCOMMS reads from buff=%p (len=%d)", cp->rx[index_buf].data, cp->rx[index_buf].data_len);
     if ((cp->rx[index_buf].data_len) > 0) log_buf_trace("RX_PKT", cp->rx[index_buf].data, cp->rx[index_buf].data_len);
