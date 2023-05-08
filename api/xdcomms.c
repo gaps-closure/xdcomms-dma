@@ -592,7 +592,7 @@ void rcvr_shm(chan *cp, int buffer_id, int index_buf) {
   static int pkt_index=0;
   
   log_debug("THREAD-2 waiting for packet (%d %s %s) chan_index=(r=%d t=%d) buff_index=(id=%d index=%d)", cp->ctag, cp->dev_type, cp->dev_name, pkt_index, cp->shm_addr->pkt_index_next, buffer_id, index_buf);
-  while ((cp->unix_seconds) > (cp->shm_addr->cinfo.unix_seconds)) { ; }
+  while ((cp->unix_seconds) > (cp->shm_addr->cinfo.unix_seconds)) { log_trace("XXXX"); }
   while (pkt_index == (cp->shm_addr->pkt_index_next)) { ; }
   log_trace("THREAD-3 %s got packet (index=%d len=%d tr=0x%lx - tt=0x%lx = 0x%lx))", __func__, pkt_index, cp->shm_addr->pinfo[pkt_index].data_length, cp->shm_addr->cinfo.unix_seconds, cp->unix_seconds, (cp->unix_seconds) -(cp->shm_addr->cinfo.unix_seconds), cp->shm_addr->cinfo.unix_seconds);
   pthread_mutex_lock(&(cp->lock));
