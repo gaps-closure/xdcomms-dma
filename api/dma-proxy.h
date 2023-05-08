@@ -35,9 +35,9 @@
 #define BUFFER_COUNT 32					        /* driver only */
 #endif
 
-#define TX_BUFFER_COUNT 	1				      /* app only, must be <= to the number in the driver */
-#define RX_BUFFER_COUNT 	BUFFER_COUNT  /* app only, must be <= to the number in the driver */
-#define BUFFER_INCREMENT	1				      /* normally 1, but skipping buffers (2) defeats CPU prefetching */
+#define DMA_TX_PKT_BUF_COUNT 	1				      /* app only, must be <= to the number in the driver */
+#define RX_BUFFER_COUNT 	    BUFFER_COUNT  /* app only, must be <= to the number in the driver */
+#define BUFFER_INCREMENT	    1				      /* normally 1, but skipping buffers (2) defeats CPU prefetching */
 
 #define FINISH_XFER 	   _IOW('a','a',int32_t*)
 #define START_XFER 		   _IOW('a','b',int32_t*)

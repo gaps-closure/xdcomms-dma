@@ -9,7 +9,7 @@
 #define SHM_MMAP_LEN_ESCAPE    0x10000000UL     // 256 MB
 #define MMAP_PAGE_MASK     (sysconf(_SC_PAGE_SIZE) - 1)    // Normally 4K - 1
 
-#define PKT_INDEX_MAX             2     // number of packet buffers in channel
+#define SHM_TX_PKT_BUF_COUNT         2  // number of packet buffers in channel
 #define DEFAULT_MS_GUARD_TIME_AW  5000  // Timing param to sync Tx write and Rx read
 #define DEFAULT_MS_GUARD_TIME_BW  1000  // Timing param to sync Tx write and Rx read
 //#define DEFAULT_MS_POLL_TIME      1000  // Timing param to sync Tx write and Rx read
@@ -42,8 +42,8 @@ typedef struct _shm_channel {
   cinfo  cinfo;
   int    pkt_index_last;            // Index to last valid packet
   int    pkt_index_next;            // Index to next packet to be written
-  pinfo  pinfo[PKT_INDEX_MAX];
-  pdata  pdata[PKT_INDEX_MAX];
+  pinfo  pinfo[SHM_TX_PKT_BUF_COUNT];
+  pdata  pdata[SHM_TX_PKT_BUF_COUNT];
 } shm_channel __attribute__ ((aligned (1024)));		/*  byte alignment */
 
 #endif /* _SHM_H_ */

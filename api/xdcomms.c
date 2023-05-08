@@ -182,7 +182,7 @@ void ctag_decode(gaps_tag *tag, uint32_t *ctag) {
 /**********************************************************************/
 /* Open channel. Returns fd, mmap-va and mmap-len */
 void dma_open_channel(chan *cp) {
-  int buffer_count = TX_BUFFER_COUNT;
+  int buffer_count = DMA_TX_PKT_BUF_COUNT;
   if ((cp->dir) == 'r') buffer_count = RX_BUFFER_COUNT;
 
   // a) Open device
@@ -342,13 +342,13 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
     get_dev_name(cp->dev_name,     getenv("DEV_NAME_TX"), "dma_proxy_tx", "mem", cp->dev_type);
     // *val = (unsigned long) strtol(env_val, NULL, 16);
     get_dev_val (&(cp->mm.offset), getenv("DEV_OFFS_TX"), 0x0, 0x0, cp->dev_type);
-    get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * TX_BUFFER_COUNT), SHM_MMAP_LEN_ESCAPE, cp->dev_type);
+    get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * DMA_TX_PKT_BUF_COUNT), SHM_MMAP_LEN_ESCAPE, cp->dev_type); // SHM_MMAP_LEN_ESCAPE vs (sizeof(struct shm_channel) * SHM_TX_PKT_BUF_COUNT  
   }
   else {            // RX
     get_dev_type(cp->dev_type,     getenv("DEV_TYPE_RX"), "dma");
     get_dev_name(cp->dev_name,     getenv("DEV_NAME_RX"), "dma_proxy_rx", "mem", cp->dev_type);
     get_dev_val (&(cp->mm.offset), getenv("DEV_OFFS_RX"), 0x0, 0x0, cp->dev_type);
-    get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * RX_BUFFER_COUNT), SHM_MMAP_LEN_ESCAPE, cp->dev_type);
+    get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * RX_BUFFER_COUNT), , cp->dev_type);
   }
   get_dev_val(&(cp->mm.phys_addr), getenv("DEV_MMAP_AD"), DMA_ADDR_HOST, SHM_MMAP_ADDR_HOST, cp->dev_type);
 //  log_trace("%s Env Vars: type=%s name=%s off=%s mlen=%s (%", __func__, getenv("DEV_TYPE_TX"), getenv("DEV_NAME_TX"), getenv("DEV_OFFS_TX"), getenv("DEV_MMAP_LE"));
@@ -360,7 +360,7 @@ void shm_info_print(shm_channel *cip) {
   unsigned long  len_bytes;
   
   fprintf(stderr, "  shm info %08x (%p): last=%d next=%d (max=%d ga=%ld gb=%ld ut=0x%lx crc=0x%04x)\n", cip->cinfo.ctag, cip, cip->pkt_index_last, cip->pkt_index_next, cip->cinfo.pkt_index_max, cip->cinfo.ms_guard_time_aw, cip->cinfo.ms_guard_time_bw, cip->cinfo.unix_seconds, cip->cinfo.crc16);
-  for (i=0; i<PKT_INDEX_MAX; i++) {
+  for (i=0; i<SHM_TX_PKT_BUF_COUNT; i++) {
     len_bytes = cip->pinfo[i].data_length;
     fprintf(stderr, "  %d: len=%ld tid=0x%lx", i, len_bytes, cip->pinfo[i].transaction_ID);
     if (len_bytes > 0) {
@@ -384,7 +384,7 @@ void shm_init_config_one(chan *cp) {
   shm_ptr->pkt_index_last = -1;
 
   cip->ctag               = cp->ctag;
-  cip->pkt_index_max      = PKT_INDEX_MAX;
+  cip->pkt_index_max      = SHM_TX_PKT_BUF_COUNT;
   cip->ms_guard_time_aw   = DEFAULT_MS_GUARD_TIME_AW;
   cip->ms_guard_time_bw   = DEFAULT_MS_GUARD_TIME_BW;
   cip->unix_seconds       = time(NULL);
@@ -392,7 +392,7 @@ void shm_init_config_one(chan *cp) {
   cip->crc16              = crc16((uint8_t *) &cip, sizeof(cinfo));
 //  log_trace("%s %08x %c Pnters: va=%p vc=%p ci=%p vd=%p vn=%p", __func__, cp->ctag, cp->dir, shm_ptr, cip, &(shm_ptr->pinfo), &(shm_ptr->pdata), &(shm_ptr->pkt_index_next));
   
-  for (i=0; i<PKT_INDEX_MAX; i++) {
+  for (i=0; i<SHM_TX_PKT_BUF_COUNT; i++) {
     shm_ptr->pinfo[i].data_length    = 0;
     shm_ptr->pinfo[i].transaction_ID = 0;
   }
