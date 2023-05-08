@@ -593,9 +593,9 @@ void rcvr_shm(chan *cp, int buffer_id, int index_buf) {
   log_trace("THREAD-3 %s got packet (index=%d len=%d)", __func__, pkt_index, cp->shm_addr->pinfo[pkt_index].data_length);
   pthread_mutex_lock(&(cp->lock));
   log_trace("THREAD-3b rx packet ctag=0x%08x buf-id=%d", cp->ctag, buffer_id);
-  cp->pinfo[index_buf].data_len = cp->shm_addr->pinfo[pkt_index].data_length;
-  cp->pinfo[index_buf].data     = (uint8_t *) (cp->shm_addr->pdata->data);
-  cp->pinfo[index_buf].newd     = 1;
+  cp->rx[index_buf].data_len = cp->shm_addr->pinfo[pkt_index].data_length;
+  cp->rx[index_buf].data     = (uint8_t *) (cp->shm_addr->pdata->data);
+  cp->rx[index_buf].newd     = 1;
   pthread_mutex_unlock(&(cp->lock));
   pkt_index++;
 }
