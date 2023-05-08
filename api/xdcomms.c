@@ -638,8 +638,6 @@ void rcvr_thread_start(chan *cp) {
 //  pthread_mutex_unlock(&chan_create);
 }
 
-)
-
 /* Receive packet from driver (via rx thread), storing data and length in ADU */
 int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
   static int  index_buf=0;
