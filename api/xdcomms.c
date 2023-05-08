@@ -593,6 +593,7 @@ void rcvr_shm(chan *cp, int buffer_id, int index_buf) {
   
   log_debug("THREAD-2 waiting for packet (%d %s %s) chan_index=(r=%d t=%d) buff_index=(id=%d index=%d)", cp->ctag, cp->dev_type, cp->dev_name, pkt_index, cp->shm_addr->pkt_index_next, buffer_id, index_buf);
   while ((cp->unix_seconds) > (cp->shm_addr->cinfo.unix_seconds)) { ; }
+  log_trace("XXXX");
   while (pkt_index == (cp->shm_addr->pkt_index_next)) { ; }
   log_trace("THREAD-3 %s got packet (index=%d len=%d tr=0x%lx - tt=0x%lx = 0x%lx))", __func__, pkt_index, cp->shm_addr->pinfo[pkt_index].data_length, cp->shm_addr->cinfo.unix_seconds, cp->unix_seconds, (cp->unix_seconds) -(cp->shm_addr->cinfo.unix_seconds), cp->shm_addr->cinfo.unix_seconds);
   pthread_mutex_lock(&(cp->lock));
@@ -804,12 +805,12 @@ int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   struct timespec  request;
   int              ntries;
 
-  log_debug("Start of %s: tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
+//  log_debug("Start of %s: tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
   cp              = get_chan_info(tag, 'r');     // get buffer for tag (to communicate with thread)
   request.tv_sec  = RX_POLL_INTERVAL_NSEC/NSEC_IN_SEC;
   request.tv_nsec = RX_POLL_INTERVAL_NSEC % NSEC_IN_SEC;
   ntries          = 1 + (cp->retries);           // number of tries to rx packet
-  log_trace("%s: test %d times every %d (%d.%09d) ns", __func__, ntries, RX_POLL_INTERVAL_NSEC, request.tv_sec, request.tv_nsec);
+//  log_trace("%s: test %d times every %d (%d.%09d) ns", __func__, ntries, RX_POLL_INTERVAL_NSEC, request.tv_sec, request.tv_nsec);
   while ((ntries--) > 0)  {
     if (nonblock_recv(adu, tag, cp) > 0)  return 0;
 //    log_trace("LOOP timeout %s: tag=<%d,%d,%d>: remaining tries = %d ", __func__, tag->mux, tag->sec, tag->typ, ntries);
@@ -821,7 +822,7 @@ int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
 
 /* Receive ADU from HAL - retry until a valid ADU */
 void xdc_blocking_recv(void *socket, void *adu, gaps_tag *tag) {
-  log_trace("Start of %s tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
+//  log_trace("Start of %s tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
   while (xdc_recv(socket, adu, tag) < 0);
 }
 
