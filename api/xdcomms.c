@@ -74,11 +74,11 @@ typedef struct _memmap {
 
 // Dynamic (per packet) Received Packet information
 typedef struct _pkt_info {
-  char      newd;      // RX thread received new packet (xdcomms resets after reading)
+  char             newd;      // RX thread sets on new packet, xdcomms resets after reading
   gaps_tag  tag;       // Received tag
-  size_t    data_len;  // length of data
-  uint8_t  *data;      // data buffer
-  int       tid;       // transaction ID
+  size_t           data_len;  // length of data
+  uint8_t         *data;      // data buffer
+  int              tid;       // transaction ID
 } pkt_info;
 
 // Channel configuration (with device abstraction)
@@ -91,7 +91,7 @@ typedef struct channel {
   int              retries;        // number of RX polls (everhmy RX_POLL_INTERVAL_NSEC) before timeout
   pthread_mutex_t  lock;           // Ensure RX thread does not write while xdcomms reads
   memmap           mm;             // Mmap configuration
-  pkt_info         pinfo;          // Received packet info stored by a RX thread
+  pkt_info         pinfo[RX_BUFFS_PER_THREAD];   // RX packet info from RX thread (use mutex lock)
   shm_channel     *shm_addr;       // Pointer to mmap'ed Shared Memory structure
 } chan;
 
@@ -354,7 +354,7 @@ void shm_info_print(shm_channel *cip) {
   int            i, j;
   unsigned long  len_bytes;
   
-  fprintf(stderr, "  shm channel info %08x (%p): last=%d next=%d (max=%d ga=%ld gb=%ld ut=0x%lx crc=0x%04x)\n", cip->cinfo.ctag, cip, cip->pkt_index_last, cip->pkt_index_next, cip->cinfo.pkt_index_max, cip->cinfo.ms_guard_time_aw, cip->cinfo.ms_guard_time_bw, cip->cinfo.unix_seconds, cip->cinfo.crc16);
+  fprintf(stderr, "  shm info %08x (%p): last=%d next=%d (max=%d ga=%ld gb=%ld ut=0x%lx crc=0x%04x)\n", cip->cinfo.ctag, cip, cip->pkt_index_last, cip->pkt_index_next, cip->cinfo.pkt_index_max, cip->cinfo.ms_guard_time_aw, cip->cinfo.ms_guard_time_bw, cip->cinfo.unix_seconds, cip->cinfo.crc16);
   for (i=0; i<PKT_INDEX_MAX; i++) {
     len_bytes = cip->pinfo[i].data_length;
     fprintf(stderr, "  %d: len=%ld tid=0x%lx", i, len_bytes, cip->pinfo[i].transaction_ID);
@@ -401,7 +401,7 @@ void shm_init_config_one(chan *cp) {
 //  b) If first call for a tag: 1) config channel info, 2) open device if new, 3) start thread
 chan *get_chan_info(gaps_tag *tag, char dir) {
   uint32_t  ctag;
-  int       i;
+  int       chan_index;
   chan     *cp;
   
   /* a) Initilize all channels (after locking from other application threads) */
@@ -410,8 +410,8 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
 
   /* b) Find info for this tag */
   ctag_encode(&ctag, tag);                 // Encoded ctag
-  for(i=0; i < GAPS_TAG_MAX; i++) {        // Break on finding tag or empty
-    cp = &(chan_info[i]);
+  for(chan_index=0; chan_index < GAPS_TAG_MAX; chan_index++) {  // Break on finding tag or empty
+    cp = &(chan_info[chan_index]);
     if (cp->ctag == ctag) break;           // found existing slot for tag
     if (cp->ctag == 0) {                   // found empty slot (before tag)
       chan_init_config_one(cp, ctag, dir);              // 1) Configure new tag
@@ -421,10 +421,7 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
         cp->shm_addr = cp->mm.virt_addr + cp->mm.offset;
         if ((cp->dir) == 't') shm_init_config_one(cp);  // 3) Configure SHM structure for new channel
       }
-      log_trace("YYY %s:", __func__);
       if ((cp->dir) == 'r') rcvr_thread_start(cp);      // 4) Start rx thread for new receive tag
-//fprintf(stderr, "D=%d L=%d\n", LOG_DEBUG, PRINT_STATE_LEVEL);
-      log_trace("XXX %s:", __func__);
 #if 1 >= PRINT_STATE_LEVEL
       chan_print(cp);
 #endif  // LOG_LEVEL_MIN
@@ -433,8 +430,8 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
   }
 
   /* c) Unlock and return chan_info pointer */
-  if (i >= GAPS_TAG_MAX) FATAL;
-  log_trace("%s %d: ctag=0x%08x", __func__, i, ctag);
+  if (chan_index >= GAPS_TAG_MAX) FATAL;
+  log_trace("%s chan_index=%d: ctag=0x%08x", __func__, chan_index, ctag);
   pthread_mutex_unlock(&chan_create);
   return (cp);
 }
@@ -767,14 +764,14 @@ void *xdc_pub_socket(void) {
   char      *mp = getenv("TAG_MUX");
   char      *sp = getenv("TAG_SEC");
   char      *tp = getenv("TAG_TYP");
-  log_debug(" %s ptr=<%p %p %p> tag=<%s,%s,%s>", __func__, mp, sp, tp, mp, sp, tp);
+  log_debug("Start of %s ptr=<%p %p %p>", __func__, mp, sp, tp);
 
   if ((mp == NULL) || (sp == NULL) || (tp == NULL)) return NULL;
   tag.mux=strtol(mp, NULL, 10);
   tag.sec=strtol(sp, NULL, 10);
   tag.typ=strtol(tp, NULL, 10);
 
-  log_debug("Start of %s: for tag=<%d,%d,%d>", __func__, tag.mux, tag.sec, tag.typ);
+  log_trace("%s: for tag=<%d,%d,%d>", __func__, tag.mux, tag.sec, tag.typ);
   get_chan_info(&tag, 't');
   return NULL;
 }
