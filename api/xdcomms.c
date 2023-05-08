@@ -269,10 +269,9 @@ void dev_open_if_new(chan *cp) {
 /**********************************************************************/
 void chan_print(chan *cp) {
   int index_buf;
-  fprintf(stderr, "  chan info %08x: dir=%c typ=%s nam=%s fd=%d\n", cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd);
+  fprintf(stderr, "  chan info %08x: dir=%c typ=%s nam=%s fd=%d ret=%d every %d ns buffers/thread=%d\n", cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->retries, RX_POLL_INTERVAL_NSEC, RX_BUFFS_PER_THREAD);
   fprintf(stderr, "  mmap len=0x%lx [pa=0x%lx va=%p off=0x%lx prot=0x%x flag=0x%x]\n",  cp->mm.len, cp->mm.phys_addr, cp->mm.virt_addr, cp->mm.offset, cp->mm.prot, cp->mm.flags);
-  fprintf(stderr, "  ret=%d every %d ns", cp->retries, RX_POLL_INTERVAL_NSEC);
-  for (index_buf=0; index_buf<RX_BUFFS_PER_THREAD; index_buf++) {
+  for (index_buf=0; index_buf<2; index_buf++) {  // RX_BUFFS_PER_THREAD
     fprintf(stderr, "    i=%d: newd=%d rx_buf_ptr=%p len=%lx tid=%d\n", index_buf, cp->rx[index_buf].newd, cp->rx[index_buf].data, cp->rx[index_buf].data_len, cp->rx[index_buf].tid);
   }
 }
