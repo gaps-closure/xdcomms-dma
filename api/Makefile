@@ -5,7 +5,7 @@ MINOR   = 1
 VERSION = $(MAJOR).$(MINOR)
 
 INCL         = -I ../log -I ../crc 
-CFLAGS      ?= -O2 -Wall -Wstrict-prototypes
+CFLAGS      ?= -Wall -Wstrict-prototypes #-O2
 SRCS        := $(wildcard *.c) $(wildcard ../log/*.c) $(wildcard ../crc/*.c)
 OBJS        := $(SRCS:%.c=%.o)
 #$(info OBJS="$(OBJS)")

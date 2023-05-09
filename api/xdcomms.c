@@ -588,6 +588,7 @@ void rcvr_dma(chan *cp, int buffer_id, int index_buf) {
 }
 
 void rxwait(shm_channel *cip) {
+  log_trace("%s t=%ld [tt=%ld - tr=%ld] = %ld", __func__, time(), cp->shm_addr->cinfo.unix_seconds, cp->unix_seconds, (cp->unix_seconds) - (cp->shm_addr->cinfo.unix_seconds));
   shm_info_print(cip);
 }
 
@@ -598,7 +599,7 @@ void rcvr_shm(chan *cp, int buffer_id, int index_buf) {
   while ((cp->unix_seconds) > (cp->shm_addr->cinfo.unix_seconds)) { rxwait(cp->shm_addr); }
   log_trace("XXXX");
   while (pkt_index == (cp->shm_addr->pkt_index_next)) { ; }
-  log_trace("THREAD-3 %s got packet (index=%d len=%d tr=0x%lx - tt=0x%lx = 0x%lx))", __func__, pkt_index, cp->shm_addr->pinfo[pkt_index].data_length, cp->shm_addr->cinfo.unix_seconds, cp->unix_seconds, (cp->unix_seconds) -(cp->shm_addr->cinfo.unix_seconds), cp->shm_addr->cinfo.unix_seconds);
+  log_trace("THREAD-3 %s got packet (index=%d len=%d tr=0x%lx - tt=0x%lx = 0x%lx))", __func__, pkt_index, cp->shm_addr->pinfo[pkt_index].data_length, cp->shm_addr->cinfo.unix_seconds, cp->unix_seconds, (cp->unix_seconds) - (cp->shm_addr->cinfo.unix_seconds), cp->shm_addr->cinfo.unix_seconds);
   pthread_mutex_lock(&(cp->lock));
   log_trace("THREAD-3b rx packet ctag=0x%08x buf-id=%d", cp->ctag, buffer_id);
   cp->rx[index_buf].data_len = cp->shm_addr->pinfo[pkt_index].data_length;
