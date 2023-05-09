@@ -588,7 +588,7 @@ void rcvr_dma(chan *cp, int buffer_id, int index_buf) {
 }
 
 void rxwait(shm_channel *cip) {
-  log_trace("%s:  t=%ld [tt=%ld - tr=%ld] = %ld", __func__, time(), cp->shm_addr->cinfo.unix_seconds, cp->unix_seconds, (cp->unix_seconds) - (cp->shm_addr->cinfo.unix_seconds));
+  log_trace("%s:  t=%ld [tt=%ld - tr=%ld] = %ld", __func__, time(NULL), cp->shm_addr->cinfo.unix_seconds, cp->unix_seconds, (cp->unix_seconds) - (cp->shm_addr->cinfo.unix_seconds));
   shm_info_print(cip);
 }
 
