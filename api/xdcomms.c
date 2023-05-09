@@ -90,6 +90,7 @@ typedef struct channel {
   int              fd;             // Device file descriptor (set when device openned)
   int              retries;        // number of RX polls (everhmy RX_POLL_INTERVAL_NSEC) before timeout
   time_t           unix_seconds;   // When process was started
+  unsigned long    wait_for_new;   // 1 = RX checks if client started later (0 = not check time)
   pthread_mutex_t  lock;           // Ensure RX thread does not write while xdcomms reads
   memmap           mm;             // Mmap configuration
   pkt_info         rx[RX_BUFFS_PER_THREAD];   // RX packet info from RX thread (use mutex lock)
@@ -270,7 +271,7 @@ void dev_open_if_new(chan *cp) {
 /**********************************************************************/
 void chan_print(chan *cp) {
   int index_buf;
-  fprintf(stderr, "  chan info %08x: dir=%c typ=%s nam=%s fd=%d ut=0x%lx ret=%d every %d ns buffers/thread=%d\n", cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->unix_seconds, cp->retries, RX_POLL_INTERVAL_NSEC, RX_BUFFS_PER_THREAD);
+  fprintf(stderr, "  chan info %08x: dir=%c typ=%s nam=%s fd=%d ut=0x%lx wn=%ld ret=%d every %d ns buffers/thread=%d\n", cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->unix_seconds, cp->wait_for_new, cp->retries, RX_POLL_INTERVAL_NSEC, RX_BUFFS_PER_THREAD);
   fprintf(stderr, "  mmap len=0x%lx [pa=0x%lx va=%p off=0x%lx prot=0x%x flag=0x%x]\n",  cp->mm.len, cp->mm.phys_addr, cp->mm.virt_addr, cp->mm.offset, cp->mm.prot, cp->mm.flags);
   for (index_buf=0; index_buf<2; index_buf++) {  // RX_BUFFS_PER_THREAD
     fprintf(stderr, "    i=%d: newd=%d rx_buf_ptr=%p len=%lx tid=%d\n", index_buf, cp->rx[index_buf].newd, cp->rx[index_buf].data, cp->rx[index_buf].data_len, cp->rx[index_buf].tid);
@@ -297,6 +298,7 @@ void chan_init_all_once(void) {
       chan_info[i].mm.flags     = MAP_SHARED;
       chan_info[i].retries      = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;
       chan_info[i].unix_seconds = time(NULL);
+      chan_info[i].wait_for_new = 0;    // Do not check time transmitter started
 
       for (index_buf=0; index_buf<RX_BUFFS_PER_THREAD; index_buf++) {
         chan_info[i].rx[index_buf].newd = 0;
@@ -353,6 +355,7 @@ void chan_init_config_one(chan *cp, uint32_t ctag, char dir) {
     get_dev_name(cp->dev_name,     getenv("DEV_NAME_RX"), "dma_proxy_rx", "mem", cp->dev_type);
     get_dev_val (&(cp->mm.offset), getenv("DEV_OFFS_RX"), 0x0, 0x0, cp->dev_type);
     get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * RX_BUFFER_COUNT), SHM_MMAP_LEN_ESCAPE, cp->dev_type);
+    get_dev_val (&(cp->wait_for_new), getenv("DEV_WAIT_NE"), 0x0, 0x0, cp->dev_type);
   }
   get_dev_val(&(cp->mm.phys_addr), getenv("DEV_MMAP_AD"), DMA_ADDR_HOST, SHM_MMAP_ADDR_HOST, cp->dev_type);
 //  log_trace("%s Env Vars: type=%s name=%s off=%s mlen=%s (%", __func__, getenv("DEV_TYPE_TX"), getenv("DEV_NAME_TX"), getenv("DEV_OFFS_TX"), getenv("DEV_MMAP_LE"));
@@ -369,7 +372,7 @@ void shm_info_print(shm_channel *cip) {
     fprintf(stderr, "  %d: len=%ld tid=0x%lx", i, len_bytes, cip->pinfo[i].transaction_ID);
     if (len_bytes > 0) {
       fprintf(stderr, " data=");
-      for (j=0; j<(len_bytes/4); j++) fprintf(stderr, "%08x ", cip->pdata[i].data[j]);
+      for (j=0; j<(len_bytes/4); j++) fprintf(stderr, "%08x ", ntohl(cip->pdata[i].data[j]));
     }
     fprintf(stderr, "\n");
   }
@@ -532,26 +535,25 @@ void shm_send(chan *cp, void *adu, gaps_tag *tag) {
   int     pkt_index_nxt = (pkt_index_now + 1) % cp->shm_addr->cinfo.pkt_index_max;
   size_t  adu_len=0;    // encoder calculates length */
 
-  log_debug("%s TX index=%d len=%ld", __func__, pkt_index_now, adu_len);
+  log_trace("%s TX index=%d len=%ld", __func__, pkt_index_now, adu_len);
 #if 0 >= PRINT_STATE_LEVEL
   chan_print(cp);
 #endif  // LOG_LEVEL_MIN
   if (cp->shm_addr->pkt_index_last == pkt_index_nxt) {
     cp->shm_addr->pkt_index_last = ((cp->shm_addr->pkt_index_last) + 1) % cp->shm_addr->cinfo.pkt_index_max;
-    // XXX: Wait ms_guard_time_bw
+    // XXX  TODO: Wait ms_guard_time_bw
   }
-  time_trace("XDC_Tx1 ready to encode for ctag=%08x", cp->ctag);
+  time_trace("XDC_Tx1 ready to encode for ctag=%08x", ntohl(cp->ctag));
   cmap_encode((uint8_t *) &(cp->shm_addr->pdata->data[pkt_index_now]), adu, &adu_len, tag);
+//  XXX  incoprate naive_memcpy into cmap_encode/decode
 //  naive_memcpy(cp->shm_addr->pdata[pkt_index_nxt].data, adu, adu_len);  // TX adds new data
   cp->shm_addr->pinfo[pkt_index_now].data_length = adu_len;
-
-  time_trace("XDC_Tx2 ready to send data for ctag=%08x typ=%s len=%ld", cp->ctag, cp->dev_type, adu_len);
   cp->shm_addr->pkt_index_next = pkt_index_nxt;           // TX updates RX
   if (cp->shm_addr->pkt_index_last < 0) cp->shm_addr->pkt_index_last = pkt_index_now;
 #if 1 >= PRINT_STATE_LEVEL
+  time_debug("XDC_Tx2 sent data (for index=%d)", pkt_index_now);
   shm_info_print(cp->shm_addr);
 #endif  // PRINT_STATE
-  exit(22);
 }
 
 /* Asynchronously send ADU to DMA driver in 'bw' packet */
@@ -559,7 +561,7 @@ void asyn_send(void *adu, gaps_tag *tag) {
   chan       *cp;        // abstract channel struct pointer for any device type
 
   // a) Open channel once (and get device type, device name and channel struct
-  log_debug("Start of %s", __func__);
+  log_trace("Start of %s", __func__);
   cp = get_chan_info(tag, 't');
   pthread_mutex_lock(&(cp->lock));
   // b) encode packet into TX buffer and send */
@@ -587,19 +589,30 @@ void rcvr_dma(chan *cp, int buffer_id, int index_buf) {
   pthread_mutex_unlock(&(cp->lock));
 }
 
-void rxwait(chan *cp) {
-  log_trace("%s:t=%lx [tt=%lx - tr=%lx] = %lx", __func__, time(NULL), cp->shm_addr->cinfo.unix_seconds, cp->unix_seconds, (cp->unix_seconds) - (cp->shm_addr->cinfo.unix_seconds));
-  shm_info_print(cp->shm_addr);
+int rxwait(chan *cp) {
+//  log_trace("%s:t=%lx [tt=%lx - tr=%lx] = %lx", __func__, time(NULL), cp->shm_addr->cinfo.unix_seconds, cp->unix_seconds, (cp->unix_seconds) - (cp->shm_addr->cinfo.unix_seconds));
+  //  shm_info_print(cp->shm_addr);
+  if ((cp->wait_for_new) == 0) {
+    log_trace("Not wait");
+    return(0);   // not wait for new cleint
+  }
+  else if ((cp->unix_seconds) <= (cp->shm_addr->cinfo.unix_seconds)) {
+    log_trace("Got New client");
+    return(0);   // new client
+  }
+  else {
+//    log_trace("Old client - so wait");
+   return(-1);  // wait for new client
+  }
 }
 
 void rcvr_shm(chan *cp, int buffer_id, int index_buf) {
   static int pkt_index=0;
   
   log_debug("THREAD-2 waiting for packet (%d %s %s) chan_index=(r=%d t=%d) buff_index=(id=%d index=%d)", cp->ctag, cp->dev_type, cp->dev_name, pkt_index, cp->shm_addr->pkt_index_next, buffer_id, index_buf);
-  while ((cp->unix_seconds) > (cp->shm_addr->cinfo.unix_seconds)) { rxwait(cp); }
-  log_trace("XXXX");
+  while (rxwait(cp)) { ; }
   while (pkt_index == (cp->shm_addr->pkt_index_next)) { ; }
-  log_trace("THREAD-3 %s got packet (index=%d len=%d tr=0x%lx - tt=0x%lx = 0x%lx))", __func__, pkt_index, cp->shm_addr->pinfo[pkt_index].data_length, cp->shm_addr->cinfo.unix_seconds, cp->unix_seconds, (cp->unix_seconds) - (cp->shm_addr->cinfo.unix_seconds), cp->shm_addr->cinfo.unix_seconds);
+  log_trace("THREAD-3 %s got packet index=(l=%d next=%d last=%d) len=%d [tr=0x%lx - tt=0x%lx = 0x%lx]", __func__, pkt_index, cp->shm_addr->pkt_index_next, cp->shm_addr->pkt_index_last, cp->shm_addr->pinfo[pkt_index].data_length, cp->shm_addr->cinfo.unix_seconds, cp->unix_seconds, (cp->unix_seconds) - (cp->shm_addr->cinfo.unix_seconds), cp->shm_addr->cinfo.unix_seconds);
   pthread_mutex_lock(&(cp->lock));
   log_trace("THREAD-3b rx packet ctag=0x%08x buf-id=%d", cp->ctag, buffer_id);
   cp->rx[index_buf].data_len = cp->shm_addr->pinfo[pkt_index].data_length;
