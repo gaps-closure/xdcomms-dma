@@ -1,6 +1,11 @@
 #ifndef XDC_HEADER_FILE
 #define XDC_HEADER_FILE
 
+#include <stdint.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <json-c/json.h>
+
 #define DATA_TYP_MAX                      50
 #define GAPS_TAG_MAX                      50
 #define CTAG_MOD                         256
@@ -48,7 +53,7 @@ typedef struct _tag {
   uint32_t         typ;      /* data type */
 } gaps_tag;
 
-//extern void tag_print     (gaps_tag *, FILE *);
+extern void tag_print     (gaps_tag *, FILE *);
 extern void tag_write     (gaps_tag *, uint32_t,   uint32_t,   uint32_t);
 extern void tag_read      (gaps_tag *, uint32_t *, uint32_t *, uint32_t *);
 extern void tag_cp        (gaps_tag *tag_out, gaps_tag *tag_in);

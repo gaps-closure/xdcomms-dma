@@ -7,10 +7,7 @@ OBJS        := $(SRCS:%.c=%.o)
 all: 	app_req_rep
 
 app_req_rep:	$(OBJS)
-# HAL veriosn:
-#	$(CC) $(CFLAGS) -o $@ app_req_rep.o ../api/xdcomms.o ../appgen/6month-demo/gma.o ../log/log.o ../appgen/6month-demo/float.o  -l zmq
-# DMA version:
-	$(CC) $(CFLAGS) -o $@ $(OBJS) -pthread
+	$(CC) $(CFLAGS) -o $@ $(OBJS) -pthread -ljson-c 
 
 %.o:	%.c
 	$(CC) $(CFLAGS) $(INCL) -c $< -o $@

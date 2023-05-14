@@ -1,22 +1,29 @@
 /*
- * Cross Domain (XD) Communication API Library between Partitioned Apps
- * and a GAP's Cross Domain Guard (CDG), without a HAL daemon and ZMQ.
+ * xdcomms (Cross Domain Communication) API Library directly between
+ * partitioned applications and a GAP's Cross Domain Guard (CDG).
  *
+ * TODO:
+ *    Add hton and ntoh for shm operations
+ *    xxxx
  *
- * v0.4 MAY 2023: adds hardware abstractions layer that defines
- * abstracted one-way channels defined in 'xdcomms.h'. To relect this
- * abstraction, this file is renamed from sdcomms-dma.c' to 'xdcomms.c'.
- * Currently, it supports:
- *   - MIND-DMA: with Direct Memory Access specific structures in 'dma-proxy.h'
- *   - ESCAPE-SHM: with Shared Memory specific structures in 'shm-h'
- * Configuration is done using environment variables. Example below
- * TODO: Add hton and ntoh for shm operations
+ * v0.4 MAY 2023:  hardware abstractions layer defines abstracted
+ * one-way channels insread of just DMA channels (so renamed
+ * 'xdcomms-dma.c' to 'xdcomms.c'. It now supports:
+ *   - MIND-DMA XDG:   Direct Memory Access device (see v0.3)
+ *   - ESCAPE-SHM XDG: Reading and writing to a specified region of
+ *     shared host mmap'ed memory under the control of the ESCAPE.
+ *     FPGA boardFor testing, xdcomms can also communicate without
+ *     a XDG using any mmap'ed memory area.
+ * Xdcomms configuration is done through:
+ *   a) Environment variables that specify device and other parameters
+ *   b) A channel configuration file that specifies flows among enclaves
+ *   c) Header files 'dma-proxy.h' and 'shm-h'
  *
- * v0.3 OCTOBER 2022: Supprts direct transfers between CLOSURE and the
- * MIND-DMA CDG. The app connect to the MIND proxy DMA driver, which uses
- * kernel space DMA control to the XILINX AXI DMA / MCDMA driver on the
- * GE MIND ZCU102 FPGA board. For testing, it can also communicate without
- * a XDG using a Pseudo driver emulation
+ * v0.3 OCTOBER 2022: Supprted direct transfers between Applications
+ * and the MIND-DMA CDG via the MIND proxy DMA driver using IOCTL
+ * commands. The driver uses kernel space DMA control to the XILINX AXI
+ * DMA/MCDMA driver on the GE MIND ZCU102 FPGA board. For testing, it
+ * can also communicate without a XDG using a Pseudo driver emulation.
  *
  *
  * Example commands using the test request-reply application (found in ../test/)
@@ -37,15 +44,12 @@
 #include <sys/ioctl.h>
 #include <time.h>
 #include <sys/time.h>
-#include <stdint.h>
 #include <signal.h>
 #include <string.h>
 #include <sched.h>
 #include <errno.h>
 #include <sys/param.h>
 
-#include <stdio.h>
-#include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -59,8 +63,9 @@
 #include "dma-proxy.h"
 #include "shm.h"
 
-#define NAME_LEN_MAX  64
-#define PRINT_STATE_LEVEL 1
+#define STR_SIZE          64
+#define PRINT_STATE_LEVEL  1
+
 
 // Fixed mmap configuration (channel_buffer in DMA device, shm_channel in SHM device)
 typedef struct _memmap {
@@ -86,7 +91,7 @@ typedef struct channel {
   uint32_t         ctag;           // Compressed tag (unique index) - used to search for channel
   char             dir;            // Receive (from network) or Transmit (to network): 'r' or 't'
   char             dev_type[4];    // device type: e.g., shm (ESCAPE) or dma (MIND)
-  char             dev_name[NAME_LEN_MAX];   // Device name: e.g., /dev/mem or /dev/sue_dominous
+  char             dev_name[STR_SIZE];   // Device name: e.g., /dev/mem or /dev/sue_dominous
   int              fd;             // Device file descriptor (set when device openned)
   int              retries;        // number of RX polls (everhmy RX_POLL_INTERVAL_NSEC) before timeout
   time_t           unix_seconds;   // When process was started
@@ -99,7 +104,7 @@ typedef struct channel {
 
 // Channel list
 typedef struct _chan_list {
-  char             dev_name[NAME_LEN_MAX];
+  char             dev_name[STR_SIZE];
   chan            *cp;
   char            dir1;
   char            dir2;
@@ -385,8 +390,8 @@ void shm_init_config_one(chan *cp) {
   cinfo        *cip = &(shm_ptr->cinfo);
 
   log_trace("%s:  cp=%p va=%p + off=%lx = %lx", __func__, cp, cp->mm.virt_addr, cp->mm.offset, shm_ptr);
-  log_trace("shm_channel size s=%lx c=%ld i=%lx d=%lx", sizeof(shm_channel), sizeof(cinfo), sizeof(pinfo), sizeof(pdata));
-
+//  log_trace("shm_channel size t=%lx c=%lx i=%lx d=%lx = %lx %lx", sizeof(time_t), sizeof(cinfo), sizeof(pinfo), sizeof(pdata), sizeof(shm_channel), SHM_TX_PKT_BUF_COUNT*(sizeof(pinfo) + sizeof(pdata)));
+  log_debug("Up to %ld Channels (mmap=0x%lx / Chan=0x%lx) PKTS/Chan=%d", (cp->mm.len) / sizeof(shm_channel), cp->mm.len, sizeof(shm_channel), SHM_TX_PKT_BUF_COUNT);
   shm_ptr->pkt_index_next = 0;
   shm_ptr->pkt_index_last = -1;
 
@@ -447,7 +452,51 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
   pthread_mutex_unlock(&chan_create);
   return (cp);
 }
-                  
+              
+void read_json_config_file(char *xcf) {
+  int                 m, n, i, j;
+  char                file_name[STR_SIZE] = "xdconf_app_req_rep.json";
+  char                encl_name[STR_SIZE], from_name[STR_SIZE];
+  struct json_object *j_root, *j_enclaves, *j_enclave_element;
+  struct json_object *j_enclave_name, *j_envlave_halmaps, *j_halmap_element;
+  struct json_object *j_halmap_src, *j_halmap_mux, *j_halmap_sec, *j_halmap_typ;
+
+  log_debug("%s: Using %s config file", __func__, xcf);
+  // A) open JSON object from configuration file
+  j_root = json_object_from_file(xcf);
+  if (!j_root) {
+    fprintf(stderr, "Could not find JSON file: %s\n", file_name);
+    exit (-1);
+  }
+  // B) Get all enclaves
+  j_enclaves = json_object_object_get(j_root, "enclaves");
+  n = json_object_array_length(j_enclaves);
+  printf("enclaves len=%d\n", n);
+  // C) For each (of n) enclaves, get the enclave information and halmaps
+  for (i=0; i<n; i++) {
+    j_enclave_element = json_object_array_get_idx(j_enclaves, i);
+    j_enclave_name = json_object_object_get(j_enclave_element, "enclave");
+    strcpy(encl_name, json_object_get_string(j_enclave_name));
+    printf("  %d: enclave=%s\n", i, json_object_get_string(j_enclave_name));
+    j_envlave_halmaps = json_object_object_get(j_enclave_element, "halmaps");
+    m = json_object_array_length(j_envlave_halmaps);
+    printf("  halmaps len=%d\n", m);
+    // D) for each (of m) halmaps, get the informationn
+    for (j=0; j<m; j++) {
+      j_halmap_element = json_object_array_get_idx(j_envlave_halmaps, j);
+      j_halmap_src = json_object_object_get(j_halmap_element, "from");
+      strcpy(from_name, json_object_get_string(j_halmap_src));
+      j_halmap_mux = json_object_object_get(j_halmap_element, "mux");
+      j_halmap_sec = json_object_object_get(j_halmap_element, "sec");
+      j_halmap_typ = json_object_object_get(j_halmap_element, "typ");
+      if ((strcmp(from_name, encl_name)) == 0) {
+        printf("    %d: tag=<%d,%d,%d>\n", j, json_object_get_int(j_halmap_mux),  json_object_get_int(j_halmap_sec), json_object_get_int(j_halmap_typ));
+      }
+    }
+  }
+  exit(22);
+}
+
 /**********************************************************************/
 /* E) BW Packet processing                                               */
 /**********************************************************************/
@@ -551,7 +600,7 @@ void shm_send(chan *cp, void *adu, gaps_tag *tag) {
   cp->shm_addr->pkt_index_next = pkt_index_nxt;           // TX updates RX
   if (cp->shm_addr->pkt_index_last < 0) cp->shm_addr->pkt_index_last = pkt_index_now;
 #if 1 >= PRINT_STATE_LEVEL
-  time_debug("XDC_Tx2 sent data (for index=%d)", pkt_index_now);
+  time_trace("XDC_Tx2 sent data (for index=%d)", pkt_index_now);
   shm_info_print(cp->shm_addr);
 #endif  // PRINT_STATE
 }
@@ -786,21 +835,12 @@ char *xdc_set_in(char *addr_in) { return NULL; }
 char *xdc_set_out(char *addr_in) { return NULL; }
 void *xdc_ctx(void) { return NULL; }
 void *xdc_pub_socket(void) {
-  gaps_tag   tag;
-  char      *mp = getenv("TAG_MUX");
-  char      *sp = getenv("TAG_SEC");
-  char      *tp = getenv("TAG_TYP");
-  log_debug("Start of %s ptr=<%p %p %p>", __func__, mp, sp, tp);
-
-  if ((mp == NULL) || (sp == NULL) || (tp == NULL)) return NULL;
-  tag.mux=strtol(mp, NULL, 10);
-  tag.sec=strtol(sp, NULL, 10);
-  tag.typ=strtol(tp, NULL, 10);
-
-  log_trace("%s: for tag=<%d,%d,%d>", __func__, tag.mux, tag.sec, tag.typ);
-  get_chan_info(&tag, 't');
+  char      *xcf = getenv("CONFIG_FILE");
+  log_debug("Start of %s", __func__);
+  if (xcf != NULL) read_json_config_file(xcf);
   return NULL;
 }
+            
 void *xdc_sub_socket(gaps_tag tag) {
   log_debug("Start of %s: for tag=<%d,%d,%d>", __func__, tag.mux, tag.sec, tag.typ);
   get_chan_info(&tag, 'r');

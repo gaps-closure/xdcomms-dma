@@ -1,0 +1,50 @@
+{
+  "enclaves": [
+    {
+      "enclave": "green",
+      "inuri": "",
+      "outuri": "",
+      "halmaps": [
+        {
+          "from": "green",
+          "to": "orange",
+          "mux": 1,
+          "sec": 1,
+          "typ": 1,
+          "name": "client_request"
+        },
+        {
+          "from": "orange",
+          "to": "green",
+          "mux": 2,
+          "sec": 2,
+          "typ": 1,
+          "name": "server_response"
+        }
+      ]
+    },
+    {
+      "enclave": "orange",
+      "inuri": "",
+      "outuri": "",
+      "halmaps": [
+        {
+          "from": "green",
+          "to": "orange",
+          "mux": 1,
+          "sec": 1,
+          "typ": 1,
+          "name": "client_request"
+        },
+        {
+          "from": "orange",
+          "to": "green",
+          "mux": 2,
+          "sec": 2,
+          "typ": 1,
+          "name": "server_response"
+        }
+      ]
+    }
+  ]
+}

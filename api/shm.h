@@ -16,11 +16,11 @@
 
 /* Static SHM Channel Information (created when channel is initialized at TX) */
 typedef struct _cinfo {
-  uint32_t      ctag;
-  int           pkt_index_max;
   unsigned long ms_guard_time_aw;    // After write min data duration (5000 ms)
   unsigned long ms_guard_time_bw;    // Before write min guard time (1000 ms)
   time_t        unix_seconds;        // Transmitter start time (seconds since 1970)
+  uint32_t      ctag;
+  int           pkt_index_max;
   uint16_t      crc16;               // cinfo error detection field
 //  unsigned long ms_poll_time;      // How often to check SHM (1000 ms)
 } cinfo;
