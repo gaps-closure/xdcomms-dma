@@ -88,17 +88,17 @@ typedef struct _pkt_info {
 
 // Channel configuration (with device abstraction)
 typedef struct channel {
-  uint32_t         ctag;           // Compressed tag (unique index) - used to search for channel
-  char             dir;            // Receive (from network) or Transmit (to network): 'r' or 't'
-  char             dev_type[4];    // device type: e.g., shm (ESCAPE) or dma (MIND)
-  char             dev_name[STR_SIZE];   // Device name: e.g., /dev/mem or /dev/sue_dominous
-  int              fd;             // Device file descriptor (set when device openned)
-  int              retries;        // number of RX polls (everhmy RX_POLL_INTERVAL_NSEC) before timeout
-  time_t           unix_seconds;   // When process was started
-  unsigned long    wait_for_new;   // 1 = RX checks if client started later (0 = not check time)
-  pthread_mutex_t  lock;           // Ensure RX thread does not write while xdcomms reads
-  memmap           mm;             // Mmap configuration
-  pkt_info         rx[RX_BUFFS_PER_THREAD];   // RX packet info from RX thread (use mutex lock)
+  uint32_t         ctag;               // Compressed tag (unique index) - used to search for channel
+  char             dir;                // Receive (from network) or Transmit (to network): 'r' or 't'
+  char             dev_type[4];        // device type: e.g., shm (ESCAPE) or dma (MIND)
+  char             dev_name[STR_SIZE]; // Device name: e.g., /dev/mem or /dev/sue_dominous
+  int              fd;                 // Device file descriptor (set when device openned)
+  int              retries;            // number of RX polls (everhmy RX_POLL_INTERVAL_NSEC) before timeout
+  time_t           unix_seconds;       // When process was started
+  unsigned long    wait_for_new;       // 1 = RX checks if client started later (0 = not check time)
+  pthread_mutex_t  lock;               // Ensure RX thread does not write while xdcomms reads
+  memmap           mm;                 // Mmap configuration
+  pkt_info         rx[RX_BUFFS_PER_THREAD];  // RX packet info from RX thread (use mutex lock)
   shm_channel     *shm_addr;       // Pointer to mmap'ed Shared Memory structure
 } chan;
 
@@ -118,8 +118,9 @@ typedef struct _thread_args {
 
 void rcvr_thread_start(chan *cp);
 
-codec_map  cmap[DATA_TYP_MAX];       // maps data type to its data encode + decode functions
-chan       chan_info[GAPS_TAG_MAX];  // array of buffers to store local channel info per tag
+char            enclave_name[STR_SIZE];   // enclave name (e.g., green)
+codec_map       cmap[DATA_TYP_MAX];       // maps data type to its data encode + decode functions
+chan            chan_info[GAPS_TAG_MAX];  // array of buffers to store local channel info per tag
 pthread_mutex_t chan_create;
 
 /**********************************************************************/
@@ -276,7 +277,7 @@ void dev_open_if_new(chan *cp) {
 /**********************************************************************/
 void chan_print(chan *cp) {
   int index_buf;
-  fprintf(stderr, "  chan info %08x: dir=%c typ=%s nam=%s fd=%d ut=0x%lx wn=%ld ret=%d every %d ns buffers/thread=%d\n", cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->unix_seconds, cp->wait_for_new, cp->retries, RX_POLL_INTERVAL_NSEC, RX_BUFFS_PER_THREAD);
+  fprintf(stderr, "  %s enclave chan %08x: dir=%c typ=%s nam=%s fd=%d ut=0x%lx wn=%ld ret=%d every %d ns buffers/thread=%d\n", enclave_name, cp->ctag, cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->unix_seconds, cp->wait_for_new, cp->retries, RX_POLL_INTERVAL_NSEC, RX_BUFFS_PER_THREAD);
   fprintf(stderr, "  mmap len=0x%lx [pa=0x%lx va=%p off=0x%lx prot=0x%x flag=0x%x]\n",  cp->mm.len, cp->mm.phys_addr, cp->mm.virt_addr, cp->mm.offset, cp->mm.prot, cp->mm.flags);
   for (index_buf=0; index_buf<2; index_buf++) {  // RX_BUFFS_PER_THREAD
     fprintf(stderr, "    i=%d: newd=%d rx_buf_ptr=%p len=%lx tid=%d\n", index_buf, cp->rx[index_buf].newd, cp->rx[index_buf].data, cp->rx[index_buf].data_len, cp->rx[index_buf].tid);
@@ -293,11 +294,13 @@ void chan_print(chan *cp) {
 void chan_init_all_once(void) {
   static int once=1;
   int        i, index_buf, t_in_ms;
-  char      *t_env;
+  char      *t_env = getenv("TIMEOUT_MS");
+
   if (once==1) {
-    t_in_ms = ((t_env = getenv("TIMEOUT_MS")) == NULL) ? RX_POLL_TIMEOUT_MSEC_DEFAULT : atoi(t_env);
+    t_in_ms = (t_env == NULL) ? RX_POLL_TIMEOUT_MSEC_DEFAULT : atoi(t_env);
     if (pthread_mutex_init(&chan_create, NULL) != 0)   FATAL;
     for(i=0; i < GAPS_TAG_MAX; i++) {
+      
       chan_info[i].ctag         = 0;
       chan_info[i].mm.prot      = PROT_READ | PROT_WRITE;
       chan_info[i].mm.flags     = MAP_SHARED;
@@ -454,6 +457,7 @@ chan *get_chan_info(gaps_tag *tag, char dir) {
 }
               
 void read_json_config_file(char *xcf) {
+  gaps_tag  tag;
   int                 m, n, i, j;
   char                file_name[STR_SIZE] = "xdconf_app_req_rep.json";
   char                encl_name[STR_SIZE], from_name[STR_SIZE];
@@ -478,23 +482,28 @@ void read_json_config_file(char *xcf) {
     j_enclave_name = json_object_object_get(j_enclave_element, "enclave");
     strcpy(encl_name, json_object_get_string(j_enclave_name));
     printf("  %d: enclave=%s\n", i, json_object_get_string(j_enclave_name));
-    j_envlave_halmaps = json_object_object_get(j_enclave_element, "halmaps");
-    m = json_object_array_length(j_envlave_halmaps);
-    printf("  halmaps len=%d\n", m);
-    // D) for each (of m) halmaps, get the informationn
-    for (j=0; j<m; j++) {
-      j_halmap_element = json_object_array_get_idx(j_envlave_halmaps, j);
-      j_halmap_src = json_object_object_get(j_halmap_element, "from");
-      strcpy(from_name, json_object_get_string(j_halmap_src));
-      j_halmap_mux = json_object_object_get(j_halmap_element, "mux");
-      j_halmap_sec = json_object_object_get(j_halmap_element, "sec");
-      j_halmap_typ = json_object_object_get(j_halmap_element, "typ");
-      if ((strcmp(from_name, encl_name)) == 0) {
-        printf("    %d: tag=<%d,%d,%d>\n", j, json_object_get_int(j_halmap_mux),  json_object_get_int(j_halmap_sec), json_object_get_int(j_halmap_typ));
+    if ((strcmp(enclave_name, encl_name)) == 0) {
+      j_envlave_halmaps = json_object_object_get(j_enclave_element, "halmaps");
+      m = json_object_array_length(j_envlave_halmaps);
+      printf("  halmaps len=%d\n", m);
+      // D) for each (of m) halmaps, get the informationn
+      for (j=0; j<m; j++) {
+        j_halmap_element = json_object_array_get_idx(j_envlave_halmaps, j);
+        j_halmap_src = json_object_object_get(j_halmap_element, "from");
+        strcpy(from_name, json_object_get_string(j_halmap_src));
+        j_halmap_mux = json_object_object_get(j_halmap_element, "mux");
+        j_halmap_sec = json_object_object_get(j_halmap_element, "sec");
+        j_halmap_typ = json_object_object_get(j_halmap_element, "typ");
+        if ((strcmp(from_name, encl_name)) == 0) {
+          tag.mux = json_object_get_int(j_halmap_mux);
+          tag.sec = json_object_get_int(j_halmap_sec);
+          tag.typ = json_object_get_int(j_halmap_typ);
+          printf("    %d: tag=<%d,%d,%d>\n", j, tag.mux, tag.sec, tag.typ);
+          get_chan_info(&tag, 't');
+        }
       }
     }
   }
-  exit(22);
 }
 
 /**********************************************************************/
@@ -836,7 +845,14 @@ char *xdc_set_out(char *addr_in) { return NULL; }
 void *xdc_ctx(void) { return NULL; }
 void *xdc_pub_socket(void) {
   char      *xcf = getenv("CONFIG_FILE");
+  char      *e_env = getenv("ENCLAVE");
+  
   log_debug("Start of %s", __func__);
+  if (e_env == NULL) {
+    log_fatal("Must specify enclace using environment variable ENCLAVE");
+    exit (-1);
+  }
+  strcpy(enclave_name, e_env);
   if (xcf != NULL) read_json_config_file(xcf);
   return NULL;
 }
