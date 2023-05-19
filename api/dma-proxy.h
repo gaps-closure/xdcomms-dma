@@ -26,8 +26,6 @@
  * is cached aligned.
  */
 
-#include "xdcomms.h"
-
 #define BUFFER_SIZE (128 * 1024)	 	    /* must match driver exactly */
 #ifdef SUE_DONIMOUS
 #define BUFFER_COUNT 16					        /* driver only */
@@ -42,6 +40,8 @@
 #define FINISH_XFER 	   _IOW('a','a',int32_t*)
 #define START_XFER 		   _IOW('a','b',int32_t*)
 #define XFER 			       _IOR('a','c',int32_t*)
+
+#define PKT_G1_ADU_SIZE_MAX   65528  // Max packet size with 16-bit data_len = 2^16 - 8 (see bw header)
 
 enum proxy_status { PROXY_NO_ERROR = 0, PROXY_BUSY = 1, PROXY_TIMEOUT = 2, PROXY_ERROR = 3 };
 
@@ -65,6 +65,5 @@ typedef struct _sdh_bw {
 } bw;
 
 #define DMA_ADDR_HOST     0x0UL            // Host System selects mmap physical memory address
-
 
 #endif /* _DMA_PROXY_H */

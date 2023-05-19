@@ -9,7 +9,6 @@
 #define DATA_TYP_MAX                      50
 #define GAPS_TAG_MAX                      32  // MAX mnumber of Tags for this node
 #define CTAG_MOD                         256
-#define PKT_G1_ADU_SIZE_MAX            65528  // Max packet size with 16-bit data_len = 2^16 - 8 (see bw header)
 #define ADU_SIZE_MAX_C               1000000     /* 1 MB - Increased for ILIP payload mode*/
 #define MAX_DEV_NAME_LEN                  64
 #define MAX_DEV_COUNT                      4

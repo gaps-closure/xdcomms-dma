@@ -33,7 +33,6 @@ typedef struct _pinfo {
 
 /* SHM data */
 typedef struct _pdata {
-  //  unsigned long data[PKT_G1_ADU_SIZE_MAX];
   int data[0x1000];
 } pdata;
 
