@@ -198,6 +198,8 @@ void dma_open_channel(chan *cp) {
   cp->mm.virt_addr = mmap(NULL, cp->mm.len, cp->mm.prot, cp->mm.flags, cp->fd, cp->mm.phys_addr);
   if (cp->mm.virt_addr == MAP_FAILED) FATAL;
   log_debug("Opened and mmap'ed DMA channel %s: mmap_virt_addr=0x%lx, len=0x%x fd=%d", cp->dev_name, cp->mm.virt_addr, cp->mm.len, cp->fd);
+  log_debug("Channel=0x%lx (CBstruct=0x%lx) bytes, Bytes/PKT=0x%lx Packets/channel=%d Channels/dev={Tx=%d Rx=%d}", BUFFER_SIZE, sizeof(struct channel_buffer), sizeof(bw), BUFFER_SIZE / sizeof(bw), DMA_TX_PKT_BUF_COUNT, RX_BUFFER_COUNT);
+  fprintf(stderr, "SUE_DONIMOUS=%d\n", SUE_DONIMOUS);
 }
 
 // Open DMA channel given Physical address and length. Returns fd, mmap-va and mmap-len
