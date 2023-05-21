@@ -7,15 +7,15 @@
 #include <json-c/json.h>
 
 #define DATA_TYP_MAX                      50
-#define GAPS_TAG_MAX                      32  // MAX mnumber of Tags for this node
+#define GAPS_TAG_MAX                      32   // MAX mnumber of Tags for this node
 #define CTAG_MOD                         256
-#define ADU_SIZE_MAX_C               1000000     /* 1 MB - Increased for ILIP payload mode*/
+#define ADU_SIZE_MAX_C               1000000   // 1 MB - Increased for ILIP payload mode*/
 #define MAX_DEV_NAME_LEN                  64
 #define MAX_DEV_COUNT                      4
 
-// Buffer allocation to threads. NB: RX_THREADS * RX_BUFFS_PER_THREAD <= RX_BUFFER_COUNT
-#define RX_THREADS                         1  // Total number of receiver threads
-#define RX_BUFFS_PER_THREAD  RX_BUFFER_COUNT  // Use all DMA rx buffers in one rx channel thread
+// Buffer allocation to threads. NB: RX_THREADS * RX_BUFFS_PER_CHAN <= RX_BUFFER_COUNT
+#define RX_THREADS                         1   // Total number of receiver threads
+#define RX_BUFFS_PER_CHAN_MAX             32   // Masimum FIFO buffer between rx thread and xdcomms
 
 // How often (interval) and how long (timout) to check for rx packet (check 'newd' flag in Per-tag buffer).
 //   Lower interval means lower delay, higher means less overhead

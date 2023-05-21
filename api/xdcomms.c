@@ -85,7 +85,7 @@ typedef struct _pkt_info {
   int              tid;       // transaction ID
 } pkt_info;
 
-// Channel configuration (with device abstraction)
+// Virutal Channel configuration (with device abstraction)
 typedef struct channel {
   uint32_t         ctag;               // Compressed tag (unique index) - used to search for channel
   char             dir;                // Receive (from network) or Transmit (to network): 'r' or 't'
@@ -97,8 +97,10 @@ typedef struct channel {
   unsigned long    wait4new_client;    // 1 = RX server checks if client started later (0 = no check)
   pthread_mutex_t  lock;               // Ensure RX thread does not write while xdcomms reads
   memmap           mm;                 // Mmap configuration
-  pkt_info         rx[RX_BUFFS_PER_THREAD];  // RX packet info from RX thread (use mutex lock)
-  shm_channel     *shm_addr;           // Pointer to mmap'ed Shared Memory structure (virtual address + offset
+  int              rx_pkt_buf_max;     // Size of packet buffer between rx thread and xdcomms
+  pkt_info         rx[RX_BUFFS_PER_CHAN_MAX];  // RX packet info from RX thread (needs mutex lock)
+  shm_channel     *shm_addr;           // Ptr to mmap'ed Shared Memory struct: virtual addr + offset
+  channel_buffer  *dma_addr;           // Ptr to mmap'ed DMA struct: virtual addr + (index * sizeof(channel_buffer))
 } chan;
 
 // Channel list
@@ -266,14 +268,16 @@ void dev_open_if_new(chan *cp) {
   FATAL;    // Only here if list cannot store all devices (> MAX_DEV_COUNT)
 }
 
+
 /**********************************************************************/
-/* D) Channel Info: Print, Create, Find (for all devices and TX/RX)   */
+/* D) Virtual Channel Initialization (for all devices and TX/RX)      */
 /**********************************************************************/
 void chan_print(chan *cp) {
   int index_buf;
-  fprintf(stderr, "  %s enclave chan %08x: dir=%c typ=%s nam=%s fd=%d ut=0x%lx wn=%ld ret=%d every %d ns buffers/thread=%d\n", enclave_name, ntohl(cp->ctag), cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->unix_seconds, cp->wait4new_client, cp->retries, RX_POLL_INTERVAL_NSEC, RX_BUFFS_PER_THREAD);
-  fprintf(stderr, "  mmap len=0x%lx [pa=0x%lx va=%p prot=0x%x flag=0x%x]\n",  cp->mm.len, cp->mm.phys_addr, cp->mm.virt_addr, cp->mm.prot, cp->mm.flags);
-  for (index_buf=0; index_buf<2; index_buf++) {  // RX_BUFFS_PER_THREAD
+  fprintf(stderr, "  %s enclave chan %08x: dir=%c typ=%s nam=%s fd=%d ut=0x%lx wn=%ld ret=%d every %d ns buffers/thread=%d\n", enclave_name, ntohl(cp->ctag), cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->unix_seconds, cp->wait4new_client, cp->retries, RX_POLL_INTERVAL_NSEC, cp->rx_pkt_buf_max);
+  fprintf(stderr, "  mmap len=0x%lx [pa=0x%lx va=%p prot=0x%x flag=0x%x]  ",  cp->mm.len, cp->mm.phys_addr, cp->mm.virt_addr, cp->mm.prot, cp->mm.flags);
+  fprintf(stderr, "Device ptrs: dma=%p shm=%p\n", cp->dma_addr, cp->shm_addr);
+  for (index_buf=0; index_buf<2; index_buf++) {  // MAx should be  cp->rx_pkt_buf_max
     fprintf(stderr, "    i=%d: newd=%d rx_buf_ptr=%p len=%lx tid=%d\n", index_buf, cp->rx[index_buf].newd, cp->rx[index_buf].data, cp->rx[index_buf].data_len, cp->rx[index_buf].tid);
   }
 }
@@ -302,7 +306,7 @@ void chan_init_all_once(void) {
       chan_info[i].unix_seconds    = time(NULL);
       chan_info[i].wait4new_client = 0;    // Do not check time transmitter started
 
-      for (index_buf=0; index_buf<RX_BUFFS_PER_THREAD; index_buf++) {
+      chan_info[i].for (index_buf=0; index_buf<RX_BUFFS_PER_CHAN_MAX; index_buf++) {
         chan_info[i].rx[index_buf].newd = 0;
         chan_info[i].rx[index_buf].data_len = 0;
         chan_info[i].rx[index_buf].data = NULL;
@@ -711,7 +715,7 @@ void *rcvr_thread_function(thread_args *vargs) {
       log_fatal("Unsupported device type %s\n", cp->dev_type);
       exit(-1);
     }
-    buffer_id_index = (buffer_id_index + 1) % RX_BUFFS_PER_THREAD;
+    buffer_id_index = (buffer_id_index + 1) % cp->rx_pkt_buf_max;
     log_trace("THREAD-4 buf-id=%d index=%d", buffer_id, buffer_id_index);
   }
 }
