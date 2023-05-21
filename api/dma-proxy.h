@@ -26,31 +26,34 @@
  * is cached aligned.
  */
 
-#define BUFFER_SIZE (128 * 1024)	 	    /* must match driver exactly - Channel buffer size in bytes */
+#define BUFFER_SIZE (128 * 1024)	 	    /* Channel buffer bytes - must match driver exactly */
 #ifdef SUE_DONIMOUS
 #define BUFFER_COUNT 16					        /* driver only */
 #else
 #define BUFFER_COUNT 32					        /* driver only */
 #endif
 
-#define DMA_TX_PKT_BUF_COUNT 	1				      /* app only, must be <= to the number in the driver */
-#define RX_BUFFER_COUNT 	    BUFFER_COUNT  /* app only, must be <= to the number in the driver */
-//#define BUFFER_INCREMENT	    1				      /* normally 1, but skipping buffers (2) defeats CPU prefetching */
-
+#define DMA_PKT_COUNT_TX 	1				      /* app only, must be <= to the number in the driver */
+#define DMA_PKT_COUNT_RX 	BUFFER_COUNT  /* app only, must be <= to the number in the driver */
+//#define BUFFER_INCREMENT	    1				/* normally 1, but skipping buffers defeats CPU prefetching */
 #define FINISH_XFER 	   _IOW('a','a',int32_t*)
 #define START_XFER 		   _IOW('a','b',int32_t*)
 #define XFER 			       _IOR('a','c',int32_t*)
 
-#define PKT_G1_ADU_SIZE_MAX   65528  // Max packet size with 16-bit data_len = 2^16 - 8 (see bw header)
+#define PKT_G1_ADU_SIZE_MAX   65528     // Max packet bytes with 16-bit data_len = 2^16 - 8 (see bw header)
+#define DMA_ADDR_HOST        0x0UL     // Host System selects mmap physical memory address
 
 enum proxy_status { PROXY_NO_ERROR = 0, PROXY_BUSY = 1, PROXY_TIMEOUT = 2, PROXY_ERROR = 3 };
 
+// Buffer (with status and mex length) for one packet (can have multiple tags) in the DMA channel
 struct channel_buffer {
 	unsigned int      buffer[BUFFER_SIZE / sizeof(unsigned int)]; /* must be first field, do not move */
   enum proxy_status status;
 	unsigned int      length;
 } __attribute__ ((aligned (1024)));		/* 64 byte alignment required for DMA, but 1024 handy for viewing memory */
 
+// DMA channel for all flows between two enclaves
+// (buf_ptr[index] selects buffer (out of DMA_PKT_COUNT_TX or DMA_PKT_COUNT_RX)
 typedef struct _dma_channel {
   struct channel_buffer *buf_ptr;
   int    fd;
@@ -63,7 +66,5 @@ typedef struct _sdh_bw {
   uint16_t  crc16;                      /* Error detection field */
   uint8_t   data[PKT_G1_ADU_SIZE_MAX];  /* Application data unit */
 } bw;
-
-#define DMA_ADDR_HOST     0x0UL            // Host System selects mmap physical memory address
 
 #endif /* _DMA_PROXY_H */
