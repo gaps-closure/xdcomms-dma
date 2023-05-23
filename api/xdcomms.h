@@ -12,12 +12,9 @@
 #define ADU_SIZE_MAX_C               1000000   // 1 MB - Increased for ILIP payload mode*/
 #define MAX_DEV_NAME_LEN                  64
 #define MAX_DEV_COUNT                      4
+#define MAX_PKTS_PER_CHAN                 32   // Max pkts in Device for one (SHM) / all (DMA) chans
 
-// Buffer allocation to threads. NB: RX_THREADS * RX_BUFFS_PER_CHAN <= RX_BUFFER_COUNT
-#define RX_THREADS                         1   // Total number of receiver threads
-#define RX_BUFFS_PER_CHAN_MAX             32   // Masimum FIFO buffer between rx thread and xdcomms
-
-// How often (interval) and how long (timout) to check for rx packet (check 'newd' flag in Per-tag buffer).
+// How often (interval) and how long (timout) to check for rx  (check 'newd'  in pkt_info buffer).
 //   Lower interval means lower delay, higher means less overhead
 //   Timout in milliseconds = RX_POLL_TIMEOUT_MSEC_DEFAULT * num_retries / NSEC_IN_MSEC
 //     - Default timeout value can be overridden by envionmental variable TIMEOUT_MS
