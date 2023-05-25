@@ -5,7 +5,7 @@
  * TODO:
  *    Add hton and ntoh for shm operations
  *
- * v0.4 MAY 2023:  hardware abstractions layer defines abstracted
+ * v0.4 June 2023:  hardware abstractions layer defines abstracted
  * one-way channels insread of just DMA channels (so renamed
  * 'xdcomms-dma.c' to 'xdcomms.c'. It now supports:
  *   - MIND-DMA XDG:   Direct Memory Access device (see v0.3)
@@ -25,7 +25,7 @@
  * can also communicate without a XDG using a Pseudo driver emulation.
  *
  *
- * Example commands using the test request-reply application (found in ../test/)
+ * Example commands using test request-reply application (found in ../test/)
  *   a) Enclave 2 responds to a request from enclave 1 over pseudo DMA channels:
  *     DEV_NAME_RX=sue_donimous_rx1 DEV_NAME_TX=sue_donimous_tx1 ./app_req_rep -e 2
  *     DEV_NAME_RX=sue_donimous_rx0 DEV_NAME_TX=sue_donimous_tx0 ./app_req_rep
@@ -34,6 +34,12 @@
  *     sudo DEV_NAME_RX=mem DEV_NAME_TX=mem DEV_TYPE_RX=shm DEV_TYPE_TX=shm DEV_OFFS_TX=0x40000 DEV_MMAP_LE=0x80000 ./app_req_rep -e 2
  *     sudo DEV_NAME_RX=mem DEV_NAME_TX=mem DEV_TYPE_RX=shm DEV_TYPE_TX=shm DEV_OFFS_RX=0x40000 DEV_MMAP_LE=0x80000 ./app_req_rep
  *
+ * Example commands using websrv app. Found in ditectories:
+ *   vid) ~/gaps/eop2-closure-mind-demo/websrv/.solution/partitioned/multithreaded/orange
+ *   web) ~/gaps/eop2-closure-mind-demo/websrv/.solution/partitioned/multithreaded/green
+ *
+ *   vid) sudo ENCLAVE=orange CONFIG_FILE=../xdconf.ini DEV_NAME_RX=mem DEV_NAME_TX=mem DEV_TYPE_RX=shm DEV_TYPE_TX=shm DEV_OFFS_RX=0x40000 DEV_WAIT_NE=1 DEV_MMAP_LE=0x80000 LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api XDCLOGLEVEL=0 MYADDR=10.109.23.126 CAMADDR=10.109.23.151 ./websrv > ~/log_v.txt 2>&1
+ *   web) sudo ENCLAVE=green CONFIG_FILE=../xdconf.ini DEV_NAME_RX=mem DEV_NAME_TX=mem DEV_TYPE_RX=shm DEV_TYPE_TX=shm DEV_OFFS_RX=0x40000 DEV_MMAP_LE=0x80000 LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api XDCLOGLEVEL=0 ./websrv  > ~/log_w.txt 2>&1
  */
 
 #include <stdlib.h>
@@ -122,6 +128,8 @@ codec_map       cmap[DATA_TYP_MAX];           // maps data type to its data enco
 chan            chan_info[GAPS_TAG_MAX];      // array of buffers to store local channel info per tag
 pthread_mutex_t chan_create;
 
+// XXX Codec, DMA and SHM functions should be put into separate functions
+//     with xdcomms including DMA and SHM, and DMA and SHM including Codec
 /**********************************************************************/
 /* C) Codec map table to store encoding and decoding function pointers   */
 /**********************************************************************/
@@ -360,7 +368,7 @@ void shm_init_config_one(chan *cp) {
 }
 
 /**********************************************************************/
-/* G) SHM read/write functions                                  */
+/* S2) SHM read/write functions                                  */
 /**********************************************************************/
 // Dumb memory copy using 8-byte words
 void naive_memcpy(unsigned long *d, const unsigned long *s, unsigned long len_in_words) {
@@ -422,7 +430,7 @@ void rcvr_shm(chan *cp, int index_buf) {
 
 
 /**********************************************************************/
-/* C) Device open                                               */
+/* A) Virtual Device open                                               */
 /**********************************************************************/
 // Open channel device (based on name and type) and return its channel structure
 void open_device(chan *cp) {
@@ -473,7 +481,7 @@ void dev_open_if_new(chan *cp) {
 
 
 /**********************************************************************/
-/* D) Virtual Channel Initialization (for all devices and TX/RX)      */
+/* B) Virtual Channel Configuration  (for all devices and TX/RX)      */
 /**********************************************************************/
 void chan_print(chan *cp) {
   int index_buf;
@@ -517,7 +525,6 @@ void chan_init_all_once(void) {
     once=0;
   }
 }
-
 
 // Get channel device type
 void get_dev_type(char *dev_type, char *env_type, char *def_type) {
@@ -630,7 +637,7 @@ chan *get_chan_info(gaps_tag *tag, char dir, int index) {
 }
 
 /**********************************************************************/
-/* E) Extract JSON Configuration Info (for all devices and TX/RX)     */
+/* C) Extract JSON Configuration Info (for all devices and TX/RX)     */
 /**********************************************************************/
 // For each (of m) halmaps in JSON file, proces the flow
 //   Ensure a) Both sides use the same index for the same tag
@@ -725,7 +732,7 @@ void config_channels(void) {
 
 
 /**********************************************************************/
-/* H) Virtual Device read/write functions                                  */
+/* D) Virtual Device read/write functions                                  */
 /**********************************************************************/
 /* Asynchronously send ADU to DMA driver in 'bw' packet */
 void asyn_send(void *adu, gaps_tag *tag) {
@@ -747,7 +754,7 @@ void *rcvr_thread_function(thread_args *vargs) {
   int   buffer_id = 0;
 
   while (1) {
-    log_trace("THREAD-1 %s: tag=0x%08x fd=%d index=%d (base_id=%d)", __func__, cp->ctag, cp->fd, buffer_id, vargs->buffer_id_start);
+    log_trace("THREAD-1 %s: tag=0x%08x fd=%d index=%d (base_id=%d)", __func__, ntohl(cp->ctag), cp->fd, buffer_id, vargs->buffer_id_start);
 #if 0 >= PRINT_STATE_LEVEL
     chan_print(cp);
 #endif  // PRINT_STATE_LEVEL
@@ -799,7 +806,7 @@ int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
 }
 
 /**********************************************************************/
-/* I) XDCOMMS Utility functions (not sure if all are still needed)  */
+/* E) XDCOMMS Utility functions (not sure if all are still needed)  */
 /**********************************************************************/
 void tag_print (gaps_tag *tag, FILE * fd) {
   fprintf(fd, "[mux=%02u sec=%02u typ=%02u] ", tag->mux, tag->sec, tag->typ);
@@ -849,8 +856,9 @@ void len_decode (size_t *out, uint32_t in) {
 }
 
 /**********************************************************************/
-/* J) XDCOMMS API (some functions gutted if irrelevant to xdcomms-dma */
+/* F) XDCOMMS API                                                     */
 /**********************************************************************/
+// These HAL-API functions are gutted - as irrelevant to xdcomms-lib
 void set_address(char *xdc_addr, char *addr_in, const char *addr_default, int *do_once) { }
 char *xdc_set_in(char *addr_in) { return NULL; }
 char *xdc_set_out(char *addr_in) { return NULL; }
@@ -879,7 +887,7 @@ void xdc_log_level(int new_level) {
 /* Load Codec Table with ADU encode and decode functions */
 /* XXX: must be called at least once so locks are inited and log level defaults set  */
 void xdc_register(codec_func_ptr encode, codec_func_ptr decode, int typ) {
-  int   i;
+         int i;
   static int do_once = 1;
 
 //  xdc_log_level(LOG_TRACE);            /* Mostly Quiet (LOG_TRACE is the most verbose) */
@@ -906,6 +914,7 @@ void xdc_register(codec_func_ptr encode, codec_func_ptr decode, int typ) {
   config_channels();
 }
 
+// Only kept to allow setting receiver timeout value
 void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout) {
   log_debug("Start of %s: timeout = %d ms for tag=<%d,%d,%d>", __func__, timeout, tag.mux, tag.sec, tag.typ);
   config_channels();
