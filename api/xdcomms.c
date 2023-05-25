@@ -141,7 +141,28 @@ void dma_open_channel(chan *cp) {
 }
 
 /**********************************************************************/
-/* D2) Read/write DMA device                                           */
+/* D2) Tag Compression / Decompression                                    */
+/**********************************************************************/
+/* Compress teg (tag -> ctag) from a 3 member stuct to a uint32_t*/
+void ctag_encode(uint32_t *ctag, gaps_tag *tag) {
+  uint32_t ctag_h;
+  ctag_h = ((CTAG_MOD * (
+                         ( CTAG_MOD * ((tag->mux) % CTAG_MOD)) +
+                                  ((tag->sec)  % CTAG_MOD))
+             ) + ((tag->typ) % CTAG_MOD));
+  *ctag = htonl(ctag_h);
+}
+
+/* Decompress teg (ctag -> tag) */
+void ctag_decode(gaps_tag *tag, uint32_t *ctag) {
+  uint32_t ctag_h = ntohl(*ctag);
+  tag->mux = (ctag_h & 0xff0000) >> 16 ;
+  tag->sec = (ctag_h &   0xff00) >> 8;
+  tag->typ = (ctag_h &     0xff);
+}
+
+/**********************************************************************/
+/* D3) Read/write DMA device                                           */
 /**********************************************************************/
 void bw_print(bw *p) {
   fprintf(stderr, "%s: ", __func__);
@@ -338,26 +359,6 @@ void cmap_decode(uint8_t *data, size_t data_len, uint8_t *buff_out, gaps_tag *ta
   log_buf_trace("    <- decoded data:", buff_out, data_len);
 }
 
-/**********************************************************************/
-/* B) Tag Compression / Decompression                                    */
-/**********************************************************************/
-/* Compress teg (tag -> ctag) from a 3 member stuct to a uint32_t*/
-void ctag_encode(uint32_t *ctag, gaps_tag *tag) {
-  uint32_t ctag_h;
-  ctag_h = ((CTAG_MOD * (
-                         ( CTAG_MOD * ((tag->mux) % CTAG_MOD)) +
-                                  ((tag->sec)  % CTAG_MOD))
-             ) + ((tag->typ) % CTAG_MOD));
-  *ctag = htonl(ctag_h);
-}
-
-/* Decompress teg (ctag -> tag) */
-void ctag_decode(gaps_tag *tag, uint32_t *ctag) {
-  uint32_t ctag_h = ntohl(*ctag);
-  tag->mux = (ctag_h & 0xff0000) >> 16 ;
-  tag->sec = (ctag_h &   0xff00) >> 8;
-  tag->typ = (ctag_h &     0xff);
-}
 
 /**********************************************************************/
 /* C) Device open                                               */
