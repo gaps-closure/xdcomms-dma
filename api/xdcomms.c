@@ -359,6 +359,67 @@ void shm_init_config_one(chan *cp) {
 #endif  // PRINT_STATE
 }
 
+/**********************************************************************/
+/* G) SHM read/write functions                                  */
+/**********************************************************************/
+// Dumb memory copy using 8-byte words
+void naive_memcpy(unsigned long *d, const unsigned long *s, unsigned long len_in_words) {
+  for (int i = 0; i < len_in_words; i++) *d++ = *s++;
+}
+
+void shm_send(chan *cp, void *adu, gaps_tag *tag) {
+  int     pkt_index_now = cp->shm_addr->pkt_index_next;
+  int     pkt_index_nxt = (pkt_index_now + 1) % cp->shm_addr->cinfo.pkt_index_max;
+  size_t  adu_len=0;    // encoder calculates length */
+
+  log_trace("%s TX index=%d", __func__, pkt_index_now);
+#if 0 >= PRINT_STATE_LEVEL
+  chan_print(cp);
+#endif
+  
+  // A) Delete oldest message?
+  if (cp->shm_addr->pkt_index_last == pkt_index_nxt) {
+    cp->shm_addr->pkt_index_last = ((cp->shm_addr->pkt_index_last) + 1) % cp->shm_addr->cinfo.pkt_index_max;
+    // XXX  TODO: Wait ms_guard_time_bw
+  }
+  // B) Encode Data into SHM
+  time_trace("XDC_Tx1 ready to encode for ctag=%08x", ntohl(cp->ctag));
+  cmap_encode((uint8_t *) &(cp->shm_addr->pdata->data[pkt_index_now]), adu, &adu_len, tag);
+//  XXX  incoprate naive_memcpy into cmap_encode/decode
+//  naive_memcpy(cp->shm_addr->pdata[pkt_index_nxt].data, adu, adu_len);  // TX adds new data
+  cp->shm_addr->pinfo[pkt_index_now].data_length = adu_len;
+  // C) TX updates indexes for RX
+  cp->shm_addr->pkt_index_next = pkt_index_nxt;
+  if (cp->shm_addr->pkt_index_last < 0) cp->shm_addr->pkt_index_last = pkt_index_now;
+#if 1 >= PRINT_STATE_LEVEL
+  time_trace("XDC_Tx2 sent data (for index=%d)", pkt_index_now);
+  shm_info_print(cp->shm_addr);
+#endif  // PRINT_STATE
+}
+
+int wait_if_old(chan *cp) {
+  if ((cp->wait4new_client) == 0) log_trace("Not wait for client");
+  else if ((cp->unix_seconds) <= (cp->shm_addr->cinfo.unix_seconds)) log_trace("New client");
+  else return(-1);  // wait for new client
+  return(0);
+}
+
+void rcvr_shm(chan *cp, int index_buf) {
+  while (wait_if_old(cp)) { ; }
+  log_debug("THREAD-2 waiting for %s tag=0x%08x on dev=%s with index=%d (last=%d)", cp->dev_type, ntohl(cp->ctag), cp->dev_name, index_buf, cp->shm_addr->pkt_index_next);
+  while (index_buf == (cp->shm_addr->pkt_index_next)) { ; }
+//  log_trace("THREAD-3a got packet index=%d (next=%d last=%d) len=%d [tr=0x%lx - tt=0x%lx = 0x%lx]", index_buf, cp->shm_addr->pkt_index_next, cp->shm_addr->pkt_index_last, cp->shm_addr->pinfo[index_buf].data_length, cp->unix_seconds, (cp->unix_seconds) - (cp->shm_addr->cinfo.unix_seconds), cp->shm_addr->cinfo.unix_seconds);
+  pthread_mutex_lock(&(cp->lock));
+  log_debug("THREAD-3 rx packet ctag=0x%08x len=%d id=%d", ntohl(cp->ctag), cp->shm_addr->pinfo[index_buf].data_length, index_buf);
+#if 1 >= PRINT_STATE_LEVEL
+  shm_info_print(cp->shm_addr);
+#endif  // PRINT_STATE
+  cp->rx[index_buf].data_len = cp->shm_addr->pinfo[index_buf].data_length;
+  cp->rx[index_buf].data     = (uint8_t *) (cp->shm_addr->pdata->data);
+  cp->rx[index_buf].newd     = 1;
+  pthread_mutex_unlock(&(cp->lock));
+}
+
 
 /**********************************************************************/
 /* C) Device open                                               */
@@ -662,66 +723,6 @@ void config_channels(void) {
   read_json_config_file(e_xcf);
 }
 
-/**********************************************************************/
-/* G) SHM read/write functions                                  */
-/**********************************************************************/
-// Dumb memory copy using 8-byte words
-void naive_memcpy(unsigned long *d, const unsigned long *s, unsigned long len_in_words) {
-  for (int i = 0; i < len_in_words; i++) *d++ = *s++;
-}
-
-void shm_send(chan *cp, void *adu, gaps_tag *tag) {
-  int     pkt_index_now = cp->shm_addr->pkt_index_next;
-  int     pkt_index_nxt = (pkt_index_now + 1) % cp->shm_addr->cinfo.pkt_index_max;
-  size_t  adu_len=0;    // encoder calculates length */
-
-  log_trace("%s TX index=%d", __func__, pkt_index_now);
-#if 0 >= PRINT_STATE_LEVEL
-  chan_print(cp);
-#endif
-  
-  // A) Delete oldest message?
-  if (cp->shm_addr->pkt_index_last == pkt_index_nxt) {
-    cp->shm_addr->pkt_index_last = ((cp->shm_addr->pkt_index_last) + 1) % cp->shm_addr->cinfo.pkt_index_max;
-    // XXX  TODO: Wait ms_guard_time_bw
-  }
-  // B) Encode Data into SHM
-  time_trace("XDC_Tx1 ready to encode for ctag=%08x", ntohl(cp->ctag));
-  cmap_encode((uint8_t *) &(cp->shm_addr->pdata->data[pkt_index_now]), adu, &adu_len, tag);
-//  XXX  incoprate naive_memcpy into cmap_encode/decode
-//  naive_memcpy(cp->shm_addr->pdata[pkt_index_nxt].data, adu, adu_len);  // TX adds new data
-  cp->shm_addr->pinfo[pkt_index_now].data_length = adu_len;
-  // C) TX updates indexes for RX
-  cp->shm_addr->pkt_index_next = pkt_index_nxt;
-  if (cp->shm_addr->pkt_index_last < 0) cp->shm_addr->pkt_index_last = pkt_index_now;
-#if 1 >= PRINT_STATE_LEVEL
-  time_trace("XDC_Tx2 sent data (for index=%d)", pkt_index_now);
-  shm_info_print(cp->shm_addr);
-#endif  // PRINT_STATE
-}
-
-int wait_if_old(chan *cp) {
-  if ((cp->wait4new_client) == 0) log_trace("Not wait for client");
-  else if ((cp->unix_seconds) <= (cp->shm_addr->cinfo.unix_seconds)) log_trace("New client");
-  else return(-1);  // wait for new client
-  return(0);
-}
-
-void rcvr_shm(chan *cp, int index_buf) {
-  while (wait_if_old(cp)) { ; }
-  log_debug("THREAD-2 waiting for %s tag=0x%08x on dev=%s with index=%d (last=%d)", cp->dev_type, ntohl(cp->ctag), cp->dev_name, index_buf, cp->shm_addr->pkt_index_next);
-  while (index_buf == (cp->shm_addr->pkt_index_next)) { ; }
-//  log_trace("THREAD-3a got packet index=%d (next=%d last=%d) len=%d [tr=0x%lx - tt=0x%lx = 0x%lx]", index_buf, cp->shm_addr->pkt_index_next, cp->shm_addr->pkt_index_last, cp->shm_addr->pinfo[index_buf].data_length, cp->unix_seconds, (cp->unix_seconds) - (cp->shm_addr->cinfo.unix_seconds), cp->shm_addr->cinfo.unix_seconds);
-  pthread_mutex_lock(&(cp->lock));
-  log_debug("THREAD-3 rx packet ctag=0x%08x len=%d id=%d", ntohl(cp->ctag), cp->shm_addr->pinfo[index_buf].data_length, index_buf);
-#if 1 >= PRINT_STATE_LEVEL
-  shm_info_print(cp->shm_addr);
-#endif  // PRINT_STATE
-  cp->rx[index_buf].data_len = cp->shm_addr->pinfo[index_buf].data_length;
-  cp->rx[index_buf].data     = (uint8_t *) (cp->shm_addr->pdata->data);
-  cp->rx[index_buf].newd     = 1;
-  pthread_mutex_unlock(&(cp->lock));
-}
 
 /**********************************************************************/
 /* H) Virtual Device read/write functions                                  */
