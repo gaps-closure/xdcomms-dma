@@ -125,20 +125,111 @@ pthread_mutex_t chan_create;
 /**********************************************************************/
 /* D1) Open/Configure DMA device                                      */
 /**********************************************************************/
-/* Open channel. Returns fd, mmap-va and mmap-len */
+/* Open DMA channel. USes and fills-in cp (with fd, mmap-va, mmap-len) */
 void dma_open_channel(chan *cp) {
+  // a) Get buffer count
   int buffer_count = DMA_PKT_COUNT_TX;
   if ((cp->dir) == 'r') buffer_count = DMA_PKT_COUNT_RX;
-
-  // a) Open device
+  // b) Open device
   if ((cp->fd = open(cp->dev_name, O_RDWR)) < 1) FATAL;
-  // b) mmpp device
+  // c) mmpp device
   cp->mm.len = sizeof(struct channel_buffer) * buffer_count;
   cp->mm.virt_addr = mmap(NULL, cp->mm.len, cp->mm.prot, cp->mm.flags, cp->fd, cp->mm.phys_addr);
   if (cp->mm.virt_addr == MAP_FAILED) FATAL;
   log_debug("Opened and mmap'ed DMA channel %s: virt_addr=0x%lx, len=0x%x fd=%d", cp->dev_name, cp->mm.virt_addr, cp->mm.len, cp->fd);
   log_debug("Chan_Buff=0x%lx Bytes (Bytes/PKT=0x%lx Packets/channel=%d) Channels/dev={Tx=%d Rx=%d}", BUFFER_SIZE, sizeof(bw), BUFFER_SIZE / sizeof(bw), DMA_PKT_COUNT_TX, DMA_PKT_COUNT_RX);
 }
+
+/**********************************************************************/
+/* D2) Read/write DMA device                                           */
+/**********************************************************************/
+void bw_print(bw *p) {
+  fprintf(stderr, "%s: ", __func__);
+  fprintf(stderr, "ctag=%u ", ntohl(p->message_tag_ID));
+  fprintf(stderr, "crc=%02x ", ntohs(p->crc16));
+  log_buf_trace("Data", (uint8_t *) p->data, ntohs(p->data_len));
+  fprintf(stderr, "\n");
+}
+
+uint16_t bw_crc_calc(bw *pkt) {
+  return (crc16((uint8_t *) pkt, sizeof(pkt->message_tag_ID) + sizeof (pkt->data_len)));
+}
+
+/* Get size of packet (= header length + data length) */
+int bw_get_packet_length(bw *pkt, size_t data_len) {
+  return (sizeof(pkt->message_tag_ID) + sizeof(pkt->data_len) + sizeof(pkt->crc16) + data_len);
+}
+
+/* Convert tag to local host format */
+void bw_len_encode (uint16_t *out, size_t len) {
+  *out = ntohs((uint16_t) len);
+}
+
+/* Convert tag to local host format */
+void bw_len_decode (size_t *out, uint16_t len) {
+  *out = ntohs(len);
+}
+
+/* b) Create CLOSURE packet header */
+void bw_gaps_header_encode(bw *p, size_t *p_len, uint8_t *buff_in, size_t *buff_len, gaps_tag *tag) {
+  ctag_encode(&(p->message_tag_ID), tag);
+  bw_len_encode(&(p->data_len), *buff_len);
+  p->crc16 = htons(bw_crc_calc(p));
+  *p_len = bw_get_packet_length(p, *buff_len);
+}
+
+/* Use DMA ioctl operations to tx or rx data */
+int dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *cbuf_ptr) {
+//  log_trace("START_XFER (fd=%d, id=%d buf_ptr=%p unset-status=%d)", fd, *buffer_id_ptr, cbuf_ptr, cbuf_ptr->status);
+//  time_trace("DMA Proxy transfer 1 (fd=%d, id=%d)", fd, *buffer_id_ptr);
+  ioctl(fd, START_XFER,  buffer_id_ptr);
+//  time_trace("DMA Proxy transfer 2 (fd=%d, id=%d)", fd, *buffer_id_ptr);
+  ioctl(fd, FINISH_XFER, buffer_id_ptr);
+//  time_trace("DMA Proxy transfer 3 (fd=%d, id=%d): status=%d", fd, *buffer_id_ptr, cbuf_ptr->status);
+  if (cbuf_ptr->status != PROXY_NO_ERROR) {
+//    log_trace("DMA Proxy transfer error (fd=%d, id=%d): st=%d (BUSY=1, TIMEOUT=2, ERROR=3)", fd, *buffer_id_ptr, cbuf_ptr->status);
+    return -1;
+  }
+  return 0;
+}
+
+void dma_send(chan *cp, void *adu, gaps_tag *tag) {
+  struct channel_buffer  *dma_tx_chan = (struct channel_buffer *) cp->mm.virt_addr;
+  bw        *p;               // Packet pointer
+  int       buffer_id=0;      // Use only a single buffer
+  size_t    adu_len;    // encoder calculates length */
+  size_t    packet_len;
+  
+  p = (bw *) &(dma_tx_chan->buffer);      // point to a DMA packet buffer */
+//  time_trace("XDC_Tx1 ready to encode for ctag=%08x", ntohl(cp->ctag));
+  cmap_encode(p->data, adu, &adu_len, tag);
+  bw_gaps_header_encode(p, &packet_len, adu, &adu_len, tag);  /* Put packet into channel buffer */
+//  log_debug("len: a=%d p=%d p2=%d", adu_len, packet_len, ntohs(p->data_len));
+  if (packet_len <= sizeof(bw)) log_buf_trace("TX_PKT", (uint8_t *) &(dma_tx_chan->buffer), packet_len);
+  dma_start_to_finish(cp->fd, &buffer_id, dma_tx_chan);
+  log_debug("XDCOMMS tx packet tag=<%d,%d,%d> len=%ld", tag->mux, tag->sec, tag->typ, packet_len);
+//  log_trace("%s: Buffer id = %d packet pointer=%p", buffer_id, p);
+}
+
+void dma_rcvr(chan *cp, int index_buf) {
+  bw                    *p;
+  struct channel_buffer *dma_cb_ptr = (struct channel_buffer *) cp->mm.virt_addr;  /* start of channel buffer */
+  static int             dma_cb_index=0;
+
+//  log_trace("%s ctag=%x %s cp=%p va=%p dma=%p ID=%d len=%ld", __func__, ntohl(cp->ctag), cp->dev_name, cp, cp->mm.virt_addr, dma_cb_ptr, index_buf, sizeof(bw));
+  dma_cb_ptr[dma_cb_index].length = sizeof(bw);      /* Receive up to make length Max size */
+  log_debug("THREAD-2 waiting for %s tag=0x%08x on dev=%s with cb_index=%d)", cp->dev_type, ntohl(cp->ctag), cp->dev_name, dma_cb_index);
+  while (dma_start_to_finish(cp->fd, &dma_cb_index, &(dma_cb_ptr[dma_cb_index])) != 0) { ; }
+  p = (bw *) &(dma_cb_ptr[dma_cb_index].buffer);    /* XXX: DMA buffer must be larger than size of BW */
+  pthread_mutex_lock(&(cp->lock));
+  log_trace("THREAD-3 rx packet cb_index=%d status=%d", dma_cb_index, dma_cb_ptr[dma_cb_index].status);
+  bw_len_decode(&(cp->rx[index_buf].data_len), p->data_len);
+  cp->rx[index_buf].data = (uint8_t *) p->data;
+  cp->rx[index_buf].newd = 1;
+  pthread_mutex_unlock(&(cp->lock));
+  dma_cb_index++;
+}
+
 
 /**********************************************************************/
 /* S1) Open/Configure SHM device                                      */
@@ -150,7 +241,6 @@ void shm_open_channel(chan *cp) {
 
   // a) Open device
   if ((cp->fd = open(cp->dev_name, O_RDWR | O_SYNC)) == -1) FATAL;
-  
   // b) mmpp device: reduce address to be a multiple of page size and add the diff to length
   pa_phys_addr       = cp->mm.phys_addr & ~MMAP_PAGE_MASK;
   pa_mmap_len        = cp->mm.len + cp->mm.phys_addr - pa_phys_addr;
@@ -572,96 +662,6 @@ void config_channels(void) {
 }
 
 /**********************************************************************/
-/* F) DMA read/write Functions                                        */
-/**********************************************************************/
-void bw_print(bw *p) {
-  fprintf(stderr, "%s: ", __func__);
-  fprintf(stderr, "ctag=%u ", ntohl(p->message_tag_ID));
-  fprintf(stderr, "crc=%02x ", ntohs(p->crc16));
-  log_buf_trace("Data", (uint8_t *) p->data, ntohs(p->data_len));
-  fprintf(stderr, "\n");
-}
-
-uint16_t bw_crc_calc(bw *pkt) {
-  return (crc16((uint8_t *) pkt, sizeof(pkt->message_tag_ID) + sizeof (pkt->data_len)));
-}
-
-/* Get size of packet (= header length + data length) */
-int bw_get_packet_length(bw *pkt, size_t data_len) {
-  return (sizeof(pkt->message_tag_ID) + sizeof(pkt->data_len) + sizeof(pkt->crc16) + data_len);
-}
-
-/* Convert tag to local host format */
-void bw_len_encode (uint16_t *out, size_t len) {
-  *out = ntohs((uint16_t) len);
-}
-
-/* Convert tag to local host format */
-void bw_len_decode (size_t *out, uint16_t len) {
-  *out = ntohs(len);
-}
-
-/* b) Create CLOSURE packet header */
-void bw_gaps_header_encode(bw *p, size_t *p_len, uint8_t *buff_in, size_t *buff_len, gaps_tag *tag) {
-  ctag_encode(&(p->message_tag_ID), tag);
-  bw_len_encode(&(p->data_len), *buff_len);
-  p->crc16 = htons(bw_crc_calc(p));
-  *p_len = bw_get_packet_length(p, *buff_len);
-}
-
-/* Use DMA ioctl operations to tx or rx data */
-int dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *cbuf_ptr) {
-//  log_trace("START_XFER (fd=%d, id=%d buf_ptr=%p unset-status=%d)", fd, *buffer_id_ptr, cbuf_ptr, cbuf_ptr->status);
-//  time_trace("DMA Proxy transfer 1 (fd=%d, id=%d)", fd, *buffer_id_ptr);
-  ioctl(fd, START_XFER,  buffer_id_ptr);
-//  time_trace("DMA Proxy transfer 2 (fd=%d, id=%d)", fd, *buffer_id_ptr);
-  ioctl(fd, FINISH_XFER, buffer_id_ptr);
-//  time_trace("DMA Proxy transfer 3 (fd=%d, id=%d): status=%d", fd, *buffer_id_ptr, cbuf_ptr->status);
-  if (cbuf_ptr->status != PROXY_NO_ERROR) {
-//    log_trace("DMA Proxy transfer error (fd=%d, id=%d): st=%d (BUSY=1, TIMEOUT=2, ERROR=3)", fd, *buffer_id_ptr, cbuf_ptr->status);
-    return -1;
-  }
-  return 0;
-}
-
-void dma_send(chan *cp, void *adu, gaps_tag *tag) {
-  struct channel_buffer  *dma_tx_chan = (struct channel_buffer *) cp->mm.virt_addr;
-  bw        *p;               // Packet pointer
-  int       buffer_id=0;      // Use only a single buffer
-  size_t    adu_len;    // encoder calculates length */
-  size_t    packet_len;
-  
-  p = (bw *) &(dma_tx_chan->buffer);      // point to a DMA packet buffer */
-//  time_trace("XDC_Tx1 ready to encode for ctag=%08x", ntohl(cp->ctag));
-  cmap_encode(p->data, adu, &adu_len, tag);
-  bw_gaps_header_encode(p, &packet_len, adu, &adu_len, tag);  /* Put packet into channel buffer */
-//  log_debug("len: a=%d p=%d p2=%d", adu_len, packet_len, ntohs(p->data_len));
-  if (packet_len <= sizeof(bw)) log_buf_trace("TX_PKT", (uint8_t *) &(dma_tx_chan->buffer), packet_len);
-  dma_start_to_finish(cp->fd, &buffer_id, dma_tx_chan);
-  log_debug("XDCOMMS tx packet tag=<%d,%d,%d> len=%ld", tag->mux, tag->sec, tag->typ, packet_len);
-//  log_trace("%s: Buffer id = %d packet pointer=%p", buffer_id, p);
-}
-
-void rcvr_dma(chan *cp, int index_buf) {
-  bw                    *p;
-  struct channel_buffer *dma_cb_ptr = (struct channel_buffer *) cp->mm.virt_addr;  /* start of channel buffer */
-  static int             dma_cb_index=0;
-
-//  log_trace("%s ctag=%x %s cp=%p va=%p dma=%p ID=%d len=%ld", __func__, ntohl(cp->ctag), cp->dev_name, cp, cp->mm.virt_addr, dma_cb_ptr, index_buf, sizeof(bw));
-  dma_cb_ptr[dma_cb_index].length = sizeof(bw);      /* Receive up to make length Max size */
-  log_debug("THREAD-2 waiting for %s tag=0x%08x on dev=%s with cb_index=%d)", cp->dev_type, ntohl(cp->ctag), cp->dev_name, dma_cb_index);
-  while (dma_start_to_finish(cp->fd, &dma_cb_index, &(dma_cb_ptr[dma_cb_index])) != 0) { ; }
-  p = (bw *) &(dma_cb_ptr[dma_cb_index].buffer);    /* XXX: DMA buffer must be larger than size of BW */
-  pthread_mutex_lock(&(cp->lock));
-  log_trace("THREAD-3 rx packet cb_index=%d status=%d", dma_cb_index, dma_cb_ptr[dma_cb_index].status);
-  bw_len_decode(&(cp->rx[index_buf].data_len), p->data_len);
-  cp->rx[index_buf].data = (uint8_t *) p->data;
-  cp->rx[index_buf].newd = 1;
-  pthread_mutex_unlock(&(cp->lock));
-  dma_cb_index++;
-}
-
-/**********************************************************************/
 /* G) SHM read/write functions                                  */
 /**********************************************************************/
 // Dumb memory copy using 8-byte words
@@ -750,7 +750,7 @@ void *rcvr_thread_function(thread_args *vargs) {
     chan_print(cp);
 #endif  // PRINT_STATE_LEVEL
 //    buffer_id = (vargs->buffer_id_start) + buffer_id_index;
-    if      (strcmp(cp->dev_type, "dma") == 0) rcvr_dma(cp, buffer_id);
+    if      (strcmp(cp->dev_type, "dma") == 0) dma_rcvr(cp, buffer_id);
     else if (strcmp(cp->dev_type, "shm") == 0) rcvr_shm(cp, buffer_id);
     else {
       log_fatal("Unsupported device type %s\n", cp->dev_type);
