@@ -123,6 +123,91 @@ chan            chan_info[GAPS_TAG_MAX];      // array of buffers to store local
 pthread_mutex_t chan_create;
 
 /**********************************************************************/
+/* D1) Open/Configure DMA device                                      */
+/**********************************************************************/
+/* Open channel. Returns fd, mmap-va and mmap-len */
+void dma_open_channel(chan *cp) {
+  int buffer_count = DMA_PKT_COUNT_TX;
+  if ((cp->dir) == 'r') buffer_count = DMA_PKT_COUNT_RX;
+
+  // a) Open device
+  if ((cp->fd = open(cp->dev_name, O_RDWR)) < 1) FATAL;
+  // b) mmpp device
+  cp->mm.len = sizeof(struct channel_buffer) * buffer_count;
+  cp->mm.virt_addr = mmap(NULL, cp->mm.len, cp->mm.prot, cp->mm.flags, cp->fd, cp->mm.phys_addr);
+  if (cp->mm.virt_addr == MAP_FAILED) FATAL;
+  log_debug("Opened and mmap'ed DMA channel %s: virt_addr=0x%lx, len=0x%x fd=%d", cp->dev_name, cp->mm.virt_addr, cp->mm.len, cp->fd);
+  log_debug("Chan_Buff=0x%lx Bytes (Bytes/PKT=0x%lx Packets/channel=%d) Channels/dev={Tx=%d Rx=%d}", BUFFER_SIZE, sizeof(bw), BUFFER_SIZE / sizeof(bw), DMA_PKT_COUNT_TX, DMA_PKT_COUNT_RX);
+}
+
+/**********************************************************************/
+/* S1) Open/Configure SHM device                                      */
+/**********************************************************************/
+// Open DMA channel given Physical address and length. Returns fd, mmap-va and mmap-len
+void shm_open_channel(chan *cp) {
+  void          *pa_virt_addr;
+  unsigned long  pa_phys_addr, pa_mmap_len;       /* page aligned physical address (offset) */
+
+  // a) Open device
+  if ((cp->fd = open(cp->dev_name, O_RDWR | O_SYNC)) == -1) FATAL;
+  
+  // b) mmpp device: reduce address to be a multiple of page size and add the diff to length
+  pa_phys_addr       = cp->mm.phys_addr & ~MMAP_PAGE_MASK;
+  pa_mmap_len        = cp->mm.len + cp->mm.phys_addr - pa_phys_addr;
+  pa_virt_addr       = mmap(0, pa_mmap_len, cp->mm.prot, cp->mm.flags, cp->fd, pa_phys_addr);
+  if (pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
+  cp->mm.virt_addr = pa_virt_addr + cp->mm.phys_addr - pa_phys_addr;   // add offset to page aligned addr
+  log_debug("Opened and mmap'ed SHM channel %s: mmap_virt_addr=%p, len=0x%x fd=%d", cp->dev_name, cp->mm.virt_addr, cp->mm.len, cp->fd);
+}
+
+void shm_info_print(shm_channel *cip) {
+  int            i, j;
+  unsigned long  len_bytes;
+  
+  fprintf(stderr, "  shm info %08x (%p): last=%d next=%d (max=%d ga=%ld gb=%ld ut=0x%lx crc=0x%04x)\n", ntohl(cip->cinfo.ctag), cip, cip->pkt_index_last, cip->pkt_index_next, cip->cinfo.pkt_index_max, cip->cinfo.ms_guard_time_aw, cip->cinfo.ms_guard_time_bw, cip->cinfo.unix_seconds, cip->cinfo.crc16);
+  for (i=0; i<SHM_PKT_COUNT; i++) {
+    len_bytes = cip->pinfo[i].data_length;
+    fprintf(stderr, "  %d: len=%ld tid=0x%lx", i, len_bytes, cip->pinfo[i].transaction_ID);
+    if (len_bytes > 0) {
+      fprintf(stderr, " data=");
+      for (j=0; j<(len_bytes/4); j++) fprintf(stderr, "%08x ", ntohl(cip->pdata[i].data[j]));
+    }
+    fprintf(stderr, "\n");
+  }
+}
+
+// After openning SHM device, initialize SHM configuration
+void shm_init_config_one(chan *cp) {
+  int           i;
+  shm_channel  *shm_ptr = cp->shm_addr;
+  cinfo        *cip = &(shm_ptr->cinfo);
+
+  log_trace("%s:  cp=%p va=%p va_offset=%lx", __func__, cp, cp->mm.virt_addr, shm_ptr);
+//  log_trace("shm_channel size t=%lx c=%lx i=%lx d=%lx = %lx %lx", sizeof(time_t), sizeof(cinfo), sizeof(pinfo), sizeof(pdata), sizeof(shm_channel), SHM_PKT_COUNT*(sizeof(pinfo) + sizeof(pdata)));
+  log_trace("Up to %ld Channels (mmap=0x%lx / Chan=0x%lx) PKTS/Chan=%d Bytes/PKT=0x%lx", (cp->mm.len) / sizeof(shm_channel), cp->mm.len, sizeof(shm_channel), SHM_PKT_COUNT, sizeof(pdata));
+  shm_ptr->pkt_index_next = 0;
+  shm_ptr->pkt_index_last = -1;
+
+  cip->ctag               = cp->ctag;
+  cip->pkt_index_max      = SHM_PKT_COUNT;
+  cip->ms_guard_time_aw   = DEFAULT_MS_GUARD_TIME_AW;
+  cip->ms_guard_time_bw   = DEFAULT_MS_GUARD_TIME_BW;
+  cip->unix_seconds       = time(NULL);
+  cip->crc16              = 0;
+  cip->crc16              = crc16((uint8_t *) &cip, sizeof(cinfo));
+//  log_trace("%s %08x %c Pnters: va=%p vc=%p ci=%p vd=%p vn=%p", __func__, ntohl(cp->ctag), cp->dir, shm_ptr, cip, &(shm_ptr->pinfo), &(shm_ptr->pdata), &(shm_ptr->pkt_index_next));
+  
+  for (i=0; i<SHM_PKT_COUNT; i++) {
+    shm_ptr->pinfo[i].data_length    = 0;
+    shm_ptr->pinfo[i].transaction_ID = 0;
+  }
+#if 1 >= PRINT_STATE_LEVEL
+  shm_info_print(shm_ptr);
+#endif  // PRINT_STATE
+}
+
+
+/**********************************************************************/
 /* A) Codec map table to store encoding and decoding function pointers   */
 /**********************************************************************/
 void cmap_print_one(codec_map *cm) {
@@ -187,38 +272,6 @@ void ctag_decode(gaps_tag *tag, uint32_t *ctag) {
 /**********************************************************************/
 /* C) Device open                                               */
 /**********************************************************************/
-/* Open channel. Returns fd, mmap-va and mmap-len */
-void dma_open_channel(chan *cp) {
-  int buffer_count = DMA_PKT_COUNT_TX;
-  if ((cp->dir) == 'r') buffer_count = DMA_PKT_COUNT_RX;
-
-  // a) Open device
-  if ((cp->fd = open(cp->dev_name, O_RDWR)) < 1) FATAL;
-  // b) mmpp device
-  cp->mm.len = sizeof(struct channel_buffer) * buffer_count;
-  cp->mm.virt_addr = mmap(NULL, cp->mm.len, cp->mm.prot, cp->mm.flags, cp->fd, cp->mm.phys_addr);
-  if (cp->mm.virt_addr == MAP_FAILED) FATAL;
-  log_debug("Opened and mmap'ed DMA channel %s: virt_addr=0x%lx, len=0x%x fd=%d", cp->dev_name, cp->mm.virt_addr, cp->mm.len, cp->fd);
-  log_debug("Chan_Buff=0x%lx Bytes (Bytes/PKT=0x%lx Packets/channel=%d) Channels/dev={Tx=%d Rx=%d}", BUFFER_SIZE, sizeof(bw), BUFFER_SIZE / sizeof(bw), DMA_PKT_COUNT_TX, DMA_PKT_COUNT_RX);
-}
-
-// Open DMA channel given Physical address and length. Returns fd, mmap-va and mmap-len
-void shm_open_channel(chan *cp) {
-  void          *pa_virt_addr;
-  unsigned long  pa_phys_addr, pa_mmap_len;       /* page aligned physical address (offset) */
-
-  // a) Open device
-  if ((cp->fd = open(cp->dev_name, O_RDWR | O_SYNC)) == -1) FATAL;
-  
-  // b) mmpp device: reduce address to be a multiple of page size and add the diff to length
-  pa_phys_addr       = cp->mm.phys_addr & ~MMAP_PAGE_MASK;
-  pa_mmap_len        = cp->mm.len + cp->mm.phys_addr - pa_phys_addr;
-  pa_virt_addr       = mmap(0, pa_mmap_len, cp->mm.prot, cp->mm.flags, cp->fd, pa_phys_addr);
-  if (pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
-  cp->mm.virt_addr = pa_virt_addr + cp->mm.phys_addr - pa_phys_addr;   // add offset to page aligned addr
-  log_debug("Opened and mmap'ed SHM channel %s: mmap_virt_addr=%p, len=0x%x fd=%d", cp->dev_name, cp->mm.virt_addr, cp->mm.len, cp->fd);
-}
-
 // Open channel device (based on name and type) and return its channel structure
 void open_device(chan *cp) {
   log_trace("%s of type=%s name=%s", __func__, cp->dev_type, cp->dev_name);
@@ -278,52 +331,6 @@ void chan_print(chan *cp) {
   for (index_buf=0; index_buf<(cp->pkts_per_chan); index_buf++) {
     fprintf(stderr, "    i=%d: newd=%d rx_buf_ptr=%p len=%lx tid=%d\n", index_buf, cp->rx[index_buf].newd, cp->rx[index_buf].data, cp->rx[index_buf].data_len, cp->rx[index_buf].tid);
   }
-}
-
-void shm_info_print(shm_channel *cip) {
-  int            i, j;
-  unsigned long  len_bytes;
-  
-  fprintf(stderr, "  shm info %08x (%p): last=%d next=%d (max=%d ga=%ld gb=%ld ut=0x%lx crc=0x%04x)\n", ntohl(cip->cinfo.ctag), cip, cip->pkt_index_last, cip->pkt_index_next, cip->cinfo.pkt_index_max, cip->cinfo.ms_guard_time_aw, cip->cinfo.ms_guard_time_bw, cip->cinfo.unix_seconds, cip->cinfo.crc16);
-  for (i=0; i<SHM_PKT_COUNT; i++) {
-    len_bytes = cip->pinfo[i].data_length;
-    fprintf(stderr, "  %d: len=%ld tid=0x%lx", i, len_bytes, cip->pinfo[i].transaction_ID);
-    if (len_bytes > 0) {
-      fprintf(stderr, " data=");
-      for (j=0; j<(len_bytes/4); j++) fprintf(stderr, "%08x ", ntohl(cip->pdata[i].data[j]));
-    }
-    fprintf(stderr, "\n");
-  }
-}
-
-// After openning SHM device, initialize SHM configuration
-void shm_init_config_one(chan *cp) {
-  int           i;
-  shm_channel  *shm_ptr = cp->shm_addr;
-  cinfo        *cip = &(shm_ptr->cinfo);
-
-  log_trace("%s:  cp=%p va=%p va_offset=%lx", __func__, cp, cp->mm.virt_addr, shm_ptr);
-//  log_trace("shm_channel size t=%lx c=%lx i=%lx d=%lx = %lx %lx", sizeof(time_t), sizeof(cinfo), sizeof(pinfo), sizeof(pdata), sizeof(shm_channel), SHM_PKT_COUNT*(sizeof(pinfo) + sizeof(pdata)));
-  log_debug("Up to %ld Channels (mmap=0x%lx / Chan=0x%lx) PKTS/Chan=%d Bytes/PKT=0x%lx", (cp->mm.len) / sizeof(shm_channel), cp->mm.len, sizeof(shm_channel), SHM_PKT_COUNT, sizeof(pdata));
-  shm_ptr->pkt_index_next = 0;
-  shm_ptr->pkt_index_last = -1;
-
-  cip->ctag               = cp->ctag;
-  cip->pkt_index_max      = SHM_PKT_COUNT;
-  cip->ms_guard_time_aw   = DEFAULT_MS_GUARD_TIME_AW;
-  cip->ms_guard_time_bw   = DEFAULT_MS_GUARD_TIME_BW;
-  cip->unix_seconds       = time(NULL);
-  cip->crc16              = 0;
-  cip->crc16              = crc16((uint8_t *) &cip, sizeof(cinfo));
-//  log_trace("%s %08x %c Pnters: va=%p vc=%p ci=%p vd=%p vn=%p", __func__, ntohl(cp->ctag), cp->dir, shm_ptr, cip, &(shm_ptr->pinfo), &(shm_ptr->pdata), &(shm_ptr->pkt_index_next));
-  
-  for (i=0; i<SHM_PKT_COUNT; i++) {
-    shm_ptr->pinfo[i].data_length    = 0;
-    shm_ptr->pinfo[i].transaction_ID = 0;
-  }
-#if 1 >= PRINT_STATE_LEVEL
-  shm_info_print(shm_ptr);
-#endif  // PRINT_STATE
 }
 
 // Initialize channel information for all (GAPS_TAG_MAX) possible tags
@@ -723,7 +730,7 @@ void asyn_send(void *adu, gaps_tag *tag) {
   chan       *cp;        // abstract channel struct pointer for any device type
 
   // a) Open channel once (and get device type, device name and channel struct
-  log_trace("Start of %s for tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
+  log_debug("Start of %s for tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
   cp = get_chan_info(tag, 't', 0);
   pthread_mutex_lock(&(cp->lock));
   // b) encode packet into TX buffer and send */
@@ -842,6 +849,13 @@ void len_decode (size_t *out, uint32_t in) {
 /**********************************************************************/
 /* J) XDCOMMS API (some functions gutted if irrelevant to xdcomms-dma */
 /**********************************************************************/
+void set_address(char *xdc_addr, char *addr_in, const char *addr_default, int *do_once) { }
+char *xdc_set_in(char *addr_in) { return NULL; }
+char *xdc_set_out(char *addr_in) { return NULL; }
+void *xdc_ctx(void) { return NULL; }
+void *xdc_pub_socket(void) { return NULL; }
+void *xdc_sub_socket(gaps_tag tag) { return NULL; }
+
 /* Set API Logging to a new level */
 void xdc_log_level(int new_level) {
   char *ll;
@@ -886,16 +900,9 @@ void xdc_register(codec_func_ptr encode, codec_func_ptr decode, int typ) {
   cmap[i].valid     = 1;
   cmap[i].encode    = encode;
   cmap[i].decode    = decode;
-  log_debug("API registered new data typ = %d (index=%d)", typ, i);
+  log_trace("API registered new data typ = %d (index=%d)", typ, i);
   config_channels();
 }
-
-void set_address(char *xdc_addr, char *addr_in, const char *addr_default, int *do_once) { }
-char *xdc_set_in(char *addr_in) { return NULL; }
-char *xdc_set_out(char *addr_in) { return NULL; }
-void *xdc_ctx(void) { return NULL; }
-void *xdc_pub_socket(void) { return NULL; }
-void *xdc_sub_socket(gaps_tag tag) { return NULL; }
 
 void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout) {
   log_debug("Start of %s: timeout = %d ms for tag=<%d,%d,%d>", __func__, timeout, tag.mux, tag.sec, tag.typ);
