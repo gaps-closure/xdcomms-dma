@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <json-c/json.h>
+#include "log.h"
 
 #define DATA_TYP_MAX                      50
 #define GAPS_TAG_MAX                      32   // MAX mnumber of Tags for this node

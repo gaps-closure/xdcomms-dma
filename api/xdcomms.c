@@ -49,6 +49,7 @@
 #include <errno.h>
 #include <sys/param.h>
 
+
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -56,7 +57,6 @@
 #include <assert.h>
 #include <pthread.h>
 
-#include "log.h"
 #include "crc.h"
 #include "xdcomms.h"
 #include "dma-proxy.h"
@@ -273,8 +273,8 @@ void dev_open_if_new(chan *cp) {
 void chan_print(chan *cp) {
   int index_buf;
   fprintf(stderr, "  %s enclave chan %08x: dir=%c typ=%s nam=%s fd=%d ut=0x%lx wn=%ld ret=%d every %d ns pkts/chan=%d (max=%d)\n", enclave_name, ntohl(cp->ctag), cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->unix_seconds, cp->wait4new_client, cp->retries, RX_POLL_INTERVAL_NSEC, cp->pkts_per_chan, MAX_PKTS_PER_CHAN);
-  fprintf(stderr, "  mmap len=0x%lx [pa=0x%lx va=%p prot=0x%x flag=0x%x]  ",  cp->mm.len, cp->mm.phys_addr, cp->mm.virt_addr, cp->mm.prot, cp->mm.flags);
-  fprintf(stderr, "Device ptrs: dma=%p shm=%p\n", cp->mm.virt_addr, cp->shm_addr);
+  fprintf(stderr, "  mmap len=0x%lx [pa=0x%lx va=%p prot=0x%x flag=0x%x] ",  cp->mm.len, cp->mm.phys_addr, cp->mm.virt_addr, cp->mm.prot, cp->mm.flags);
+  fprintf(stderr, "shm addr = %p\n", cp->shm_addr);
   for (index_buf=0; index_buf<(cp->pkts_per_chan); index_buf++) {
     fprintf(stderr, "    i=%d: newd=%d rx_buf_ptr=%p len=%lx tid=%d\n", index_buf, cp->rx[index_buf].newd, cp->rx[index_buf].data, cp->rx[index_buf].data_len, cp->rx[index_buf].tid);
   }
@@ -284,7 +284,7 @@ void shm_info_print(shm_channel *cip) {
   int            i, j;
   unsigned long  len_bytes;
   
-  fprintf(stderr, "  shm info %08x (%p): last=%d next=%d (max=%d ga=%ld gb=%ld ut=0x%lx crc=0x%04x)\n", cip->cinfo.ctag, cip, cip->pkt_index_last, cip->pkt_index_next, cip->cinfo.pkt_index_max, cip->cinfo.ms_guard_time_aw, cip->cinfo.ms_guard_time_bw, cip->cinfo.unix_seconds, cip->cinfo.crc16);
+  fprintf(stderr, "  shm info %08x (%p): last=%d next=%d (max=%d ga=%ld gb=%ld ut=0x%lx crc=0x%04x)\n", ntohl(cip->cinfo.ctag), cip, cip->pkt_index_last, cip->pkt_index_next, cip->cinfo.pkt_index_max, cip->cinfo.ms_guard_time_aw, cip->cinfo.ms_guard_time_bw, cip->cinfo.unix_seconds, cip->cinfo.crc16);
   for (i=0; i<SHM_PKT_COUNT; i++) {
     len_bytes = cip->pinfo[i].data_length;
     fprintf(stderr, "  %d: len=%ld tid=0x%lx", i, len_bytes, cip->pinfo[i].transaction_ID);
@@ -469,54 +469,82 @@ chan *get_chan_info(gaps_tag *tag, char dir, int index) {
   pthread_mutex_unlock(&chan_create);
   return (cp);
 }
-              
-void read_json_config_file(char *xcf) {
-  gaps_tag  tag;
-  int                 m, n, i, j, r=0, t;
-  char                encl_name[STR_SIZE], from_name[STR_SIZE], to_name[STR_SIZE];
-  struct json_object *j_root, *j_enclaves;
-  struct json_object *j_enclave_element, *j_enclave_name, *j_envlave_halmaps;
+
+/**********************************************************************/
+/* E) Extract JSON Configuration Info (for all devices and TX/RX)     */
+/**********************************************************************/
+// For each (of m) halmaps in JSON file, proces the flow
+//   Ensure a) Both sides use the same index for the same tag
+//          b) Group indexes for same direction
+//   For example using websrv app:
+//      orange j=0 r=0: tag=<1,1,1>   green j=0 t=0: tag=<1,1,1>
+//      orange j=1 t=9: tag=<2,2,2>   green j=1 r=9: tag=<2,2,2>
+//      orange j=2 r=1: tag=<1,1,3>   green j=2 t=1: tag=<1,1,3>
+//      orange j=3 t=8: tag=<2,2,4>   green j=3 r=8: tag=<2,2,4>
+//      ...
+//      orange j=9 t=5: tag=<2,2,10>   green j=9 r=5: tag=<2,2,10>
+void json_process_all_flows(int m, struct json_object *j_envlave_halmaps) {
+  int                 j, r, t;
+  char                dir_0, from_name[STR_SIZE], to_name[STR_SIZE];
+  gaps_tag            tag;
   struct json_object *j_halmap_element, *j_halmap_from, *j_halmap_to;
   struct json_object *j_halmap_mux, *j_halmap_sec, *j_halmap_typ;
-
-  // A) open JSON object from configuration file (using json-c library)
-  j_root = json_object_from_file(xcf);
-  if (!j_root) {
-    log_fatal("Could not find JSON file: %s", xcf);
-    exit (-1);
+  
+  for (j=0; j<m; j++) {
+    j_halmap_element = json_object_array_get_idx(j_envlave_halmaps, j);
+    j_halmap_from    = json_object_object_get(j_halmap_element, "from");
+    j_halmap_to      = json_object_object_get(j_halmap_element, "to");
+    strcpy(from_name, json_object_get_string(j_halmap_from));
+    strcpy(to_name,   json_object_get_string(j_halmap_to));
+    j_halmap_mux = json_object_object_get(j_halmap_element, "mux");
+    j_halmap_sec = json_object_object_get(j_halmap_element, "sec");
+    j_halmap_typ = json_object_object_get(j_halmap_element, "typ");
+    tag.mux = json_object_get_int(j_halmap_mux);
+    tag.sec = json_object_get_int(j_halmap_sec);
+    tag.typ = json_object_get_int(j_halmap_typ);
+    // Match and Group Indexes (see function description)
+    if ((strcmp(from_name, enclave_name)) == 0) {
+      if (j==0) { dir_0 = 't'; t = 0; r = m-1; }
+      log_debug("    %s j=%d t=%d: tag=<%d,%d,%d>", enclave_name, j, t, tag.mux, tag.sec, tag.typ);
+      get_chan_info(&tag, 't', t);
+      if (dir_0 == 't') t++;
+      else              t--;
+    }
+    if ((strcmp(to_name, enclave_name)) == 0) {
+      if (j==0) { dir_0 = 'r'; r = 0; t = m-1; }
+      log_debug("    %s j=%d r=%d: tag=<%d,%d,%d>", enclave_name, j, r, tag.mux, tag.sec, tag.typ);
+      get_chan_info(&tag, 'r', r);
+      if (dir_0 == 't') r--;
+      else              r++;
+    }
   }
-  // B) Get all enclaves
+}
+
+// Open and parse JSON configuration file (using json-c library)
+void read_json_config_file(char *xcf) {
+  int                 n, i, m;
+  char                encl_name[STR_SIZE];
+  struct json_object *j_root, *j_enclaves;
+  struct json_object *j_enclave_element, *j_enclave_name, *j_envlave_halmaps;
+
+  j_root = json_object_from_file(xcf);
+  if (!j_root) { log_fatal("Could not find JSON file: %s", xcf); FATAL; }
+  // A) Get all enclaves
   j_enclaves = json_object_object_get(j_root, "enclaves");
   n = json_object_array_length(j_enclaves);
   log_trace("%d enclaves in %s file", n, xcf);
-  // C) For each (of n) enclaves in JSON list, get enclave information and halmaps
+  // B) For each (of n) enclaves in JSON list, get enclave information and halmaps
   for (i=0; i<n; i++) {
     j_enclave_element = json_object_array_get_idx(j_enclaves, i);
     j_enclave_name = json_object_object_get(j_enclave_element, "enclave");
     strcpy(encl_name, json_object_get_string(j_enclave_name));
     log_trace("  %d: enclave=%s", i, json_object_get_string(j_enclave_name));
+    // C) Take halmaps from this nodes enclave
     if ((strcmp(enclave_name, encl_name)) == 0) {
       j_envlave_halmaps = json_object_object_get(j_enclave_element, "halmaps");
       m = json_object_array_length(j_envlave_halmaps);
-      t = m - 1;
       log_trace("  halmaps len=%d", m);
-      // D) for each (of m) halmaps in JSON list, get the informationn
-      for (j=0; j<m; j++) {
-        j_halmap_element = json_object_array_get_idx(j_envlave_halmaps, j);
-        j_halmap_from    = json_object_object_get(j_halmap_element, "from");
-        j_halmap_to      = json_object_object_get(j_halmap_element, "to");
-        strcpy(from_name, json_object_get_string(j_halmap_from));
-        strcpy(to_name,   json_object_get_string(j_halmap_to));
-        j_halmap_mux = json_object_object_get(j_halmap_element, "mux");
-        j_halmap_sec = json_object_object_get(j_halmap_element, "sec");
-        j_halmap_typ = json_object_object_get(j_halmap_element, "typ");
-        tag.mux = json_object_get_int(j_halmap_mux);
-        tag.sec = json_object_get_int(j_halmap_sec);
-        tag.typ = json_object_get_int(j_halmap_typ);
-        log_debug("    j=%d r=%d t=%d: tag=<%d,%d,%d>", j, r, t, tag.mux, tag.sec, tag.typ);
-        if ((strcmp(from_name, encl_name)) == 0) get_chan_info(&tag, 't', t--);
-        if ((strcmp(to_name,   encl_name)) == 0) get_chan_info(&tag, 'r', r++);
-      }
+      json_process_all_flows(m, j_envlave_halmaps);
     }
   }
 }
@@ -536,9 +564,8 @@ void config_channels(void) {
   read_json_config_file(e_xcf);
 }
 
-
 /**********************************************************************/
-/* E) BW Packet processing                                               */
+/* F) DMA read/write Functions                                        */
 /**********************************************************************/
 void bw_print(bw *p) {
   fprintf(stderr, "%s: ", __func__);
@@ -575,9 +602,6 @@ void bw_gaps_header_encode(bw *p, size_t *p_len, uint8_t *buff_in, size_t *buff_
   *p_len = bw_get_packet_length(p, *buff_len);
 }
 
-/**********************************************************************/
-/* F) Device write functions                                              */
-/**********************************************************************/
 /* Use DMA ioctl operations to tx or rx data */
 int dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *cbuf_ptr) {
 //  log_trace("START_XFER (fd=%d, id=%d buf_ptr=%p unset-status=%d)", fd, *buffer_id_ptr, cbuf_ptr, cbuf_ptr->status);
@@ -611,6 +635,28 @@ void dma_send(chan *cp, void *adu, gaps_tag *tag) {
 //  log_trace("%s: Buffer id = %d packet pointer=%p", buffer_id, p);
 }
 
+void rcvr_dma(chan *cp, int index_buf) {
+  bw                    *p;
+  struct channel_buffer *dma_cb_ptr = (struct channel_buffer *) cp->mm.virt_addr;  /* start of channel buffer */
+  static int             dma_cb_index=0;
+
+//  log_trace("%s ctag=%x %s cp=%p va=%p dma=%p ID=%d len=%ld", __func__, ntohl(cp->ctag), cp->dev_name, cp, cp->mm.virt_addr, dma_cb_ptr, index_buf, sizeof(bw));
+  dma_cb_ptr[dma_cb_index].length = sizeof(bw);      /* Receive up to make length Max size */
+  log_debug("THREAD-2 waiting for %s tag=0x%08x on dev=%s with cb_index=%d)", cp->dev_type, ntohl(cp->ctag), cp->dev_name, dma_cb_index);
+  while (dma_start_to_finish(cp->fd, &dma_cb_index, &(dma_cb_ptr[dma_cb_index])) != 0) { ; }
+  p = (bw *) &(dma_cb_ptr[dma_cb_index].buffer);    /* XXX: DMA buffer must be larger than size of BW */
+  pthread_mutex_lock(&(cp->lock));
+  log_trace("THREAD-3 rx packet cb_index=%d status=%d", dma_cb_index, dma_cb_ptr[dma_cb_index].status);
+  bw_len_decode(&(cp->rx[index_buf].data_len), p->data_len);
+  cp->rx[index_buf].data = (uint8_t *) p->data;
+  cp->rx[index_buf].newd = 1;
+  pthread_mutex_unlock(&(cp->lock));
+  dma_cb_index++;
+}
+
+/**********************************************************************/
+/* G) SHM read/write functions                                  */
+/**********************************************************************/
 // Dumb memory copy using 8-byte words
 void naive_memcpy(unsigned long *d, const unsigned long *s, unsigned long len_in_words) {
   for (int i = 0; i < len_in_words; i++) *d++ = *s++;
@@ -621,7 +667,7 @@ void shm_send(chan *cp, void *adu, gaps_tag *tag) {
   int     pkt_index_nxt = (pkt_index_now + 1) % cp->shm_addr->cinfo.pkt_index_max;
   size_t  adu_len=0;    // encoder calculates length */
 
-  log_trace("%s TX index=%d len=%ld", __func__, pkt_index_now, adu_len);
+  log_trace("%s TX index=%d", __func__, pkt_index_now);
 #if 0 >= PRINT_STATE_LEVEL
   chan_print(cp);
 #endif
@@ -646,12 +692,38 @@ void shm_send(chan *cp, void *adu, gaps_tag *tag) {
 #endif  // PRINT_STATE
 }
 
+int wait_if_old(chan *cp) {
+  if ((cp->wait4new_client) == 0) log_trace("Not wait for client");
+  else if ((cp->unix_seconds) <= (cp->shm_addr->cinfo.unix_seconds)) log_trace("New client");
+  else return(-1);  // wait for new client
+  return(0);
+}
+
+void rcvr_shm(chan *cp, int index_buf) {
+  while (wait_if_old(cp)) { ; }
+  log_debug("THREAD-2 waiting for %s tag=0x%08x on dev=%s with index=%d (last=%d)", cp->dev_type, ntohl(cp->ctag), cp->dev_name, index_buf, cp->shm_addr->pkt_index_next);
+  while (index_buf == (cp->shm_addr->pkt_index_next)) { ; }
+//  log_trace("THREAD-3a got packet index=%d (next=%d last=%d) len=%d [tr=0x%lx - tt=0x%lx = 0x%lx]", index_buf, cp->shm_addr->pkt_index_next, cp->shm_addr->pkt_index_last, cp->shm_addr->pinfo[index_buf].data_length, cp->unix_seconds, (cp->unix_seconds) - (cp->shm_addr->cinfo.unix_seconds), cp->shm_addr->cinfo.unix_seconds);
+  pthread_mutex_lock(&(cp->lock));
+  log_debug("THREAD-3 rx packet ctag=0x%08x len=%d id=%d", ntohl(cp->ctag), cp->shm_addr->pinfo[index_buf].data_length, index_buf);
+#if 1 >= PRINT_STATE_LEVEL
+  shm_info_print(cp->shm_addr);
+#endif  // PRINT_STATE
+  cp->rx[index_buf].data_len = cp->shm_addr->pinfo[index_buf].data_length;
+  cp->rx[index_buf].data     = (uint8_t *) (cp->shm_addr->pdata->data);
+  cp->rx[index_buf].newd     = 1;
+  pthread_mutex_unlock(&(cp->lock));
+}
+
+/**********************************************************************/
+/* H) Virtual Device read/write functions                                  */
+/**********************************************************************/
 /* Asynchronously send ADU to DMA driver in 'bw' packet */
 void asyn_send(void *adu, gaps_tag *tag) {
   chan       *cp;        // abstract channel struct pointer for any device type
 
   // a) Open channel once (and get device type, device name and channel struct
-  log_trace("Start of %s", __func__);
+  log_trace("Start of %s for tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
   cp = get_chan_info(tag, 't', 0);
   pthread_mutex_lock(&(cp->lock));
   // b) encode packet into TX buffer and send */
@@ -660,71 +732,13 @@ void asyn_send(void *adu, gaps_tag *tag) {
   pthread_mutex_unlock(&(cp->lock));
 }
 
-/**********************************************************************/
-/* Device read functions                                              */
-/**********************************************************************/
-void rcvr_dma(chan *cp, int index_buf) {
-  bw                    *p;
-  struct channel_buffer *dma_cb_ptr = (struct channel_buffer *) cp->mm.virt_addr;  /* start of channel buffer */
-  static int             dma_cb_index=0;
-
-//  log_trace("%s ctag=%x %s cp=%p va=%p dma=%p ID=%d len=%ld", __func__, ntohl(cp->ctag), cp->dev_name, cp, cp->mm.virt_addr, dma_cb_ptr, index_buf, sizeof(bw));
-  dma_cb_ptr[dma_cb_index].length = sizeof(bw);      /* Receive up to make length Max size */
-  log_debug("THREAD-2 waiting for packet (0x%08x cb_index=%d) %s %s)", ntohl(cp->ctag), dma_cb_index, cp->dev_type, cp->dev_name);
-  while (dma_start_to_finish(cp->fd, &dma_cb_index, &(dma_cb_ptr[dma_cb_index])) != 0) { ; }
-  p = (bw *) &(dma_cb_ptr[dma_cb_index].buffer);    /* XXX: DMA buffer must be larger than size of BW */
-  pthread_mutex_lock(&(cp->lock));
-  log_trace("THREAD-3 rx packet cb_index=%d status=%d", dma_cb_index, dma_cb_ptr[dma_cb_index].status);
-  bw_len_decode(&(cp->rx[index_buf].data_len), p->data_len);
-  cp->rx[index_buf].data = (uint8_t *) p->data;
-  cp->rx[index_buf].newd = 1;
-  pthread_mutex_unlock(&(cp->lock));
-  dma_cb_index++;
-}
-
-int wait_if_old(chan *cp) {
-//  log_trace("%s:t=%lx [tt=%lx - tr=%lx] = %lx", __func__, time(NULL), cp->shm_addr->cinfo.unix_seconds, cp->unix_seconds, (cp->unix_seconds) - (cp->shm_addr->cinfo.unix_seconds));
-  //  shm_info_print(cp->shm_addr);
-  if ((cp->wait4new_client) == 0) {
-    log_trace("Not wait");
-    return(0);   // not wait for new cleint
-  }
-  else if ((cp->unix_seconds) <= (cp->shm_addr->cinfo.unix_seconds)) {
-    log_trace("Got New client");
-    return(0);   // new client
-  }
-  else {
-//    log_trace("Old client - so wait");
-   return(-1);  // wait for new client
-  }
-}
-
-void rcvr_shm(chan *cp, int index_buf) {
-  static int pkt_index=0;
-  
-  log_debug("THREAD-2 waiting for packet (%d %s %s) chan_index=(r=%d t=%d) (id=%d)", ntohl(cp->ctag), cp->dev_type, cp->dev_name, pkt_index, cp->shm_addr->pkt_index_next, index_buf);
-  while (wait_if_old(cp)) { ; }
-  while (pkt_index == (cp->shm_addr->pkt_index_next)) { ; }
-  log_trace("THREAD-3 %s got packet index=(l=%d next=%d last=%d) len=%d [tr=0x%lx - tt=0x%lx = 0x%lx]", __func__, pkt_index, cp->shm_addr->pkt_index_next, cp->shm_addr->pkt_index_last, cp->shm_addr->pinfo[pkt_index].data_length, cp->shm_addr->cinfo.unix_seconds, cp->unix_seconds, (cp->unix_seconds) - (cp->shm_addr->cinfo.unix_seconds), cp->shm_addr->cinfo.unix_seconds);
-  pthread_mutex_lock(&(cp->lock));
-  log_debug("THREAD-3b rx packet ctag=0x%08x id=%d", ntohl(cp->ctag), index_buf);
-#if 1 >= PRINT_STATE_LEVEL
-  shm_info_print(cp->shm_addr);
-#endif  // PRINT_STATE
-  cp->rx[index_buf].data_len = cp->shm_addr->pinfo[pkt_index].data_length;
-  cp->rx[index_buf].data     = (uint8_t *) (cp->shm_addr->pdata->data);
-  cp->rx[index_buf].newd     = 1;
-  pthread_mutex_unlock(&(cp->lock));
-  pkt_index++;
-}
-
 // Receive packets via DMA in a loop (rate controled by FINISH_XFER blocking call)
 void *rcvr_thread_function(thread_args *vargs) {
   chan *cp = vargs->cp;
   int   buffer_id = 0;
 
   while (1) {
-    log_trace("THREAD-1 %s: fd=%d index=%d (base_id=%d)", __func__, cp->fd, buffer_id, vargs->buffer_id_start);
+    log_trace("THREAD-1 %s: tag=0x%08x fd=%d index=%d (base_id=%d)", __func__, cp->ctag, cp->fd, buffer_id, vargs->buffer_id_start);
 #if 0 >= PRINT_STATE_LEVEL
     chan_print(cp);
 #endif  // PRINT_STATE_LEVEL
@@ -776,8 +790,7 @@ int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
 }
 
 /**********************************************************************/
-/* XDCOMMS External API Functions                                     */
-/* Some functions are gutted if not relevant to xdcomms-dma           */
+/* I) XDCOMMS Utility functions (not sure if all are still needed)  */
 /**********************************************************************/
 void tag_print (gaps_tag *tag, FILE * fd) {
   fprintf(fd, "[mux=%02u sec=%02u typ=%02u] ", tag->mux, tag->sec, tag->typ);
@@ -826,6 +839,9 @@ void len_decode (size_t *out, uint32_t in) {
   *out = (uint32_t) htonl(in);
 }
 
+/**********************************************************************/
+/* J) XDCOMMS API (some functions gutted if irrelevant to xdcomms-dma */
+/**********************************************************************/
 /* Set API Logging to a new level */
 void xdc_log_level(int new_level) {
   char *ll;
@@ -870,24 +886,16 @@ void xdc_register(codec_func_ptr encode, codec_func_ptr decode, int typ) {
   cmap[i].valid     = 1;
   cmap[i].encode    = encode;
   cmap[i].decode    = decode;
-  log_trace("API registered new data typ = %d (index=%d)", typ, i);
+  log_debug("API registered new data typ = %d (index=%d)", typ, i);
+  config_channels();
 }
 
 void set_address(char *xdc_addr, char *addr_in, const char *addr_default, int *do_once) { }
 char *xdc_set_in(char *addr_in) { return NULL; }
 char *xdc_set_out(char *addr_in) { return NULL; }
 void *xdc_ctx(void) { return NULL; }
-void *xdc_pub_socket(void) {
-  log_debug("Start of %s", __func__);
-  config_channels();
-  return NULL;
-}
-            
-void *xdc_sub_socket(gaps_tag tag) {
-  log_debug("Start of %s: for tag=<%d,%d,%d>", __func__, tag.mux, tag.sec, tag.typ);
-  config_channels();
-  return NULL;
-}
+void *xdc_pub_socket(void) { return NULL; }
+void *xdc_sub_socket(gaps_tag tag) { return NULL; }
 
 void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout) {
   log_debug("Start of %s: timeout = %d ms for tag=<%d,%d,%d>", __func__, timeout, tag.mux, tag.sec, tag.typ);
@@ -896,8 +904,9 @@ void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout) {
 //  fprintf(stderr, "timeout = %d ms for tag=<%d,%d,%d>\n", timeout, tag.mux, tag.sec, tag.typ);
   if (timeout > 0) cp->retries = (timeout * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;     // Set value
   log_trace("%s sets RX retries = %d every %d ns (for ctag=%08x)", __func__, cp->retries, RX_POLL_INTERVAL_NSEC, ntohl(cp->ctag));
-  return NULL;
+  return (NULL);
 }
+
 void xdc_asyn_send(void *socket, void *adu, gaps_tag *tag) { asyn_send(adu, tag); }
 
 int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
