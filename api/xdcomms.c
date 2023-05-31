@@ -320,9 +320,7 @@ void shm_send(chan *cp, void *adu, gaps_tag *tag) {
 //  naive_memcpy(cp->shm_addr->pdata[pkt_index_nxt].data, adu, adu_len);  // TX adds new data
   cp->shm_addr->pinfo[write_index].data_length = adu_len;
   *next_ptr = (write_index + 1) % SHM_PKT_COUNT;
-  
-  log_trace("data[19]=%0x", cp->shm_addr->pdata[write_index].data[19]);
-  log_trace("data[18]=%0x", cp->shm_addr->pdata[write_index].data[18]);
+//  log_trace("data[19]=%0x", cp->shm_addr->pdata[write_index].data[19]);
   
 #if 1 >= PRINT_STATE_LEVEL
   time_trace("XDC_Tx2 sent data (for index=%d)", write_index);
@@ -368,7 +366,7 @@ void shm_rcvr(chan *cp, int index_buf) {
   cp->rx[index_buf].data_len = cp->shm_addr->pinfo[index_buf].data_length;
   cp->rx[index_buf].data     = (uint8_t *) (cp->shm_addr->pdata[index_buf].data);
   cp->rx[index_buf].newd     = 1;
-  fprintf(stderr, "PPP %p = %08x ", cp->shm_addr->pdata[index_buf].data, ntohl(cp->shm_addr->pdata[index_buf].data[4]));
+//  fprintf(stderr, "PPP %p = %08x ", cp->shm_addr->pdata[index_buf].data, ntohl(cp->shm_addr->pdata[index_buf].data[4]));
   pthread_mutex_unlock(&(cp->lock));
 }
 
@@ -732,10 +730,7 @@ int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
     chan_print(cp, enclave_name);
 #endif
     cmap_decode(cp->rx[index_buf].data, cp->rx[index_buf].data_len, adu, tag);   /* Put packet into ADU */
-    log_trace("XDCOMMS reads from buff=%p (index=%d): len=%d", cp->rx[index_buf].data, index_buf, cp->rx[index_buf].data_len);
-//    fprintf(stderr, "QQQ %p = %08x\n", cp->rx[index_buf].data, cp->rx[index_buf].data[4]);
-//    cp->rx[index_buf].data[4] = 0x012334567;
-    if ((cp->rx[index_buf].data_len) > 0) log_buf_trace("RX_PKT", cp->rx[index_buf].data, cp->rx[index_buf].data_len);
+//    log_trace("XDCOMMS reads from buff=%p (index=%d): len=%d", cp->rx[index_buf].data, index_buf, cp->rx[index_buf].data_len);
     cp->rx[index_buf].newd = 0;                      // unmark newdata
     log_debug("XDCOMMS rx packet tag=<%d,%d,%d> len=%d", tag->mux, tag->sec, tag->typ, cp->rx[index_buf].data_len);
     if (cp->rx[index_buf].data_len > 0) rv = cp->rx[index_buf].data_len;
@@ -871,7 +866,7 @@ int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   chan            *cp;
   struct timespec  request;
   int              ntries;
-int x=0;
+//  int x=0;
 
 //  log_debug("Start of %s: tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
   cp              = get_chan_info(tag, 'r', 0);     // get buffer for tag (to communicate with thread)
@@ -880,11 +875,11 @@ int x=0;
   ntries          = 1 + (cp->retries);           // number of tries to rx packet
 //  log_trace("%s: test %d times every %d (%d.%09d) ns", __func__, ntries, RX_POLL_INTERVAL_NSEC, request.tv_sec, request.tv_nsec);
   while ((ntries--) > 0)  {
-//    if (nonblock_recv(adu, tag, cp) > 0)  return 0;
-    if ((x=nonblock_recv(adu, tag, cp)) > 0) {
-      log_trace("%s RXed packet len=%d", __func__, x);
-      return x;
-    }
+    if (nonblock_recv(adu, tag, cp) > 0)  return 0;
+//    if ((x=nonblock_recv(adu, tag, cp)) > 0) {
+//      log_trace("%s RXed packet len=%d", __func__, x);
+//      return x;
+//    }
 //    log_trace("LOOP timeout %s: tag=<%d,%d,%d>: remaining tries = %d ", __func__, tag->mux, tag->sec, tag->typ, ntries);
     nanosleep(&request, NULL);
   }
