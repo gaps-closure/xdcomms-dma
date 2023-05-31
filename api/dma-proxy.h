@@ -67,4 +67,10 @@ typedef struct _sdh_bw {
   uint8_t   data[PKT_G1_ADU_SIZE_MAX];  /* Application data unit */
 } bw;
 
+//void dma_open_channel(chan *cp);
+//void ctag_encode(uint32_t *ctag, gaps_tag *tag);
+//void ctag_decode(gaps_tag *tag, uint32_t *ctag);
+//void dma_send(chan *cp, void *adu, gaps_tag *tag);
+//void dma_rcvr(chan *cp, int index_buf);
+  
 #endif /* _DMA_PROXY_H */

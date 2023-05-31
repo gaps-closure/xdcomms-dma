@@ -1,13 +1,11 @@
 #ifndef XDC_HEADER_FILE
 #define XDC_HEADER_FILE
 
-#include <stdint.h>
 #include <stddef.h>
-#include <stdio.h>
+//#include <stdio.h>
 #include <json-c/json.h>
-#include "log.h"
+#include "cmap.h"
 
-#define DATA_TYP_MAX                      50
 #define GAPS_TAG_MAX                      32   // MAX mnumber of Tags for this node
 #define CTAG_MOD                         256
 #define ADU_SIZE_MAX_C               1000000   // 1 MB - Increased for ILIP payload mode*/
@@ -30,25 +28,6 @@
 
 #define DEV_DIR_IN  0
 #define DEV_DIR_OUT 1
-
-
-/* Per-tag Rx buffer stores retries (based on timeout) per tag value */
-
-/* Table of codec per data types (Max of DATA_TYP_MAX types) */
-typedef void (*codec_func_ptr)(void *, void *, size_t *);
-typedef struct _codec_map {
-  int             valid;
-  uint32_t        data_type;
-  codec_func_ptr  encode;
-  codec_func_ptr  decode;
-} codec_map;
-
-/* CLOSURE tag structure */
-typedef struct _tag {
-  uint32_t         mux;      /* APP ID */
-  uint32_t         sec;      /* Security tag */
-  uint32_t         typ;      /* data type */
-} gaps_tag;
 
 extern void tag_print     (gaps_tag *, FILE *);
 extern void tag_write     (gaps_tag *, uint32_t,   uint32_t,   uint32_t);

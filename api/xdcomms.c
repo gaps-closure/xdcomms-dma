@@ -5,9 +5,9 @@
  * TODO:
  *    Add hton and ntoh for shm operations
  *
- * v0.4 June 2023:  hardware abstractions layer defines abstracted
- * one-way channels insread of just DMA channels (so renamed
- * 'xdcomms-dma.c' to 'xdcomms.c'. It now supports:
+ * v0.4 June 2023: Hardware abstractions layer defines abstract one-way
+ * channels insread of just DMA channels (so renamed 'xdcomms-dma.c' to
+ * 'xdcomms.c'). It now supports:
  *   - MIND-DMA XDG:   Direct Memory Access device (see v0.3)
  *   - ESCAPE-SHM XDG: Reading and writing to a specified region of
  *     shared host mmap'ed memory under the control of the ESCAPE.
@@ -63,7 +63,6 @@
 #include <assert.h>
 #include <pthread.h>
 
-#include "crc.h"
 #include "xdcomms.h"
 #include "dma-proxy.h"
 #include "shm.h"
@@ -103,7 +102,8 @@ typedef struct channel {
   unsigned long    wait4new_client;        // 1 = RX server checks if client started later (0 = no check)
   pthread_mutex_t  lock;                   // Ensure RX thread does not write while xdcomms reads
   memmap           mm;                     // Mmap configuration
-  int              pkts_per_chan;          // Number of packets in a channel: e.g., SHM=2, DMAt=1, DMAr=16
+  int              pkt_buf_index;          // Buf index between Rx Thread nad RX virtual channel
+  int              pkt_buf_count;          // Number of packets in a channel: e.g., SHM=2, DMAt=1, DMAr=16
   pkt_info         rx[MAX_PKTS_PER_CHAN];  // RX packet info from RX thread (needs mutex lock)
   shm_channel     *shm_addr;               // Ptr to mmap'ed SHM struct: virtual addr + offset
 } chan;
@@ -124,53 +124,11 @@ typedef struct _thread_args {
 void rcvr_thread_start(chan *cp);
 
 char            enclave_name[STR_SIZE] = "";  // enclave name (e.g., green)
-codec_map       cmap[DATA_TYP_MAX];           // maps data type to its data encode + decode functions
 chan            chan_info[GAPS_TAG_MAX];      // array of buffers to store local channel info per tag
 pthread_mutex_t chan_create;
 
-// XXX Codec, DMA and SHM functions should be put into separate functions
-//     with xdcomms including DMA and SHM, and DMA and SHM including Codec
-/**********************************************************************/
-/* C) Codec map table to store encoding and decoding function pointers   */
-/**********************************************************************/
-void cmap_print_one(codec_map *cm) {
-  fprintf(stderr, "[typ=%d ", cm->data_type);
-  fprintf(stderr, "e=%p ",    cm->encode);
-  fprintf(stderr, "d=%p] ",    cm->decode);
-}
-
-void cmap_print(void) {
-  codec_map  *cm;
-  fprintf(stderr, "%s: ", __func__);
-  for(cm = cmap; cm->valid != 0; cm++) cmap_print_one(cm);
-  fprintf(stderr, "\n");
-}
-
-codec_map *cmap_find(int data_type) {
-  codec_map  *cm;
-  for(cm = cmap; cm->valid != 0; cm++) {
-    if (cm->data_type == data_type) return (cm);
-  }
-  log_warn("Could not find registered data typ = %d\n", data_type);
-  return (NULL);
-}
-
-/* Create packet (serialize data and add header) */
-void cmap_encode(uint8_t *data, uint8_t *buff_in, size_t *buff_len, gaps_tag *tag) {
-  codec_map  *cm = cmap_find(tag->typ);
-  cm->encode (data, buff_in, buff_len);
-  log_buf_trace("API <- raw app data:", buff_in, *buff_len);
-  log_buf_trace("    -> encoded data:", data,    *buff_len);
-}
-
-/* Decode data from packet */
-void cmap_decode(uint8_t *data, size_t data_len, uint8_t *buff_out, gaps_tag *tag) {
-  codec_map  *cm = cmap_find(tag->typ);
-  cm->decode (buff_out, data, &data_len);
-  log_buf_trace("API -> raw app data:", data,     data_len);
-  log_buf_trace("    <- decoded data:", buff_out, data_len);
-}
-
+// XXX DMA and SHM functions should be put into separate functions, with
+// xdcomms including DMA + SHM, and DMA + SHM functions including Codec
 
 /**********************************************************************/
 /* D1) Open/Configure DMA device                                      */
@@ -315,26 +273,44 @@ void shm_open_channel(chan *cp) {
   // b) mmpp device: reduce address to be a multiple of page size and add the diff to length
   pa_phys_addr       = cp->mm.phys_addr & ~MMAP_PAGE_MASK;
   pa_mmap_len        = cp->mm.len + cp->mm.phys_addr - pa_phys_addr;
+//  log_trace("SHM len = 0x%x = 0x%x", cp->mm.len, pa_mmap_len);
   pa_virt_addr       = mmap(0, pa_mmap_len, cp->mm.prot, cp->mm.flags, cp->fd, pa_phys_addr);
   if (pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
   cp->mm.virt_addr = pa_virt_addr + cp->mm.phys_addr - pa_phys_addr;   // add offset to page aligned addr
-  log_debug("Opened and mmap'ed SHM channel %s: mmap_virt_addr=%p, len=0x%x fd=%d", cp->dev_name, cp->mm.virt_addr, cp->mm.len, cp->fd);
+  log_debug("Opened and mmap'ed SHM channel %s (fd=%d): virt addr: %p - %p = 0x%x ", cp->dev_name, cp->fd, cp->mm.virt_addr, ((unsigned long) cp->mm.virt_addr) + pa_mmap_len - 1, pa_mmap_len);
 }
 
+void buf_print_hex(uint8_t *buf, int len_bytes) {
+  int       j, s=4, e=2, w=4;    // number of bytes to print at start and end for long lengths
+  uint32_t *buf_word_ptr = (uint32_t *) buf;
+  int       len_words = len_bytes/w;
+  
+  if (len_bytes > 0) {
+    if (len_words <= (s+e)) {
+      for (j=0; j<len_words; j++)           fprintf(stderr, "%08x ", buf_word_ptr[j]);
+    }
+    else {
+      for (j=0; j<s; j++)                   fprintf(stderr, "%08x ", buf_word_ptr[j]);
+      fprintf(stderr, " ... ");
+      for (j=len_words-e; j<len_words; j++) fprintf(stderr, "%08x ", buf_word_ptr[j]);
+    }
+  }
+  fprintf(stderr, "\n");
+}
 void shm_info_print(shm_channel *cip) {
-  int            i, j;
+  int            i;
   unsigned long  len_bytes;
   
-  fprintf(stderr, "  shm info %08x (%p): last=%d next=%d (max=%d ga=%ld gb=%ld ut=0x%lx crc=0x%04x)\n", ntohl(cip->cinfo.ctag), cip, cip->pkt_index_last, cip->pkt_index_next, cip->cinfo.pkt_index_max, cip->cinfo.ms_guard_time_aw, cip->cinfo.ms_guard_time_bw, cip->cinfo.unix_seconds, cip->cinfo.crc16);
+  fprintf(stderr, "  shm info %08x (%p): last=%d next=%d (max=%d ga=%ld gb=%ld ut=0x%lx crc=0x%04x)\n", ntohl(cip->cinfo.ctag), cip, cip->pkt_index_last, cip->pkt_index_next, cip->cinfo.pkt_index_max, cip->cinfo.ms_guard_time_aw, cip->cinfo.ms_guard_time_bw, cip->cinfo.unix_seconds, cip->crc16);
   for (i=0; i<SHM_PKT_COUNT; i++) {
     len_bytes = cip->pinfo[i].data_length;
-    fprintf(stderr, "  %d: len=%ld tid=0x%lx", i, len_bytes, cip->pinfo[i].transaction_ID);
-    if (len_bytes > 0) {
-      fprintf(stderr, " data=");
-      for (j=0; j<(len_bytes/4); j++) fprintf(stderr, "%08x ", ntohl(cip->pdata[i].data[j]));
-    }
-    fprintf(stderr, "\n");
+    fprintf(stderr, "  %d (%p) tid=0x%lx len=%ld: ", i, cip->pdata[i].data, cip->pinfo[i].transaction_ID, len_bytes);
+    buf_print_hex(cip->pdata[i].data, len_bytes);
   }
+}
+
+uint16_t get_crc(chan *cp) {
+  return(crc16((uint8_t *) &(cp->shm_addr->cinfo), sizeof(cinfo)));
 }
 
 // After openning SHM device, initialize SHM configuration
@@ -347,15 +323,16 @@ void shm_init_config_one(chan *cp) {
 //  log_trace("shm_channel size t=%lx c=%lx i=%lx d=%lx = %lx %lx", sizeof(time_t), sizeof(cinfo), sizeof(pinfo), sizeof(pdata), sizeof(shm_channel), SHM_PKT_COUNT*(sizeof(pinfo) + sizeof(pdata)));
   log_trace("Up to %ld Channels (mmap=0x%lx / Chan=0x%lx) PKTS/Chan=%d Bytes/PKT=0x%lx", (cp->mm.len) / sizeof(shm_channel), cp->mm.len, sizeof(shm_channel), SHM_PKT_COUNT, sizeof(pdata));
   shm_ptr->pkt_index_next = 0;
+  // CHeck that it is possible to write into the SHM structure
+  if (shm_ptr->pkt_index_next !=0) {log_fatal("SHM write fails for ctag=0x%08x", cp->ctag); FATAL;}
   shm_ptr->pkt_index_last = -1;
 
   cip->ctag               = cp->ctag;
   cip->pkt_index_max      = SHM_PKT_COUNT;
-  cip->ms_guard_time_aw   = DEFAULT_MS_GUARD_TIME_AW;
-  cip->ms_guard_time_bw   = DEFAULT_MS_GUARD_TIME_BW;
+  cip->ms_guard_time_aw   = DEFAULT_NS_GUARD_TIME_AW;
+  cip->ms_guard_time_bw   = DEFAULT_NS_GUARD_TIME_BW;
   cip->unix_seconds       = time(NULL);
-  cip->crc16              = 0;
-  cip->crc16              = crc16((uint8_t *) &cip, sizeof(cinfo));
+  shm_ptr->crc16          = get_crc(cp);
 //  log_trace("%s %08x %c Pnters: va=%p vc=%p ci=%p vd=%p vn=%p", __func__, ntohl(cp->ctag), cp->dir, shm_ptr, cip, &(shm_ptr->pinfo), &(shm_ptr->pdata), &(shm_ptr->pkt_index_next));
   
   for (i=0; i<SHM_PKT_COUNT; i++) {
@@ -371,49 +348,71 @@ void shm_init_config_one(chan *cp) {
 /* S2) SHM read/write functions                                  */
 /**********************************************************************/
 // Dumb memory copy using 8-byte words
-void naive_memcpy(unsigned long *d, const unsigned long *s, unsigned long len_in_words) {
-  for (int i = 0; i < len_in_words; i++) *d++ = *s++;
-}
+//void naive_memcpy(unsigned long *d, const unsigned long *s, unsigned long len_in_words) {
+//  for (int i = 0; i < len_in_words; i++) *d++ = *s++;
+//}
 
 void shm_send(chan *cp, void *adu, gaps_tag *tag) {
-  int     pkt_index_now = cp->shm_addr->pkt_index_next;
-  int     pkt_index_nxt = (pkt_index_now + 1) % cp->shm_addr->cinfo.pkt_index_max;
-  size_t  adu_len=0;    // encoder calculates length */
-
-  log_trace("%s TX index=%d", __func__, pkt_index_now);
-#if 0 >= PRINT_STATE_LEVEL
-  chan_print(cp);
-#endif
+  int            *last_ptr    = &(cp->shm_addr->pkt_index_last);
+  int            *next_ptr    = &(cp->shm_addr->pkt_index_next);
+  int             write_index = *next_ptr;
+  size_t          adu_len     = 0;    // encoder calculates length */
+  struct timespec ts;                 // Guard time
   
+  ts.tv_sec  = 0;
+  ts.tv_nsec = DEFAULT_NS_GUARD_TIME_BW;
+  log_trace("%s TX index: next = %d last = %d (guard_bw=%d)", __func__, *next_ptr, *last_ptr, DEFAULT_NS_GUARD_TIME_BW);
   // A) Delete oldest message?
-  if (cp->shm_addr->pkt_index_last == pkt_index_nxt) {
-    cp->shm_addr->pkt_index_last = ((cp->shm_addr->pkt_index_last) + 1) % cp->shm_addr->cinfo.pkt_index_max;
-    // XXX  TODO: Wait ms_guard_time_bw
+  if (*last_ptr == write_index) {
+    *last_ptr = ((*last_ptr) + 1) % SHM_PKT_COUNT;
+    nanosleep(&ts, NULL);       // Give time to finish reading before writing into last
   }
+  if (*last_ptr < 0) *last_ptr = 0;   // If the first written packet
+  time_trace("XDC_Tx1 ready to encode for ctag=%08x (next = %d last = %d)", ntohl(cp->ctag), write_index, *last_ptr);
+  
   // B) Encode Data into SHM
-  time_trace("XDC_Tx1 ready to encode for ctag=%08x", ntohl(cp->ctag));
-  cmap_encode((uint8_t *) &(cp->shm_addr->pdata->data[pkt_index_now]), adu, &adu_len, tag);
-//  XXX  incoprate naive_memcpy into cmap_encode/decode
+  cmap_encode(cp->shm_addr->pdata[write_index].data, adu, &adu_len, tag);
+//  XXX TODO: incoprate naive_memcpy into cmap_encode/decode
 //  naive_memcpy(cp->shm_addr->pdata[pkt_index_nxt].data, adu, adu_len);  // TX adds new data
-  cp->shm_addr->pinfo[pkt_index_now].data_length = adu_len;
-  // C) TX updates indexes for RX
-  cp->shm_addr->pkt_index_next = pkt_index_nxt;
-  if (cp->shm_addr->pkt_index_last < 0) cp->shm_addr->pkt_index_last = pkt_index_now;
+  cp->shm_addr->pinfo[write_index].data_length = adu_len;
+  *next_ptr = (write_index + 1) % SHM_PKT_COUNT;
+  
+  log_trace("data[19]=%0x", cp->shm_addr->pdata[write_index].data[19]);
+  log_trace("data[18]=%0x", cp->shm_addr->pdata[write_index].data[18]);
+  
 #if 1 >= PRINT_STATE_LEVEL
-  time_trace("XDC_Tx2 sent data (for index=%d)", pkt_index_now);
+  time_trace("XDC_Tx2 sent data (for index=%d)", write_index);
   shm_info_print(cp->shm_addr);
 #endif  // PRINT_STATE
 }
 
+// Check that SHM TX has matches RX tag and crc. Also, (optionally) has newer timestamp
 int wait_if_old(chan *cp) {
-  if ((cp->wait4new_client) == 0) log_trace("Not wait for client");
-  else if ((cp->unix_seconds) <= (cp->shm_addr->cinfo.unix_seconds)) log_trace("New client");
-  else return(-1);  // wait for new client
+  uint32_t rx_tag = cp->ctag;
+  uint16_t rx_crc = get_crc(cp);
+  time_t   rx_tim = cp->unix_seconds;
+  
+  uint32_t tx_tag = cp->shm_addr->cinfo.ctag;
+  uint16_t tx_crc = cp->shm_addr->crc16;
+  time_t   tx_tim = cp->shm_addr->cinfo.unix_seconds;
+  
+//  log_trace("tags: SHM=0x%08x Loc=0x%08x", rx_tag, tx_tag);
+  if (tx_tag != rx_tag)  return(-1);  // wait for good data
+//  log_trace("CRCs: SHM=0x%04x Loc=0x%04x", tx_crc, rx_crc);
+  if (tx_crc != rx_crc ) return(-1);  // wait for good data
+//  log_trace("time: SHM=0x%04x Loc=0x%04x (nnew=%d)", tx_tim, rx_tim, cp->wait4new_client);
+  if      ((cp->wait4new_client) == 0) log_trace("Not wait for client");
+  else if (rx_tim <= tx_tim) log_trace("New client");
+  else return(-1);                    // wait for new client
   return(0);
 }
 
 void rcvr_shm(chan *cp, int index_buf) {
-  while (wait_if_old(cp)) { ; }
+  static int once = 1;
+  if (once == 1) {
+    while (wait_if_old(cp)) { ; }
+    once = 0;
+  }
   log_debug("THREAD-2 waiting for %s tag=0x%08x on dev=%s with index=%d (last=%d)", cp->dev_type, ntohl(cp->ctag), cp->dev_name, index_buf, cp->shm_addr->pkt_index_next);
   while (index_buf == (cp->shm_addr->pkt_index_next)) { ; }
 //  log_trace("THREAD-3a got packet index=%d (next=%d last=%d) len=%d [tr=0x%lx - tt=0x%lx = 0x%lx]", index_buf, cp->shm_addr->pkt_index_next, cp->shm_addr->pkt_index_last, cp->shm_addr->pinfo[index_buf].data_length, cp->unix_seconds, (cp->unix_seconds) - (cp->shm_addr->cinfo.unix_seconds), cp->shm_addr->cinfo.unix_seconds);
@@ -423,8 +422,9 @@ void rcvr_shm(chan *cp, int index_buf) {
   shm_info_print(cp->shm_addr);
 #endif  // PRINT_STATE
   cp->rx[index_buf].data_len = cp->shm_addr->pinfo[index_buf].data_length;
-  cp->rx[index_buf].data     = (uint8_t *) (cp->shm_addr->pdata->data);
+  cp->rx[index_buf].data     = (uint8_t *) (cp->shm_addr->pdata[index_buf].data);
   cp->rx[index_buf].newd     = 1;
+  fprintf(stderr, "PPP %p = %08x ", cp->shm_addr->pdata[index_buf].data, ntohl(cp->shm_addr->pdata[index_buf].data[4]));
   pthread_mutex_unlock(&(cp->lock));
 }
 
@@ -485,10 +485,10 @@ void dev_open_if_new(chan *cp) {
 /**********************************************************************/
 void chan_print(chan *cp) {
   int index_buf;
-  fprintf(stderr, "  %s enclave chan %08x: dir=%c typ=%s nam=%s fd=%d ut=0x%lx wn=%ld ret=%d every %d ns pkts/chan=%d (max=%d)\n", enclave_name, ntohl(cp->ctag), cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->unix_seconds, cp->wait4new_client, cp->retries, RX_POLL_INTERVAL_NSEC, cp->pkts_per_chan, MAX_PKTS_PER_CHAN);
+  fprintf(stderr, "  %s enclave chan %08x: dir=%c typ=%s nam=%s fd=%d ut=0x%lx wn=%ld ret=%d every %d ns index=%d pkts/chan=%d (max=%d)\n", enclave_name, ntohl(cp->ctag), cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->unix_seconds, cp->wait4new_client, cp->retries, RX_POLL_INTERVAL_NSEC, cp->pkt_buf_index, cp->pkt_buf_count, MAX_PKTS_PER_CHAN);
   fprintf(stderr, "  mmap len=0x%lx [pa=0x%lx va=%p prot=0x%x flag=0x%x] ",  cp->mm.len, cp->mm.phys_addr, cp->mm.virt_addr, cp->mm.prot, cp->mm.flags);
   fprintf(stderr, "shm addr = %p\n", cp->shm_addr);
-  for (index_buf=0; index_buf<(cp->pkts_per_chan); index_buf++) {
+  for (index_buf=0; index_buf<(cp->pkt_buf_count); index_buf++) {
     fprintf(stderr, "    i=%d: newd=%d rx_buf_ptr=%p len=%lx tid=%d\n", index_buf, cp->rx[index_buf].newd, cp->rx[index_buf].data, cp->rx[index_buf].data_len, cp->rx[index_buf].tid);
   }
 }
@@ -562,15 +562,15 @@ void init_new_chan_from_envi(chan *cp, uint32_t ctag, char dir) {
   if (dir == 't') { // TX
     get_dev_type(cp->dev_type,     getenv("DEV_TYPE_TX"), "dma");
     get_dev_name(cp->dev_name,     getenv("DEV_NAME_TX"), "dma_proxy_tx", "mem", cp->dev_type);
-    get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * DMA_PKT_COUNT_TX), SHM_MMAP_LEN_ESCAPE, cp->dev_type); // SHM_MMAP_LEN_ESCAPE vs
+    get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * DMA_PKT_COUNT_TX), SHM_MMAP_LEN, cp->dev_type);
   }
   else {            // RX
     get_dev_type(cp->dev_type,     getenv("DEV_TYPE_RX"), "dma");
     get_dev_name(cp->dev_name,     getenv("DEV_NAME_RX"), "dma_proxy_rx", "mem", cp->dev_type);
-    get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * DMA_PKT_COUNT_RX), SHM_MMAP_LEN_ESCAPE, cp->dev_type);   // XXX dma default is an over estimate
+    get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * DMA_PKT_COUNT_RX), SHM_MMAP_LEN, cp->dev_type);   // XXX dma default is an over estimate
     get_dev_val (&(cp->wait4new_client), getenv("DEV_WAIT_NE"), 0x0, 0x0, cp->dev_type);
   }
-  get_dev_val(&(cp->mm.phys_addr), getenv("DEV_MMAP_AD"), DMA_ADDR_HOST, SHM_MMAP_ADDR_HOST, cp->dev_type);
+  get_dev_val(&(cp->mm.phys_addr), getenv("DEV_MMAP_AD"), DMA_ADDR_HOST, SHM_MMAP_ADDR, cp->dev_type);
 //  log_trace("%s Env Vars: type=%s name=%s off=%s mlen=%s (%", __func__, getenv("DEV_TYPE_TX"), getenv("DEV_NAME_TX"), getenv("DEV_OFFS_TX"), getenv("DEV_MMAP_LE"));
 //  log_trace("%s Env Vars: type=%s name=%s off=%s mlen=%s", __func__, getenv("DEV_TYPE_RX"), getenv("DEV_NAME_RX"), getenv("DEV_OFFS_RX"), getenv("DEV_MMAP_LE"));
 }
@@ -582,9 +582,10 @@ void init_new_chan(chan *cp, uint32_t ctag, char dir, int index) {
   init_new_chan_from_envi(cp, ctag, dir);   // 1) Configure new tag
   dev_open_if_new(cp);                   // 2) Open device (if not already open)
 //      log_trace("%s: Using %s device %s for ctag=0x%08x dir=%c", __func__, cp->dev_type, cp->dev_name, ntohl(cp->ctag), cp->dir);
+  cp->pkt_buf_index = 0;
   if ((strcmp(cp->dev_type, "shm")) == 0) {
     cp->shm_addr      = cp->mm.virt_addr + (index * sizeof(shm_channel));
-    cp->pkts_per_chan = SHM_PKT_COUNT;
+    cp->pkt_buf_count = SHM_PKT_COUNT;
     if ((cp->dir) == 't') shm_init_config_one(cp);  // 3) Configure SHM structure for new channel
     if ((cp->dir) == 'r') {
       rcvr_thread_start(cp);      // 4) Start rx thread for new receive tag
@@ -592,14 +593,14 @@ void init_new_chan(chan *cp, uint32_t ctag, char dir, int index) {
   }
   else if ((strcmp(cp->dev_type, "dma")) == 0) {
     if ((cp->dir) == 'r') {
-      cp->pkts_per_chan = DMA_PKT_COUNT_RX;
+      cp->pkt_buf_count = DMA_PKT_COUNT_RX;
       if (once==1) {
         rcvr_thread_start(cp);      // 4) Start rx thread only once
         once = 0;
       }
     }
     else {
-      cp->pkts_per_chan = DMA_PKT_COUNT_TX;
+      cp->pkt_buf_count = DMA_PKT_COUNT_TX;
     }
   }
   else {log_warn("Unknown type=%s (name=%s)", cp->dev_type, cp->dev_name); FATAL;}
@@ -765,7 +766,7 @@ void *rcvr_thread_function(thread_args *vargs) {
       log_fatal("Unsupported device type %s\n", cp->dev_type);
       FATAL;
     }
-    buffer_id = (buffer_id + 1) % (cp->pkts_per_chan);
+    buffer_id = (buffer_id + 1) % (cp->pkt_buf_count);
     log_trace("THREAD-4 index=%d", buffer_id);
   }
 }
@@ -786,23 +787,28 @@ void rcvr_thread_start(chan *cp) {
 
 /* Receive packet from driver (via rx thread), storing data and length in ADU */
 int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
-  static int  index_buf=0;
+  int index_buf = cp->pkt_buf_index;
+  int rv = -1;
   
   pthread_mutex_lock(&(cp->lock));
 //  log_trace("%s: Check for received packet on tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
   if (cp->rx[index_buf].newd == 1) {                            // get packet from buffer if available)
 #if 0 >= PRINT_STATE_LEVEL
-    fprintf(stderr, "%s", __func__);
+    fprintf(stderr, "%s on buff index=%d", __func__, index_buf);
     chan_print(cp);
 #endif
     cmap_decode(cp->rx[index_buf].data, cp->rx[index_buf].data_len, adu, tag);   /* Put packet into ADU */
-    log_trace("XDCOMMS reads from buff=%p (len=%d)", cp->rx[index_buf].data, cp->rx[index_buf].data_len);
+    log_trace("XDCOMMS reads from buff=%p (index=%d): len=%d", cp->rx[index_buf].data, index_buf, cp->rx[index_buf].data_len);
+//    fprintf(stderr, "QQQ %p = %08x\n", cp->rx[index_buf].data, cp->rx[index_buf].data[4]);
+//    cp->rx[index_buf].data[4] = 0x012334567;
     if ((cp->rx[index_buf].data_len) > 0) log_buf_trace("RX_PKT", cp->rx[index_buf].data, cp->rx[index_buf].data_len);
     cp->rx[index_buf].newd = 0;                      // unmark newdata
     log_debug("XDCOMMS rx packet tag=<%d,%d,%d> len=%d", tag->mux, tag->sec, tag->typ, cp->rx[index_buf].data_len);
+    if (cp->rx[index_buf].data_len > 0) rv = cp->rx[index_buf].data_len;
+    cp->pkt_buf_index = (index_buf + 1) % (cp->pkt_buf_count);
   }
   pthread_mutex_unlock(&(cp->lock));
-  return ((cp->rx[index_buf].data_len) > 0) ? cp->rx[index_buf].data_len : -1;
+  return(rv);
 }
 
 /**********************************************************************/
@@ -931,6 +937,7 @@ int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   chan            *cp;
   struct timespec  request;
   int              ntries;
+int x=0;
 
 //  log_debug("Start of %s: tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
   cp              = get_chan_info(tag, 'r', 0);     // get buffer for tag (to communicate with thread)
@@ -939,7 +946,11 @@ int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   ntries          = 1 + (cp->retries);           // number of tries to rx packet
 //  log_trace("%s: test %d times every %d (%d.%09d) ns", __func__, ntries, RX_POLL_INTERVAL_NSEC, request.tv_sec, request.tv_nsec);
   while ((ntries--) > 0)  {
-    if (nonblock_recv(adu, tag, cp) > 0)  return 0;
+//    if (nonblock_recv(adu, tag, cp) > 0)  return 0;
+    if ((x=nonblock_recv(adu, tag, cp)) > 0) {
+      log_trace("%s RXed packet len=%d", __func__, x);
+      return x;
+    }
 //    log_trace("LOOP timeout %s: tag=<%d,%d,%d>: remaining tries = %d ", __func__, tag->mux, tag->sec, tag->typ, ntries);
     nanosleep(&request, NULL);
   }
