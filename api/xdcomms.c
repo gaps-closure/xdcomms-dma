@@ -63,49 +63,10 @@
 #include <pthread.h>
 
 #include "xdcomms.h"
-#include "dma-proxy.h"
-#include "shm.h"
+#include "vchan.h"
 
-#define STR_SIZE          64
 #define PRINT_STATE_LEVEL  1
 
-
-// Fixed mmap configuration (channel_buffer in DMA device, shm_channel in SHM device)
-typedef struct _memmap {
-  int              prot;      // Mmap protection field (e.g., Read and/or write)
-  int              flags;     // mmap'ed flags (e.g., SHARED)
-  unsigned long    phys_addr; // mmap'ed physical address
-  unsigned long    len;       // mmap'ed memory length
-  void            *virt_addr; // Mmaped virtual address of device buffer struct (for 1st SHM and all DMA channels)
-//  unsigned long    offset;    // Offset from mmap_virt_addr to channel info
-} memmap;
-
-// Dynamic (per packet) Received Packet information
-typedef struct _pkt_info {
-  char             newd;      // RX thread sets on new packet, xdcomms resets after reading
-//  gaps_tag  tag;       // Received tag
-  size_t           data_len;  // length of data
-  uint8_t         *data;      // data buffer
-  int              tid;       // transaction ID
-} pkt_info;
-
-// Virutal Channel configuration (with device abstraction)
-typedef struct channel {
-  uint32_t         ctag;                   // Compressed tag (unique index) - used to search for channel
-  char             dir;                    // Receive (from network) or Transmit (to network): 'r' or 't'
-  char             dev_type[4];            // device type: e.g., shm (ESCAPE) or dma (MIND)
-  char             dev_name[STR_SIZE];     // Device name: e.g., /dev/mem or /dev/sue_dominous
-  int              fd;                     // Device file descriptor (set when device openned)
-  int              retries;                // Number of RX polls (every RX_POLL_INTERVAL_NSEC) pre timeout
-  time_t           unix_seconds;           // When process was started
-  unsigned long    wait4new_client;        // 1 = RX server checks if client started later (0 = no check)
-  pthread_mutex_t  lock;                   // Ensure RX thread does not write while xdcomms reads
-  memmap           mm;                     // Mmap configuration
-  int              pkt_buf_index;          // Buf index between Rx Thread nad RX virtual channel
-  int              pkt_buf_count;          // Number of packets in a channel: e.g., SHM=2, DMAt=1, DMAr=16
-  pkt_info         rx[MAX_PKTS_PER_CHAN];  // RX packet info from RX thread (needs mutex lock)
-  shm_channel     *shm_addr;               // Ptr to mmap'ed SHM struct: virtual addr + offset
-} chan;
 
 // Channel list
 typedef struct _chan_list {
@@ -466,16 +427,6 @@ void dev_open_if_new(chan *cp) {
 /**********************************************************************/
 /* B) Virtual Channel Configuration  (for all devices and TX/RX)      */
 /**********************************************************************/
-void chan_print(chan *cp) {
-  int index_buf;
-  fprintf(stderr, "  %s enclave chan %08x: dir=%c typ=%s nam=%s fd=%d ut=0x%lx wn=%ld ret=%d every %d ns index=%d pkts/chan=%d (max=%d)\n", enclave_name, ntohl(cp->ctag), cp->dir, cp->dev_type, cp->dev_name, cp->fd, cp->unix_seconds, cp->wait4new_client, cp->retries, RX_POLL_INTERVAL_NSEC, cp->pkt_buf_index, cp->pkt_buf_count, MAX_PKTS_PER_CHAN);
-  fprintf(stderr, "  mmap len=0x%lx [pa=0x%lx va=%p prot=0x%x flag=0x%x] ",  cp->mm.len, cp->mm.phys_addr, cp->mm.virt_addr, cp->mm.prot, cp->mm.flags);
-  fprintf(stderr, "shm addr = %p\n", cp->shm_addr);
-  for (index_buf=0; index_buf<(cp->pkt_buf_count); index_buf++) {
-    fprintf(stderr, "    i=%d: newd=%d rx_buf_ptr=%p len=%lx tid=%d\n", index_buf, cp->rx[index_buf].newd, cp->rx[index_buf].data, cp->rx[index_buf].data_len, cp->rx[index_buf].tid);
-  }
-}
-
 // Initialize channel information for all (GAPS_TAG_MAX) possible tags
 //   Set retries from one of three possible timeout values (in msecs).
 //   In order of precedence (highest first) they are the:
@@ -588,7 +539,7 @@ void init_new_chan(chan *cp, uint32_t ctag, char dir, int index) {
   }
   else {log_warn("Unknown type=%s (name=%s)", cp->dev_type, cp->dev_name); FATAL;}
 #if 1 >= PRINT_STATE_LEVEL
-  chan_print(cp);
+  chan_print(cp, enclave_name);
 #endif  // LOG_LEVEL_MIN
 }
 
@@ -740,7 +691,7 @@ void *rcvr_thread_function(thread_args *vargs) {
   while (1) {
     log_trace("THREAD-1 %s: tag=0x%08x fd=%d index=%d (base_id=%d)", __func__, ntohl(cp->ctag), cp->fd, buffer_id, vargs->buffer_id_start);
 #if 0 >= PRINT_STATE_LEVEL
-    chan_print(cp);
+    chan_print(cp, enclave_name);
 #endif  // PRINT_STATE_LEVEL
 //    buffer_id = (vargs->buffer_id_start) + buffer_id_index;
     if      (strcmp(cp->dev_type, "dma") == 0) dma_rcvr(cp, buffer_id);
@@ -778,7 +729,7 @@ int nonblock_recv(void *adu, gaps_tag *tag, chan *cp) {
   if (cp->rx[index_buf].newd == 1) {                            // get packet from buffer if available)
 #if 0 >= PRINT_STATE_LEVEL
     fprintf(stderr, "%s on buff index=%d", __func__, index_buf);
-    chan_print(cp);
+    chan_print(cp, enclave_name);
 #endif
     cmap_decode(cp->rx[index_buf].data, cp->rx[index_buf].data_len, adu, tag);   /* Put packet into ADU */
     log_trace("XDCOMMS reads from buff=%p (index=%d): len=%d", cp->rx[index_buf].data, index_buf, cp->rx[index_buf].data_len);

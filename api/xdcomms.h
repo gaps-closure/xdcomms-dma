@@ -11,7 +11,6 @@
 #define ADU_SIZE_MAX_C               1000000   // 1 MB - Increased for ILIP payload mode*/
 #define MAX_DEV_NAME_LEN                  64
 #define MAX_DEV_COUNT                      4
-#define MAX_PKTS_PER_CHAN                 32   // Max pkts in Device for one (SHM) / all (DMA) chans
 
 // How often (interval) and how long (timout) to check for rx  (check 'newd'  in pkt_info buffer).
 //   Lower interval means lower delay, higher means less overhead
