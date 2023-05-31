@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include "log.h"
 #include "crc.h"
+#include <arpa/inet.h>
 
 #define DATA_TYP_MAX  50
 
@@ -28,5 +29,6 @@ codec_map       cmap[DATA_TYP_MAX];           // maps data type to its data enco
 
 void cmap_encode(uint8_t *data, uint8_t *buff_in, size_t *buff_len, gaps_tag *tag);
 void cmap_decode(uint8_t *data, size_t data_len, uint8_t *buff_out, gaps_tag *tag);
-  
+void buf_print_hex(uint8_t *buf, int len_bytes);
+
 #endif /* CMAP_HEADER_FILE */

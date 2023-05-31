@@ -59,7 +59,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <arpa/inet.h>
 #include <assert.h>
 #include <pthread.h>
 
@@ -126,6 +125,7 @@ void rcvr_thread_start(chan *cp);
 char            enclave_name[STR_SIZE] = "";  // enclave name (e.g., green)
 chan            chan_info[GAPS_TAG_MAX];      // array of buffers to store local channel info per tag
 pthread_mutex_t chan_create;
+
 
 // XXX DMA and SHM functions should be put into separate functions, with
 // xdcomms including DMA + SHM, and DMA + SHM functions including Codec
@@ -280,23 +280,6 @@ void shm_open_channel(chan *cp) {
   log_debug("Opened and mmap'ed SHM channel %s (fd=%d): virt addr: %p - %p = 0x%x ", cp->dev_name, cp->fd, cp->mm.virt_addr, ((unsigned long) cp->mm.virt_addr) + pa_mmap_len - 1, pa_mmap_len);
 }
 
-void buf_print_hex(uint8_t *buf, int len_bytes) {
-  int       j, s=4, e=2, w=4;    // number of bytes to print at start and end for long lengths
-  uint32_t *buf_word_ptr = (uint32_t *) buf;
-  int       len_words = len_bytes/w;
-  
-  if (len_bytes > 0) {
-    if (len_words <= (s+e)) {
-      for (j=0; j<len_words; j++)           fprintf(stderr, "%08x ", buf_word_ptr[j]);
-    }
-    else {
-      for (j=0; j<s; j++)                   fprintf(stderr, "%08x ", buf_word_ptr[j]);
-      fprintf(stderr, " ... ");
-      for (j=len_words-e; j<len_words; j++) fprintf(stderr, "%08x ", buf_word_ptr[j]);
-    }
-  }
-  fprintf(stderr, "\n");
-}
 void shm_info_print(shm_channel *cip) {
   int            i;
   unsigned long  len_bytes;
@@ -407,7 +390,7 @@ int wait_if_old(chan *cp) {
   return(0);
 }
 
-void rcvr_shm(chan *cp, int index_buf) {
+void shm_rcvr(chan *cp, int index_buf) {
   static int once = 1;
   if (once == 1) {
     while (wait_if_old(cp)) { ; }
@@ -761,7 +744,7 @@ void *rcvr_thread_function(thread_args *vargs) {
 #endif  // PRINT_STATE_LEVEL
 //    buffer_id = (vargs->buffer_id_start) + buffer_id_index;
     if      (strcmp(cp->dev_type, "dma") == 0) dma_rcvr(cp, buffer_id);
-    else if (strcmp(cp->dev_type, "shm") == 0) rcvr_shm(cp, buffer_id);
+    else if (strcmp(cp->dev_type, "shm") == 0) shm_rcvr(cp, buffer_id);
     else {
       log_fatal("Unsupported device type %s\n", cp->dev_type);
       FATAL;

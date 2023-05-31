@@ -1,6 +1,24 @@
 // Codec map table to encode and decode function pointers
 #include "cmap.h"
 
+void buf_print_hex(uint8_t *buf, int len_bytes) {
+  int       j, s=4, e=2, w=4;    // bytes to print at start (s) and end (e) if large buffer.
+  uint32_t *buf_word_ptr = (uint32_t *) buf;
+  int       len_words = len_bytes/w;
+  
+  if (len_bytes > 0) {
+    if (len_words <= (s+e)) {
+      for (j=0; j<len_words; j++)           fprintf(stderr, " %08x", ntohl(buf_word_ptr[j]));
+    }
+    else {
+      for (j=0; j<s; j++)                   fprintf(stderr, " %08x", ntohl(buf_word_ptr[j]));
+      fprintf(stderr, " ...");
+      for (j=len_words-e; j<len_words; j++) fprintf(stderr, " %08x", ntohl(buf_word_ptr[j]));
+    }
+  }
+  fprintf(stderr, "\n");
+}
+
 void cmap_print_one(codec_map *cm) {
   fprintf(stderr, "[typ=%d ", cm->data_type);
   fprintf(stderr, "e=%p ",    cm->encode);
