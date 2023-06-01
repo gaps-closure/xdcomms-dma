@@ -35,14 +35,12 @@ typedef struct _pinfo {
   unsigned long transaction_ID;    // Packet transaction ID
 } pinfo;
 
-/* SHM data */
+/* SHM data (0x8000 = 32KB, 0x9C40 = 40KB) */
 typedef struct _pdata {
 #ifdef SHM_MMAP_HOST
-//  unsigned long data[(0x8000 / sizeof(unsigned long))];   // 32KB
   uint8_t data[(0x8c00 / sizeof(uint8_t))];   // 35KB (36KB fails though there is room????)
-//  unsigned long data[(0x9C40 / sizeof(unsigned long))];  // 40,000B
 #else
-  unsigned long data[(0x10000 / sizeof(unsigned long))];  // 64KB
+  uint8_t data[(0x10000 / sizeof(uint8_t))];  // 64KB
 #endif //SHM_MMAP_HOST
 } pdata;
 
