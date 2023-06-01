@@ -3,7 +3,7 @@
 
 #include "xdcomms.h"
 
-#define SHM_MMAP_HOST   // Uncomment to use Host memory and comment-out to use ESCAPE (FPGA) memory
+//#define SHM_MMAP_HOST   // Uncomment to use Host memory and comment-out to use ESCAPE (FPGA) memory
 #ifdef  SHM_MMAP_HOST
 #define SHM_MMAP_ADDR             0x0UL            // Host System selects mmap physical memory address
 #define SHM_MMAP_LEN              0x100000UL       // 1 MB (limit on Unix)
@@ -37,10 +37,13 @@ typedef struct _pinfo {
 
 /* SHM data */
 typedef struct _pdata {
-//  unsigned long data[(0x10000 / sizeof(unsigned long))];  // 64KB
-//  unsigned long data[(0x9C40 / sizeof(unsigned long))];  // 40,000B
+#ifdef SHM_MMAP_HOST
 //  unsigned long data[(0x8000 / sizeof(unsigned long))];   // 32KB
   uint8_t data[(0x8c00 / sizeof(uint8_t))];   // 35KB (36KB fails though there is room????)
+//  unsigned long data[(0x9C40 / sizeof(unsigned long))];  // 40,000B
+#else
+  unsigned long data[(0x10000 / sizeof(unsigned long))];  // 64KB
+#endif //SHM_MMAP_HOST
 } pdata;
 
 /* SHM channel (one per TAG) */
