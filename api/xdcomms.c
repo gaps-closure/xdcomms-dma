@@ -31,15 +31,15 @@
  *     DEV_NAME_RX=sue_donimous_rx0 DEV_NAME_TX=sue_donimous_tx0 ./app_req_rep
  *
  *   b) Enclave 2 responds to a request from enclave 1 over host DRAM SHM channels:
- *     sudo DEV_NAME_RX=mem DEV_NAME_TX=mem DEV_TYPE_RX=shm DEV_TYPE_TX=shm DEV_OFFS_TX=0x40000 DEV_MMAP_LE=0x80000 ./app_req_rep -e 2
- *     sudo DEV_NAME_RX=mem DEV_NAME_TX=mem DEV_TYPE_RX=shm DEV_TYPE_TX=shm DEV_OFFS_RX=0x40000 DEV_MMAP_LE=0x80000 ./app_req_rep
+ *     sudo DEV_NAME_RX=mem DEV_NAME_TX=mem DEV_TYPE_RX=shm DEV_TYPE_TX=shm ./app_req_rep -e 2
+ *     sudo DEV_NAME_RX=mem DEV_NAME_TX=mem DEV_TYPE_RX=shm DEV_TYPE_TX=shm ./app_req_rep
  *
  * Example commands using websrv app. Found in ditectories:
  *   vid) ~/gaps/eop2-closure-mind-demo/websrv/.solution/partitioned/multithreaded/orange
  *   web) ~/gaps/eop2-closure-mind-demo/websrv/.solution/partitioned/multithreaded/green
  *
- *   vid) sudo ENCLAVE=orange CONFIG_FILE=../xdconf.ini DEV_NAME_RX=mem DEV_NAME_TX=mem DEV_TYPE_RX=shm DEV_TYPE_TX=shm DEV_OFFS_RX=0x40000 DEV_WAIT_NE=1 DEV_MMAP_LE=0x80000 LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api XDCLOGLEVEL=0 MYADDR=10.109.23.126 CAMADDR=10.109.23.151 ./websrv > ~/log_v.txt 2>&1
- *   web) sudo ENCLAVE=green CONFIG_FILE=../xdconf.ini DEV_NAME_RX=mem DEV_NAME_TX=mem DEV_TYPE_RX=shm DEV_TYPE_TX=shm DEV_OFFS_RX=0x40000 DEV_MMAP_LE=0x80000 LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api XDCLOGLEVEL=0 ./websrv  > ~/log_w.txt 2>&1
+ *   vid) sudo ENCLAVE=orange CONFIG_FILE=../xdconf.ini DEV_NAME_RX=mem DEV_NAME_TX=mem DEV_TYPE_RX=shm DEV_TYPE_TX=shm DEV_WAIT_NE=1 LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api XDCLOGLEVEL=0 MYADDR=10.109.23.126 CAMADDR=10.109.23.151 ./websrv > ~/log_v.txt 2>&1
+ *   web) sudo ENCLAVE=green CONFIG_FILE=../xdconf.ini DEV_NAME_RX=mem DEV_NAME_TX=mem DEV_TYPE_RX=shm DEV_TYPE_TX=shm LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api XDCLOGLEVEL=0 ./websrv  > ~/log_w.txt 2>&1
  */
 
 #include <stdlib.h>
@@ -503,8 +503,8 @@ void init_new_chan_from_envi(chan *cp, uint32_t ctag, char dir) {
     get_dev_val (&(cp->wait4new_client), getenv("DEV_WAIT_NE"), 0x0, 0x0, cp->dev_type);
   }
   get_dev_val(&(cp->mm.phys_addr), getenv("DEV_MMAP_AD"), DMA_ADDR_HOST, SHM_MMAP_ADDR, cp->dev_type);
-//  log_trace("%s Env Vars: type=%s name=%s off=%s mlen=%s (%", __func__, getenv("DEV_TYPE_TX"), getenv("DEV_NAME_TX"), getenv("DEV_OFFS_TX"), getenv("DEV_MMAP_LE"));
-//  log_trace("%s Env Vars: type=%s name=%s off=%s mlen=%s", __func__, getenv("DEV_TYPE_RX"), getenv("DEV_NAME_RX"), getenv("DEV_OFFS_RX"), getenv("DEV_MMAP_LE"));
+//  log_trace("%s Env Vars: type=%s name=%s mlen=%s (%", __func__, getenv("DEV_TYPE_TX"), getenv("DEV_NAME_TX"), getenv("DEV_MMAP_LE"));
+//  log_trace("%s Env Vars: type=%s name=%s mlen=%s", __func__, getenv("DEV_TYPE_RX"), getenv("DEV_NAME_RX"), , getenv("DEV_MMAP_LE"));
 }
 
 // Configure new channel

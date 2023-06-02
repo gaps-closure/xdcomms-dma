@@ -38,7 +38,7 @@ typedef struct _pinfo {
 /* SHM data (0x8000 = 32KB, 0x9C40 = 40KB) */
 typedef struct _pdata {
 #ifdef SHM_MMAP_HOST
-  uint8_t data[(0x8c00 / sizeof(uint8_t))];   // 35KB (36KB fails though there is room????)
+  uint8_t data[(0x8c00  / sizeof(uint8_t))];  // 35KB (36KB fails though there is room????)
 #else
   uint8_t data[(0x10000 / sizeof(uint8_t))];  // 64KB
 #endif //SHM_MMAP_HOST
