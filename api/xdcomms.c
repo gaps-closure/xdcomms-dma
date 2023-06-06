@@ -208,12 +208,13 @@ void dma_rcvr(chan *cp, int index_buf) {
 
 //  log_trace("%s ctag=%x %s cp=%p va=%p dma=%p ID=%d len=%ld", __func__, ntohl(cp->ctag), cp->dev_name, cp, cp->mm.virt_addr, dma_cb_ptr, index_buf, sizeof(bw));
   dma_cb_ptr[dma_cb_index].length = sizeof(bw);      /* Receive up to make length Max size */
-  log_debug("THREAD-2 waiting for %s tag=0x%08x on dev=%s with cb_index=%d)", cp->dev_type, ntohl(cp->ctag), cp->dev_name, dma_cb_index);
+  log_debug("THREAD-2 waiting for %s tag=0x%08x on dev=%s with cb_index=%d, max_len=%d)", cp->dev_type, ntohl(cp->ctag), cp->dev_name, dma_cb_index, dma_cb_ptr[dma_cb_index].length);
   while (dma_start_to_finish(cp->fd, &dma_cb_index, &(dma_cb_ptr[dma_cb_index])) != 0) { ; }
   p = (bw *) &(dma_cb_ptr[dma_cb_index].buffer);    /* XXX: DMA buffer must be larger than size of BW */
+  log_trace("%s len=%d data[0]=0x%08x", __func__, ntohs(p->data_len), (unsigned long *) &(dma_cb_ptr[dma_cb_index].buffer));
   pthread_mutex_lock(&(cp->lock));
-  log_trace("THREAD-3 rx packet cb_index=%d status=%d", dma_cb_index, dma_cb_ptr[dma_cb_index].status);
   bw_len_decode(&(cp->rx[index_buf].data_len), p->data_len);
+  log_trace("THREAD-3 rx packet cb_index=%d status=%d len=%d", dma_cb_index, dma_cb_ptr[dma_cb_index].status, cp->rx[index_buf].data_len);
   cp->rx[index_buf].data = (uint8_t *) p->data;
   cp->rx[index_buf].newd = 1;
   pthread_mutex_unlock(&(cp->lock));

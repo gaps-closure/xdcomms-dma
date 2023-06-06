@@ -3,7 +3,7 @@
 
 #include "xdcomms.h"
 
-//#define SHM_MMAP_HOST   // Uncomment to use Host memory and comment-out to use ESCAPE (FPGA) memory
+#define SHM_MMAP_HOST   // Uncomment to use Host memory and comment-out to use ESCAPE (FPGA) memory
 #ifdef  SHM_MMAP_HOST
 #define SHM_MMAP_ADDR             0x0UL            // Host System selects mmap physical memory address
 #define SHM_MMAP_LEN              0x100000UL       // 1 MB (limit on Unix)
