@@ -1,10 +1,11 @@
-// Codec map table to encode and decode function pointers
+// Codec map table to encode and decode data using function pointers
 #include "cmap.h"
 
+// Print up to s words at start and e bytes at end of a buffer
 void buf_print_hex(uint8_t *buf, int len_bytes) {
-  int       j, s=4, e=2, w=4;    // bytes to print at start (s) and end (e) if large buffer.
+  int       j, s=4, e=2;
   uint32_t *buf_word_ptr = (uint32_t *) buf;
-  int       len_words = len_bytes/w;
+  int       len_words = len_bytes/sizeof(int);
   
   if (len_bytes > 0) {
     if (len_words <= (s+e)) {
@@ -41,7 +42,7 @@ codec_map *cmap_find(int data_type) {
   return (NULL);
 }
 
-/* Create packet (serialize data and add header) */
+/* Encode buff_in based on tag type (result in data) */
 void cmap_encode(uint8_t *data, uint8_t *buff_in, size_t *buff_len, gaps_tag *tag) {
   codec_map  *cm = cmap_find(tag->typ);
   cm->encode (data, buff_in, buff_len);
@@ -49,7 +50,7 @@ void cmap_encode(uint8_t *data, uint8_t *buff_in, size_t *buff_len, gaps_tag *ta
   log_buf_trace("    -> encoded data:", data,    *buff_len);
 }
 
-/* Decode data from packet */
+/* Decode data based on tag type (result in buff_out) */
 void cmap_decode(uint8_t *data, size_t data_len, uint8_t *buff_out, gaps_tag *tag) {
   codec_map  *cm = cmap_find(tag->typ);
   cm->decode (buff_out, data, &data_len);

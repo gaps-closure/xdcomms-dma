@@ -26,7 +26,7 @@
  * is cached aligned.
  */
 
-#define BUFFER_SIZE (128 * 1024)	 	    /* Channel buffer bytes - must match driver exactly */
+#define BUFFER_SIZE (128 * 1024)	 	    /* Channel buffer bytes - must match driver exactly 10^17 = 128KB */
 #ifdef SUE_DONIMOUS
 #define BUFFER_COUNT 16					        /* driver only */
 #else
@@ -34,13 +34,14 @@
 #endif
 
 #define DMA_PKT_COUNT_TX 	1				      /* app only, must be <= to the number in the driver */
-#define DMA_PKT_COUNT_RX 	BUFFER_COUNT  /* app only, must be <= to the number in the driver */
+//#define DMA_PKT_COUNT_RX   BUFFER_COUNT  /* app only, must be <= to the number in the driver */
+#define DMA_PKT_COUNT_RX   4  /* app only, must be <= to the number in the driver */
 //#define BUFFER_INCREMENT	    1				/* normally 1, but skipping buffers defeats CPU prefetching */
 #define FINISH_XFER 	   _IOW('a','a',int32_t*)
 #define START_XFER 		   _IOW('a','b',int32_t*)
 #define XFER 			       _IOR('a','c',int32_t*)
 
-#define PKT_G1_ADU_SIZE_MAX   65528     // Max packet bytes with 16-bit data_len = 2^16 - 8 (see bw header)
+#define PKT_G1_ADU_SIZE_MAX  65528     // Max packet bytes with 16-bit data_len = 2^16 - 8 (see bw header)
 #define DMA_ADDR_HOST        0x0UL     // Host System selects mmap physical memory address
 
 enum proxy_status { PROXY_NO_ERROR = 0, PROXY_BUSY = 1, PROXY_TIMEOUT = 2, PROXY_ERROR = 3 };

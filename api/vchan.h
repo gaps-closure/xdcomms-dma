@@ -30,7 +30,7 @@ typedef struct _pkt_info {
 } pkt_info;
 
 // Virutal Channel configuration (with device abstraction)
-typedef struct channel {
+typedef struct virtual_channel {
   uint32_t         ctag;                   // Compressed tag (unique index) - used to search for channel
   char             dir;                    // Receive (from network) or Transmit (to network): 'r' or 't'
   char             dev_type[4];            // device type: e.g., shm (ESCAPE) or dma (MIND)
@@ -45,8 +45,8 @@ typedef struct channel {
   int              pkt_buf_count;          // Number of packets in a channel: e.g., SHM=2, DMAt=1, DMAr=16
   pkt_info         rx[MAX_PKTS_PER_CHAN];  // RX packet info from RX thread (needs mutex lock)
   shm_channel     *shm_addr;               // Ptr to mmap'ed SHM struct: virtual addr + offset
-} chan;
+} vchan;
 
-void chan_print(chan *cp, char *enclave_name);
+void vchan_print(vchan *cp, char *enclave_name);
 
 #endif  // VCHAN_HEADER_FILE
