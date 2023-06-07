@@ -2,8 +2,6 @@
  * xdcomms (Cross Domain Communication) API Library directly between
  * partitioned applications and a GAP's Cross Domain Guard (CDG).
  *
- * TODO:
- *    Add hton and ntoh for shm operations
  *
  * v0.4 June 2023: Hardware abstraction layer defines abstract one-way
  * channels (as a vchan) insread of just DMA channels (so renamed
@@ -26,20 +24,20 @@
  *
  *
  * Example commands using test request-reply application (found in ../test/)
- *   a) Enclave 2 responds to a request from enclave 1 over pseudo DMA channels:
- *     DEV_NAME_RX=sue_donimous_rx1 DEV_NAME_TX=sue_donimous_tx1 ./app_req_rep -e 2
- *     DEV_NAME_RX=sue_donimous_rx0 DEV_NAME_TX=sue_donimous_tx0 ./app_req_rep
+ *   p) Enclave 2 responds to a request from enclave 1 over pseudo DMA channels:
+ *     ENCLAVE=orange CONFIG_FILE=xdconf_app_req_rep.json DEV_NAME_RX=sue_donimous_rx1 DEV_NAME_TX=sue_donimous_tx1 ./app_req_rep -v -l 1 -e 2 > ~/log_p.txt 2>&1
+ *     ENCLAVE=green CONFIG_FILE=xdconf_app_req_rep.json DEV_NAME_RX=sue_donimous_rx0 DEV_NAME_TX=sue_donimous_tx0 ./app_req_rep -v -l 1 > ~/log_q.txt 2>&1
  *
- *   b) Enclave 2 responds to a request from enclave 1 over host DRAM SHM channels:
- *     sudo DEV_NAME_RX=mem DEV_NAME_TX=mem DEV_TYPE_RX=shm DEV_TYPE_TX=shm ./app_req_rep -e 2
- *     sudo DEV_NAME_RX=mem DEV_NAME_TX=mem DEV_TYPE_RX=shm DEV_TYPE_TX=shm ./app_req_rep
+ *   q) Enclave 2 responds to a request from enclave 1 over host DRAM SHM channels:
+ *     sudo ENCLAVE=orange CONFIG_FILE=xdconf_app_req_rep.json DEV_TYPE_RX=shm DEV_TYPE_TX=shm DEV_WAIT_NE=1 ./app_req_rep -v -l 1 -e 2 > ~/log_p.txt 2>&1
+ *     sudo ENCLAVE=green CONFIG_FILE=xdconf_app_req_rep.json DEV_TYPE_RX=shm DEV_TYPE_TX=shm ./app_req_rep -v -l 1 > ~/log_q.txt 2>&1
  *
  * Example commands using websrv app. Found in ditectories:
- *   vid) ~/gaps/eop2-closure-mind-demo/websrv/.solution/partitioned/multithreaded/orange
- *   web) ~/gaps/eop2-closure-mind-demo/websrv/.solution/partitioned/multithreaded/green
+ *   v) ENCLAVE=orange CONFIG_FILE=../xdconf.ini DEV_NAME_RX=sue_donimous_rx0 DEV_NAME_TX=sue_donimous_tx0 DEV_WAIT_NE=1 XDCLOGLEVEL=0 LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api MYADDR=10.109.23.126 CAMADDR=10.109.23.151 ./websrv > ~/log_v.txt 2>&1
+ *   web) ENCLAVE=green CONFIG_FILE=../xdconf.ini DEV_NAME_RX=sue_donimous_rx1 DEV_NAME_TX=sue_donimous_tx1 LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api XDCLOGLEVEL=0 ./websrv  > ~/log_w.txt 2>&1
  *
- *   vid) sudo ENCLAVE=orange CONFIG_FILE=../xdconf.ini DEV_NAME_RX=mem DEV_NAME_TX=mem DEV_TYPE_RX=shm DEV_TYPE_TX=shm DEV_WAIT_NE=1 LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api XDCLOGLEVEL=0 MYADDR=10.109.23.126 CAMADDR=10.109.23.151 ./websrv > ~/log_v.txt 2>&1
- *   web) sudo ENCLAVE=green CONFIG_FILE=../xdconf.ini DEV_NAME_RX=mem DEV_NAME_TX=mem DEV_TYPE_RX=shm DEV_TYPE_TX=shm LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api XDCLOGLEVEL=0 ./websrv  > ~/log_w.txt 2>&1
+ *   w) sudo ENCLAVE=orange CONFIG_FILE=../xdconf.ini DEV_TYPE_RX=shm DEV_TYPE_TX=shm DEV_WAIT_NE=1 XDCLOGLEVEL=0 LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api MYADDR=10.109.23.126 CAMADDR=10.109.23.151 ./websrv > ~/log_v.txt 2>&1
+ *   web) sudo ENCLAVE=green CONFIG_FILE=../xdconf.ini DEV_TYPE_RX=shm DEV_TYPE_TX=shm LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api XDCLOGLEVEL=0 ./websrv  > ~/log_w.txt 2>&1
  */
 
 #include <stdlib.h>
@@ -66,14 +64,6 @@
 #include "vchan.h"
 
 #define PRINT_STATE_LEVEL  1
-
-
-// Channel list
-typedef struct _virtual_chan_list {
-  vchan  *cp;
-  char   dev_name[STR_SIZE];
-  int    count;
-} vchan_list;
 
 /* RX thread arguments when starting thread */
 typedef struct _thread_args {

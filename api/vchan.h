@@ -47,6 +47,12 @@ typedef struct virtual_channel {
   shm_channel     *shm_addr;               // Ptr to mmap'ed SHM struct: virtual addr + offset
 } vchan;
 
+typedef struct _virtual_chan_list {
+  vchan  *cp;
+  char   dev_name[STR_SIZE];
+  int    count;
+} vchan_list;
+
 void vchan_print(vchan *cp, char *enclave_name);
 
 #endif  // VCHAN_HEADER_FILE
