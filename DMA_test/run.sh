@@ -1,4 +1,4 @@
-pushd ../xdcomms-dma/pseudo
+pushd ../pseudo
 if !(test -f sue_donimous.ko) then make; fi
 sudo ./sue_donimous_unload >& /dev/null
 sudo ./sue_donimous_load
@@ -9,7 +9,7 @@ if !(test -f dma-proxy-test) then make; fi
 DMATXDEV=sue_donimous_tx1 DMARXDEV=sue_donimous_rx1 ./dma-proxy-test 1 1 1 &
 sleep 1
 make clean
-pushd ../xdcomms-dma/pseudo
+pushd ../pseudo
 sudo ./sue_donimous_unload
 make clean
 popd
