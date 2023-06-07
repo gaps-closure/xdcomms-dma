@@ -1,4 +1,4 @@
-/**/**
+/*
  * Copyright (C) 2021 Xilinx, Inc
  *
  * Licensed under the Apache License, Version 2.0 (the "License"). You may
@@ -58,7 +58,12 @@
 #include <sys/param.h>
 
 #define SUE_DONIMOUS 1        // BUFFER_COUNT = 16
-#include "../api/dma-proxy.h"
+//#include "../xdcomms-dma/api/dma-proxy.h"
+
+#include "dma-proxy.h"
+//#define TX_BUFFER_COUNT 1
+//#define RX_BUFFER_COUNT 4
+//#define BUFFER_INCREMENT 1
 
 /* The user must tune the application number of channels to match the proxy driver device tree
  * and the names of each channel must match the dma-names in the device tree for the proxy
@@ -130,9 +135,13 @@ void *tx_thread(void *pp)
 		channel_ptr->buf_ptr[buffer_id].length = test_size;
 
 		if (verify)
-			for (i = 0; i < test_size / sizeof(unsigned int); i++)
-			// for (i = 0; i < 1; i++)
-				channel_ptr->buf_ptr[buffer_id].buffer[i] = i + in_progress_count;
+    printf("XXXX START (len=%d):", test_size);
+    for (i = 0; i < test_size / sizeof(unsigned int); i++) {
+      // for (i = 0; i < 1; i++)
+      channel_ptr->buf_ptr[buffer_id].buffer[i] = i + in_progress_count;
+      printf(" 0x%04x", channel_ptr->buf_ptr[buffer_id].buffer[i]);
+    }
+    printf("\n");
 
 		/* Start the DMA transfer and this call is non-blocking
 		 *
@@ -157,7 +166,7 @@ void *tx_thread(void *pp)
 		 */
 		ioctl(channel_ptr->fd, FINISH_XFER, &buffer_id);
 		if (channel_ptr->buf_ptr[buffer_id].status != PROXY_NO_ERROR)
-			printf("Proxy tx transfer error\n");
+			printf("Proxy tx transfer error %d\n", channel_ptr->buf_ptr[buffer_id].status);
 
 		/* Keep track of how many transfers are in progress and how many completed
 		 */
@@ -194,6 +203,8 @@ void *tx_thread(void *pp)
 			// for (i = 0; i < 1; i++)
 				buffer[i] = i + ((TX_BUFFER_COUNT / BUFFER_INCREMENT) - 1) + counter;
 		}
+    printf("\n");
+
 
 		/* Restart the completed channel buffer to start another transfer and keep
 		 * track of the number of transfers in progress
@@ -248,7 +259,8 @@ void *rx_thread(void * pp)
 		ioctl(channel_ptr->fd, FINISH_XFER, &buffer_id);
 
 		if (channel_ptr->buf_ptr[buffer_id].status != PROXY_NO_ERROR) {
-			printf("Proxy rx transfer error, # transfers %d, # completed %d, # in progress %d\n",
+			printf("Proxy rx transfer error %d, # transfers %d, # completed %d, # in progress %d\n",
+            channel_ptr->buf_ptr[buffer_id].status,
 						num_transfers, rx_counter, in_progress_count);
 			exit(1);
 		}
@@ -259,13 +271,17 @@ void *rx_thread(void * pp)
 		if (verify) {
 			unsigned int *buffer = (unsigned int *)&channel_ptr->buf_ptr[buffer_id].buffer;
 			int i;
-			for (i = 0; i < test_size / sizeof(unsigned int); i++)
-			// for (i = 0; i < 1; i++) 
-				if (buffer[i] != i + rx_counter) {
-					printf("buffer not equal, index = %d, data = %d expected data = %d\n", i,
-						buffer[i], i + rx_counter);
-					break;
-				}
+      printf("RRRR START (len=%d):", test_size);
+      for (i = 0; i < test_size / sizeof(unsigned int); i++) {
+        printf(" 0x%04x", channel_ptr->buf_ptr[buffer_id].buffer[i]);
+        // for (i = 0; i < 1; i++)
+        if (buffer[i] != i + rx_counter) {
+          printf("buffer not equal, index = %d, data = %d expected data = %d\n", i,
+                 buffer[i], i + rx_counter);
+          break;
+        }
+        printf("\n");
+     }
 		}
 
 		/* Keep track how many transfers are in progress so that only the specified number
