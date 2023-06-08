@@ -133,7 +133,7 @@ printf("TX buf_id=%d TX_COUNT=%d bytes=%d\n", buffer_id, TX_BUFFER_COUNT, test_s
 		 */
 printf("TX buf ptr=%p lem_ptr=%p\n", &(channel_ptr->buf_ptr[buffer_id]), &(channel_ptr->buf_ptr[buffer_id].length));
 printf("TX fails\n");
-		channel_ptr->buf_ptr[buffer_id].length = test_size;
+//		channel_ptr->buf_ptr[buffer_id].length = test_size;
     printf("TX START (len=%d):", test_size);
     for (i = 0; i < test_size / sizeof(unsigned int); i++) {
       // for (i = 0; i < 1; i++)
