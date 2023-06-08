@@ -124,15 +124,15 @@ void *tx_thread(void *pp)
 	int stop_in_progress = 0;
 
 	// Start all buffers being sent
-  printf("%s buf_id=%d TX_COUNT=%d bytes=%d INC=%d verify=%d\n", __func__, buffer_id, TX_BUFFER_COUNT, test_size, BUFFER_INCREMENT, verify);
+printf("%s buf_id=%d TX_COUNT=%d bytes=%d INC=%d verify=%d\n", __func__, buffer_id, TX_BUFFER_COUNT, test_size, BUFFER_INCREMENT, verify);
 	for (buffer_id = 0; buffer_id < TX_BUFFER_COUNT; buffer_id += BUFFER_INCREMENT) {
-    printf("buf_id=%d TX_COUNT=%d bytes=%d\n", buffer_id, TX_BUFFER_COUNT, test_size);
+printf("TX buf_id=%d TX_COUNT=%d bytes=%d\n", buffer_id, TX_BUFFER_COUNT, test_size);
 
 		/* Set up the length for the DMA transfer and initialize the transmit
 		 * buffer to a known pattern.
 		 */
-    printf("buf ptr=%p lem_ptr=%p\n", &(channel_ptr->buf_ptr[buffer_id]), &(channel_ptr->buf_ptr[buffer_id].length));
-    printf("XXX\n");
+printf("TX buf ptr=%p lem_ptr=%p\n", &(channel_ptr->buf_ptr[buffer_id]), &(channel_ptr->buf_ptr[buffer_id].length));
+printf("TX fails\n");
 		channel_ptr->buf_ptr[buffer_id].length = test_size;
     printf("TX START (len=%d):", test_size);
     for (i = 0; i < test_size / sizeof(unsigned int); i++) {
@@ -232,11 +232,12 @@ void *rx_thread(void * pp)
   // Start all buffers being received
 
 	for (buffer_id = 0; buffer_id < RX_BUFFER_COUNT; buffer_id += BUFFER_INCREMENT) {
-    printf("buf_id=%d RX_COUNT=%d bytes=%d INC=%d verify=%d\n", buffer_id, RX_BUFFER_COUNT, test_size, BUFFER_INCREMENT, verify);
+    printf("RX buf_id=%d RX_COUNT=%d bytes=%d INC=%d verify=%d\n", buffer_id, RX_BUFFER_COUNT, test_size, BUFFER_INCREMENT, verify);
 
 		/* Don't worry about initializing the receive buffers as the pattern used in the
 		 * transmit buffers is unique across every transfer so it should catch errors.
 		 */
+    printf("RX buf ptr=%p lem_ptr=%p\n", &(channel_ptr->buf_ptr[buffer_id]), &(channel_ptr->buf_ptr[buffer_id].length));
 		channel_ptr->buf_ptr[buffer_id].length = test_size;
 
 		ioctl(channel_ptr->fd, START_XFER, &buffer_id);
@@ -449,18 +450,18 @@ int main(int argc, char *argv[])
 
 	/* Grab the start time to calculate performance then start the threads & transfers on all channels */
 
-  printf("900\n");
 
 	start_time = get_posix_clock_time_usec();
 	setup_threads(&num_transfers);
 
 	/* Do the minimum to know the transfers are done before getting the time for performance */
 
+printf("900\n");
 	for (i = 0; i < RX_CHANNEL_COUNT; i++)
 		pthread_join(rx_channels[i].tid, NULL);
 
 	/* Grab the end time and calculate the performance */
-  printf("990\n");
+printf("990\n");
 
 	end_time = get_posix_clock_time_usec();
 	time_diff = end_time - start_time;
