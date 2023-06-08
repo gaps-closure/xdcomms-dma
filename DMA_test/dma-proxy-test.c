@@ -228,7 +228,8 @@ void *rx_thread(void * pp)
 	int rx_counter = 0;
   int i;
 
-	// Start all buffers being received
+  printf("YYYY");
+  // Start all buffers being received
 
 	for (buffer_id = 0; buffer_id < RX_BUFFER_COUNT; buffer_id += BUFFER_INCREMENT) {
     printf("%s buf_id=%d RX_COUNT=%d bytes=%d INC=%d verify=%d\n", __func__, buffer_id, RX_BUFFER_COUNT, test_size, BUFFER_INCREMENT, verify);
