@@ -238,7 +238,9 @@ void *rx_thread(void * pp)
 		 * transmit buffers is unique across every transfer so it should catch errors.
 		 */
     printf("RX buf ptr=%p lem_ptr=%p\n", &(channel_ptr->buf_ptr[buffer_id]), &(channel_ptr->buf_ptr[buffer_id].length));
-		channel_ptr->buf_ptr[buffer_id].length = test_size;
+    sleep(3);
+    printf("lkjfadslfkdsklfasjklfjsklafk");
+    channel_ptr->buf_ptr[buffer_id].length = test_size;
 
 		ioctl(channel_ptr->fd, START_XFER, &buffer_id);
 
