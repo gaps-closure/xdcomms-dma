@@ -133,7 +133,7 @@ printf("TX buf_id=%d TX_COUNT=%d bytes=%d\n", buffer_id, TX_BUFFER_COUNT, test_s
 		 */
 printf("TX buf ptr=%p lem_ptr=%p\n", &(channel_ptr->buf_ptr[buffer_id]), &(channel_ptr->buf_ptr[buffer_id].length));
 printf("TX fails\n");
-//		channel_ptr->buf_ptr[buffer_id].length = test_size;
+		channel_ptr->buf_ptr[buffer_id].length = test_size;
     printf("TX START (len=%d):", test_size);
     for (i = 0; i < test_size / sizeof(unsigned int); i++) {
       // for (i = 0; i < 1; i++)
@@ -337,29 +337,32 @@ void *rx_thread(void * pp)
  */
 void setup_threads(int *num_transfers)
 {
-	pthread_attr_t tattr_tx;
-	int newprio = 20, i;
-	struct sched_param param;
-
-	/* The transmit thread should be lower priority than the receive
-	 * Get the default attributes and scheduling param
-	 */
-	pthread_attr_init (&tattr_tx);
-	pthread_attr_getschedparam (&tattr_tx, &param);
-
-	/* Set the transmit priority to the lowest
-	 */
-	param.sched_priority = newprio;
-	pthread_attr_setschedparam (&tattr_tx, &param);
+  pthread_attr_t tattr_tx;
+  int newprio = 20, i;
+  struct sched_param param;
+  
+  /* The transmit thread should be lower priority than the receive
+   * Get the default attributes and scheduling param
+   */
+  pthread_attr_init (&tattr_tx);
+  pthread_attr_getschedparam (&tattr_tx, &param);
+  
+  /* Set the transmit priority to the lowest
+   */
+  param.sched_priority = newprio;
+  pthread_attr_setschedparam (&tattr_tx, &param);
   printf("%s: COUNTS = %d %d\n", __func__, RX_CHANNEL_COUNT, TX_CHANNEL_COUNT);
-
-	for (i = 0; i < RX_CHANNEL_COUNT; i++)
-		pthread_create(&rx_channels[i].tid, NULL, rx_thread, (void *)&rx_channels[i]);
-  printf("200\n");
-
-	for (i = 0; i < TX_CHANNEL_COUNT; i++)
-		pthread_create(&tx_channels[i].tid, &tattr_tx, tx_thread, (void *)&tx_channels[i]);
-  printf("300\n");
+  
+  for (i = 0; i < RX_CHANNEL_COUNT; i++) {
+    pthread_create(&rx_channels[i].tid, NULL, rx_thread, (void *)&rx_channels[i]);
+    printf("rx_channels[i].tid=%d\n", rx_channels[i].tid);
+  }
+  
+  for (i = 0; i < TX_CHANNEL_COUNT; i++) {
+    pthread_create(&tx_channels[i].tid, &tattr_tx, tx_thread, (void *)&tx_channels[i]);
+    printf("rx_channels[i].tid=%d\n", rx_channels[i].tid);
+  }
+  printf("%s DONE\n", __func__);
 }
 
 /*******************************************************************************************************************/
@@ -456,9 +459,10 @@ int main(int argc, char *argv[])
 
 	/* Do the minimum to know the transfers are done before getting the time for performance */
 
-printf("900\n");
-	for (i = 0; i < RX_CHANNEL_COUNT; i++)
-		pthread_join(rx_channels[i].tid, NULL);
+  for (i = 0; i < RX_CHANNEL_COUNT; i++) {
+    printf("rx_channels[i].tid=%d\n", rx_channels[i].tid);
+    pthread_join(rx_channels[i].tid, NULL);
+  }
 
 	/* Grab the end time and calculate the performance */
 printf("990\n");
