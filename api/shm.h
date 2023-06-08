@@ -54,7 +54,5 @@ typedef struct _shm_channel {
   pdata    pdata[SHM_PKT_COUNT];  // Packet data
 } shm_channel __attribute__ ((aligned (1024)));		/*  byte alignment */
 
-//void shm_open_channel(chan *cp);
-
   
 #endif /* _SHM_H_ */

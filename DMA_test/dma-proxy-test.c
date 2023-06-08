@@ -57,9 +57,7 @@
 #include <errno.h>
 #include <sys/param.h>
 
-#define SUE_DONIMOUS 1        // BUFFER_COUNT = 16
-//#include "../xdcomms-dma/api/dma-proxy.h"
-
+#define SUE_DONIMOUS 1
 #include "dma-proxy.h"
 //#define TX_BUFFER_COUNT 1
 //#define RX_BUFFER_COUNT 4
@@ -135,7 +133,7 @@ void *tx_thread(void *pp)
 		channel_ptr->buf_ptr[buffer_id].length = test_size;
 
 		if (verify)
-    printf("XXXX START (len=%d):", test_size);
+    printf("TX START (len=%d):", test_size);
     for (i = 0; i < test_size / sizeof(unsigned int); i++) {
       // for (i = 0; i < 1; i++)
       channel_ptr->buf_ptr[buffer_id].buffer[i] = i + in_progress_count;
@@ -227,6 +225,7 @@ void *rx_thread(void * pp)
         struct channel *channel_ptr = (struct channel *)pp;
 	int in_progress_count = 0, buffer_id = 0;
 	int rx_counter = 0;
+  int i;
 
 	// Start all buffers being received
 
@@ -258,12 +257,20 @@ void *rx_thread(void * pp)
 
 		ioctl(channel_ptr->fd, FINISH_XFER, &buffer_id);
 
+    printf("RX FINISH (len=%d):", test_size);
+    for (i = 0; i < test_size / sizeof(unsigned int); i++) {
+      channel_ptr->buf_ptr[buffer_id].buffer[i] = i + in_progress_count;
+      printf(" 0x%04x", channel_ptr->buf_ptr[buffer_id].buffer[i]);
+    }
+    printf("\n");
+
 		if (channel_ptr->buf_ptr[buffer_id].status != PROXY_NO_ERROR) {
 			printf("Proxy rx transfer error %d, # transfers %d, # completed %d, # in progress %d\n",
             channel_ptr->buf_ptr[buffer_id].status,
 						num_transfers, rx_counter, in_progress_count);
 			exit(1);
 		}
+    printf("TX START (len=%d):", test_size);
 
 		/* Verify the data received matches what was sent (tx is looped back to tx)
 		 * A unique value in the buffers is used across all transfers
