@@ -59,9 +59,9 @@
 
 #define SUE_DONIMOUS 1
 #include "../api/dma-proxy.h"
-//#define TX_BUFFER_COUNT 1
-//#define RX_BUFFER_COUNT 4
-//#define BUFFER_INCREMENT 1s
+#define TX_BUFFER_COUNT 1
+#define RX_BUFFER_COUNT 4
+#define BUFFER_INCREMENT 1s
 
 /* The user must tune the application number of channels to match the proxy driver device tree
  * and the names of each channel must match the dma-names in the device tree for the proxy
@@ -69,7 +69,7 @@
  * channels will just not be used in testing.
  */
 #define TX_CHANNEL_COUNT 1
-#define RX_CHANNEL_COUNT 16
+#define RX_CHANNEL_COUNT 1
 
 const char *tx_channel_names[1];
 const char *rx_channel_names[1];
