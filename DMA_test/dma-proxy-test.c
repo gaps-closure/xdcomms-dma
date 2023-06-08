@@ -131,7 +131,7 @@ void *tx_thread(void *pp)
 		/* Set up the length for the DMA transfer and initialize the transmit
 		 * buffer to a known pattern.
 		 */
-    printf("buf ptr=%p lem_ptr=%p\n", &(channel_ptr->buf_ptr[buffer_id]), &(channel_ptr->buf_ptr[buffer_id].length));
+    printf("buf ptr=%p%p lem_ptr=%p\n", &(channel_ptr->buf_ptr[buffer_id]), tx_channels, &(channel_ptr->buf_ptr[buffer_id].length));
     printf("XXX\n");
 		channel_ptr->buf_ptr[buffer_id].length = test_size;
     printf("TX START (len=%d):", test_size);
@@ -461,7 +461,6 @@ int main(int argc, char *argv[])
 	printf("Throughput: %d MB / sec \n", mb_sec);
 
 	/* Clean up all the channels before leaving */
-  sleep(3);
 	for (i = 0; i < TX_CHANNEL_COUNT; i++) {
 		pthread_join(tx_channels[i].tid, NULL);
 		munmap(tx_channels[i].buf_ptr, sizeof(struct channel_buffer));
