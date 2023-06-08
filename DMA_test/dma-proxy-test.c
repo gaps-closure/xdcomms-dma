@@ -125,6 +125,7 @@ void *tx_thread(void *pp)
 
 	// Start all buffers being sent
 
+  printf("%s TX_COUNT=%d):", __func__, TX_BUFFER_COUNT);
 	for (buffer_id = 0; buffer_id < TX_BUFFER_COUNT; buffer_id += BUFFER_INCREMENT) {
 
 		/* Set up the length for the DMA transfer and initialize the transmit
