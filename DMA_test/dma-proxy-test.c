@@ -463,9 +463,9 @@ int main(int argc, char *argv[])
     printf("rx_channels[i].tid=%ld\n", rx_channels[i].tid);
     pthread_join(rx_channels[i].tid, NULL);
   }
-
 	/* Grab the end time and calculate the performance */
 printf("990\n");
+  sleep(10);
 
 	end_time = get_posix_clock_time_usec();
 	time_diff = end_time - start_time;
