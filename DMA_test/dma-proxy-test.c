@@ -461,7 +461,7 @@ int main(int argc, char *argv[])
 	printf("Throughput: %d MB / sec \n", mb_sec);
 
 	/* Clean up all the channels before leaving */
-
+  sleep(3);
 	for (i = 0; i < TX_CHANNEL_COUNT; i++) {
 		pthread_join(tx_channels[i].tid, NULL);
 		munmap(tx_channels[i].buf_ptr, sizeof(struct channel_buffer));
