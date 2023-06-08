@@ -259,7 +259,6 @@ void *rx_thread(void * pp)
 
     printf("RX FINISH (len=%d):", test_size);
     for (i = 0; i < test_size / sizeof(unsigned int); i++) {
-      channel_ptr->buf_ptr[buffer_id].buffer[i] = i + in_progress_count;
       printf(" 0x%04x", channel_ptr->buf_ptr[buffer_id].buffer[i]);
     }
     printf("\n");
