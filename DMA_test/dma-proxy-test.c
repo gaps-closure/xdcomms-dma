@@ -124,15 +124,13 @@ void *tx_thread(void *pp)
 	int stop_in_progress = 0;
 
 	// Start all buffers being sent
-printf("%s buf_id=%d TX_COUNT=%d bytes=%d INC=%d verify=%d\n", __func__, buffer_id, TX_BUFFER_COUNT, test_size, BUFFER_INCREMENT, verify);
+  printf("TX buf ptr=%p lem_ptr=%p\n", &(channel_ptr->buf_ptr[buffer_id]), &(channel_ptr->buf_ptr[buffer_id].length));
 	for (buffer_id = 0; buffer_id < TX_BUFFER_COUNT; buffer_id += BUFFER_INCREMENT) {
-printf("TX buf_id=%d TX_COUNT=%d bytes=%d\n", buffer_id, TX_BUFFER_COUNT, test_size);
+    printf("TX buf_id=%d TX_COUNT=%d bytes=%d\n", buffer_id, TX_BUFFER_COUNT, test_size);
 
 		/* Set up the length for the DMA transfer and initialize the transmit
 		 * buffer to a known pattern.
 		 */
-printf("TX buf ptr=%p lem_ptr=%p\n", &(channel_ptr->buf_ptr[buffer_id]), &(channel_ptr->buf_ptr[buffer_id].length));
-printf("TX fails\n");
 		channel_ptr->buf_ptr[buffer_id].length = test_size;
     printf("TX START (len=%d):", test_size);
     for (i = 0; i < test_size / sizeof(unsigned int); i++) {
@@ -219,6 +217,7 @@ end_tx_loop0:
 		buffer_id += BUFFER_INCREMENT;
 		buffer_id %= TX_BUFFER_COUNT;
 	}
+  printf("%s done", __func__);
 }
 
 void *rx_thread(void * pp)
@@ -228,27 +227,17 @@ void *rx_thread(void * pp)
 	int rx_counter = 0;
   int i;
 
-  printf("%s buf_id=%d RX_COUNT=%d bytes=%d INC=%d verify=%d\n", __func__, buffer_id, RX_BUFFER_COUNT, test_size, BUFFER_INCREMENT, verify);
   // Start all buffers being received
-
+  printf("RX buf ptr=%p lem_ptr=%p\n", &(channel_ptr->buf_ptr[buffer_id]), &(channel_ptr->buf_ptr[buffer_id].length));
 	for (buffer_id = 0; buffer_id < RX_BUFFER_COUNT; buffer_id += BUFFER_INCREMENT) {
     printf("RX buf_id=%d RX_COUNT=%d bytes=%d INC=%d verify=%d\n", buffer_id, RX_BUFFER_COUNT, test_size, BUFFER_INCREMENT, verify);
 
 		/* Don't worry about initializing the receive buffers as the pattern used in the
 		 * transmit buffers is unique across every transfer so it should catch errors.
 		 */
-    printf("RX buf ptr=%p lem_ptr=%p\n", &(channel_ptr->buf_ptr[buffer_id]), &(channel_ptr->buf_ptr[buffer_id].length));
-//    channel_ptr->buf_ptr[buffer_id].length = test_size;
-    channel_ptr->buf_ptr[0].buffer[0] = 77;
-
-    fprintf(stderr, "lkjfadslfkdsklfasjklfjsklafklkjfadslfkdsklfasjklfjsklafk\n");
-    fprintf(stderr, "lkjfadslfkdsklfasjklfjsklafklkjfadslfkdsklfasjklfjsklafk\n");
-    fprintf(stderr, "lkjfadslfkdsklfasjklfjsklafklkjfadslfkdsklfasjklfjsklafk\n");
-
+    channel_ptr->buf_ptr[buffer_id].length = test_size;
 		ioctl(channel_ptr->fd, START_XFER, &buffer_id);
-    fprintf(stderr, "lkjfadslfkdsklfasjklfjsklafklkjfadslfkdsklfasjklfjsklafk\n");
-    fprintf(stderr, "lkjfadslfkdsklfasjklfjsklafklkjfadslfkdsklfasjklfjsklafk\n");
-
+    
 		/* Handle the case of a specified number of transfers that is less than the number
 		 * of buffers
 		 */
@@ -334,7 +323,6 @@ void *rx_thread(void * pp)
 
 	}
   printf("%s done", __func__);
-
 }
 
 /*******************************************************************************************************************/
@@ -369,7 +357,6 @@ void setup_threads(int *num_transfers)
     pthread_create(&tx_channels[i].tid, &tattr_tx, tx_thread, (void *)&tx_channels[i]);
     printf("rx_channels[i].tid=%ld\n", tx_channels[i].tid);
   }
-  printf("%s DONE\n", __func__);
 }
 
 /*******************************************************************************************************************/
@@ -470,10 +457,9 @@ int main(int argc, char *argv[])
     printf("rx_channels[i].tid=%ld\n", rx_channels[i].tid);
     pthread_join(rx_channels[i].tid, NULL);
   }
-	/* Grab the end time and calculate the performance */
-printf("990\n");
-  sleep(10);
+  printf("RX threads complete\n");
 
+	/* Grab the end time and calculate the performance */
 	end_time = get_posix_clock_time_usec();
 	time_diff = end_time - start_time;
 	mb_sec = ((1000000 / (double)time_diff) * (num_transfers * max_channel_count * (double)test_size)) / 1000000;
@@ -492,8 +478,6 @@ printf("990\n");
 		munmap(rx_channels[i].buf_ptr, sizeof(struct channel_buffer));
 		close(rx_channels[i].fd);
 	}
-
 	printf("DMA proxy test complete\n");
-
 	return 0;
 }
