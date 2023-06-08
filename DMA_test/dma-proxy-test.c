@@ -131,7 +131,7 @@ void *tx_thread(void *pp)
 		/* Set up the length for the DMA transfer and initialize the transmit
 		 * buffer to a known pattern.
 		 */
-    printf("YXX %p %p\n", channel_ptr, channel_ptr->buf_ptr[buffer_id]);
+    printf("YXX %p %p\n", channel_ptr, &(channel_ptr->buf_ptr[buffer_id]));
 		channel_ptr->buf_ptr[buffer_id].length = test_size;
     printf("XXX\n");
     printf("TX START (len=%d):", test_size);
