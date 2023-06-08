@@ -348,9 +348,11 @@ void setup_threads(int *num_transfers)
 	 */
 	param.sched_priority = newprio;
 	pthread_attr_setschedparam (&tattr_tx, &param);
+  printf("100\n");
 
 	for (i = 0; i < RX_CHANNEL_COUNT; i++)
 		pthread_create(&rx_channels[i].tid, NULL, rx_thread, (void *)&rx_channels[i]);
+  printf("200\n");
 
 	for (i = 0; i < TX_CHANNEL_COUNT; i++)
 		pthread_create(&tx_channels[i].tid, &tattr_tx, tx_thread, (void *)&tx_channels[i]);
