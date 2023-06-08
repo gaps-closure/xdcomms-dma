@@ -228,11 +228,11 @@ void *rx_thread(void * pp)
 	int rx_counter = 0;
   int i;
 
-  printf("YYYY");
+  printf("%s buf_id=%d RX_COUNT=%d bytes=%d INC=%d verify=%d\n", __func__, buffer_id, RX_BUFFER_COUNT, test_size, BUFFER_INCREMENT, verify);
   // Start all buffers being received
 
 	for (buffer_id = 0; buffer_id < RX_BUFFER_COUNT; buffer_id += BUFFER_INCREMENT) {
-    printf("%s buf_id=%d RX_COUNT=%d bytes=%d INC=%d verify=%d\n", __func__, buffer_id, RX_BUFFER_COUNT, test_size, BUFFER_INCREMENT, verify);
+    printf("buf_id=%d RX_COUNT=%d bytes=%d INC=%d verify=%d\n", buffer_id, RX_BUFFER_COUNT, test_size, BUFFER_INCREMENT, verify);
 
 		/* Don't worry about initializing the receive buffers as the pattern used in the
 		 * transmit buffers is unique across every transfer so it should catch errors.
