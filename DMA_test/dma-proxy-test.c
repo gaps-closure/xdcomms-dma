@@ -355,12 +355,12 @@ void setup_threads(int *num_transfers)
   
   for (i = 0; i < RX_CHANNEL_COUNT; i++) {
     pthread_create(&rx_channels[i].tid, NULL, rx_thread, (void *)&rx_channels[i]);
-    printf("rx_channels[i].tid=%d\n", rx_channels[i].tid);
+    printf("rx_channels[i].tid=%ld\n", rx_channels[i].tid);
   }
   
   for (i = 0; i < TX_CHANNEL_COUNT; i++) {
     pthread_create(&tx_channels[i].tid, &tattr_tx, tx_thread, (void *)&tx_channels[i]);
-    printf("rx_channels[i].tid=%d\n", rx_channels[i].tid);
+    printf("rx_channels[i].tid=%ld\n", tx_channels[i].tid);
   }
   printf("%s DONE\n", __func__);
 }
@@ -460,7 +460,7 @@ int main(int argc, char *argv[])
 	/* Do the minimum to know the transfers are done before getting the time for performance */
 
   for (i = 0; i < RX_CHANNEL_COUNT; i++) {
-    printf("rx_channels[i].tid=%d\n", rx_channels[i].tid);
+    printf("rx_channels[i].tid=%ld\n", rx_channels[i].tid);
     pthread_join(rx_channels[i].tid, NULL);
   }
 
