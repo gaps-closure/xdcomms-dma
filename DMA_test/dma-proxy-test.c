@@ -239,7 +239,7 @@ void *rx_thread(void * pp)
 		 */
     printf("RX buf ptr=%p lem_ptr=%p\n", &(channel_ptr->buf_ptr[buffer_id]), &(channel_ptr->buf_ptr[buffer_id].length));
 //    channel_ptr->buf_ptr[buffer_id].length = test_size;
-    channel_ptr->buf_ptr[buffer_id].length = 1000;
+    channel_ptr->buf_ptr[0]= 1000;
 
     fprintf(stderr, "lkjfadslfkdsklfasjklfjsklafklkjfadslfkdsklfasjklfjsklafk\n");
     fprintf(stderr, "lkjfadslfkdsklfasjklfjsklafklkjfadslfkdsklfasjklfjsklafk\n");
