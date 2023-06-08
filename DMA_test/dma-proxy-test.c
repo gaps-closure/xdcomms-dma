@@ -69,7 +69,7 @@
  * channels will just not be used in testing.
  */
 #define TX_CHANNEL_COUNT 1
-#define RX_CHANNEL_COUNT 1
+#define RX_CHANNEL_COUNT 16
 
 const char *tx_channel_names[1];
 const char *rx_channel_names[1];
