@@ -124,7 +124,6 @@ void *tx_thread(void *pp)
 	int stop_in_progress = 0;
 
 	// Start all buffers being sent
-
   printf("%s buf_id=%d TX_COUNT=%d bytes=%d INC=%d\n", __func__, buffer_id, TX_BUFFER_COUNT, test_size, BUFFER_INCREMENT);
 	for (buffer_id = 0; buffer_id < TX_BUFFER_COUNT; buffer_id += BUFFER_INCREMENT) {
     printf("buf_id=%d TX_COUNT=%d bytes=%d\n", buffer_id, TX_BUFFER_COUNT, test_size);
