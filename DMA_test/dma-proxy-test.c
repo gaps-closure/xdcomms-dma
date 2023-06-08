@@ -356,6 +356,7 @@ void setup_threads(int *num_transfers)
 
 	for (i = 0; i < TX_CHANNEL_COUNT; i++)
 		pthread_create(&tx_channels[i].tid, &tattr_tx, tx_thread, (void *)&tx_channels[i]);
+  printf("300\n");
 }
 
 /*******************************************************************************************************************/
@@ -446,6 +447,8 @@ int main(int argc, char *argv[])
 
 	/* Grab the start time to calculate performance then start the threads & transfers on all channels */
 
+  printf("900\n");
+
 	start_time = get_posix_clock_time_usec();
 	setup_threads(&num_transfers);
 
@@ -455,6 +458,7 @@ int main(int argc, char *argv[])
 		pthread_join(rx_channels[i].tid, NULL);
 
 	/* Grab the end time and calculate the performance */
+  printf("990\n");
 
 	end_time = get_posix_clock_time_usec();
 	time_diff = end_time - start_time;
