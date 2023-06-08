@@ -120,11 +120,11 @@ static uint64_t get_posix_clock_time_usec ()
 void *tx_thread(void *pp)
 {
         struct channel *channel_ptr = (struct channel *) pp;
-	int i, counter = 0, buffer_id = 0, in_progress_count = 0;
+	int i, counter = 0, buffer_id, in_progress_count = 0;
 	int stop_in_progress = 0;
 
 	// Start all buffers being sent
-  printf("%s buf_id=%d TX_COUNT=%d bytes=%d INC=%d\n", __func__, buffer_id, TX_BUFFER_COUNT, test_size, BUFFER_INCREMENT);
+  printf("%s buf_id=%d TX_COUNT=%d bytes=%d INC=%d verify=%d\n", __func__, buffer_id, TX_BUFFER_COUNT, test_size, BUFFER_INCREMENT, verify);
 	for (buffer_id = 0; buffer_id < TX_BUFFER_COUNT; buffer_id += BUFFER_INCREMENT) {
     printf("buf_id=%d TX_COUNT=%d bytes=%d\n", buffer_id, TX_BUFFER_COUNT, test_size);
 
