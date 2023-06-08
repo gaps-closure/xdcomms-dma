@@ -131,7 +131,7 @@ void *tx_thread(void *pp)
 		/* Set up the length for the DMA transfer and initialize the transmit
 		 * buffer to a known pattern.
 		 */
-    printf("buf ptr=%p%p lem_ptr=%p\n", &(channel_ptr->buf_ptr[buffer_id]), tx_channels, &(channel_ptr->buf_ptr[buffer_id].length));
+    printf("buf ptr=%p lem_ptr=%p\n", &(channel_ptr->buf_ptr[buffer_id]), &(channel_ptr->buf_ptr[buffer_id].length));
     printf("XXX\n");
 		channel_ptr->buf_ptr[buffer_id].length = test_size;
     printf("TX START (len=%d):", test_size);
@@ -231,6 +231,7 @@ void *rx_thread(void * pp)
 	// Start all buffers being received
 
 	for (buffer_id = 0; buffer_id < RX_BUFFER_COUNT; buffer_id += BUFFER_INCREMENT) {
+    printf("%s buf_id=%d RX_COUNT=%d bytes=%d INC=%d verify=%d\n", __func__, buffer_id, RX_BUFFER_COUNT, test_size, BUFFER_INCREMENT, verify);s
 
 		/* Don't worry about initializing the receive buffers as the pattern used in the
 		 * transmit buffers is unique across every transfer so it should catch errors.
