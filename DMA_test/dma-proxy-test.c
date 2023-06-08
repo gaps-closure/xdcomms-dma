@@ -133,7 +133,6 @@ void *tx_thread(void *pp)
 		 */
 		channel_ptr->buf_ptr[buffer_id].length = test_size;
 
-		if (verify)
     printf("TX START (len=%d):", test_size);
     for (i = 0; i < test_size / sizeof(unsigned int); i++) {
       // for (i = 0; i < 1; i++)
