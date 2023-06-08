@@ -119,7 +119,7 @@ static uint64_t get_posix_clock_time_usec ()
  */
 void *tx_thread(void *pp)
 {
-        struct channel *channel_ptr = (struct channel *) pp;
+  struct channel *channel_ptr = (struct channel *) pp;
 	int i, counter = 0, buffer_id, in_progress_count = 0;
 	int stop_in_progress = 0;
 
@@ -131,7 +131,7 @@ void *tx_thread(void *pp)
 		/* Set up the length for the DMA transfer and initialize the transmit
 		 * buffer to a known pattern.
 		 */
-    printf("YXX\n");
+    printf("YXX %p %p\n", channel_ptr, channel_ptr->buf_ptr[buffer_id]);
 		channel_ptr->buf_ptr[buffer_id].length = test_size;
     printf("XXX\n");
     printf("TX START (len=%d):", test_size);
