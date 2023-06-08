@@ -58,10 +58,10 @@
 #include <sys/param.h>
 
 #define SUE_DONIMOUS 1
-#include "../api/dma-proxy.h"
-#define TX_BUFFER_COUNT 1
-#define RX_BUFFER_COUNT 4
-#define BUFFER_INCREMENT 1
+#include "dma-proxy.h"
+//#define TX_BUFFER_COUNT 1
+//#define RX_BUFFER_COUNT 4
+//#define BUFFER_INCREMENT 1
 
 /* The user must tune the application number of channels to match the proxy driver device tree
  * and the names of each channel must match the dma-names in the device tree for the proxy
