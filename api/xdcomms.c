@@ -63,7 +63,7 @@
 #include "xdcomms.h"
 #include "vchan.h"
 
-#define PRINT_STATE_LEVEL  1
+#define PRINT_STATE_LEVEL  2
 
 /* RX thread arguments when starting thread */
 typedef struct _thread_args {
