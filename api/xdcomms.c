@@ -58,7 +58,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <assert.h>
-#include <pthread.h>
 
 #include "xdcomms.h"
 #include "vchan.h"
