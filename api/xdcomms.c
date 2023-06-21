@@ -687,8 +687,8 @@ void *rcvr_thread_function(thread_args *vargs) {
     }
     buffer_id = (buffer_id + 1) % (cp->pkt_buf_count);
     log_trace("THREAD-4 index=%d", buffer_id);
+    time_trace("RX1 %08x (index=%d)", ntohl(cp->ctag), buffer_id);
   }
-  time_trace("RX1 %08x (index=%d)", ntohl(cp->ctag), buffer_id);
 }
 
 /* Start a receiver thread */
@@ -861,7 +861,7 @@ int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   while ((ntries--) > 0)  {
 //    if (nonblock_recv(adu, tag, cp) > 0)  return 0;
     if ((x=nonblock_recv(adu, tag, cp)) > 0) {
-      time_trace("RX %08x (len=%d)", ntohl(cp->ctag), x);
+      time_trace("RX3 %08x (len=%d)", ntohl(cp->ctag), x);
       return x;
     }
 //    log_trace("LOOP timeout %s: tag=<%d,%d,%d>: remaining tries = %d ", __func__, tag->mux, tag->sec, tag->typ, ntries);
