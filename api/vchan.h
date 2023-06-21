@@ -4,11 +4,19 @@
 #include <stdio.h>      // size_t
 #include <stdint.h>     // uint8_t
 #include <arpa/inet.h>  // ntohl
+#include <pthread.h>
+
 #include "dma-proxy.h"
 #include "shm.h"
 
 #define STR_SIZE          64
 #define MAX_PKTS_PER_CHAN 32   // Max pkts in Device for one (SHM) / all (DMA) chans
+
+// RX thread arguments when starting thread
+typedef struct _thread_args {
+  vchan          *cp;               // Channel RX thread is looking for
+  int             buffer_id_start;  // Device buffer index
+} thread_args;
 
 // Fixed mmap configuration (channel_buffer in DMA device, shm_channel in SHM device)
 typedef struct _memmap {
@@ -45,6 +53,8 @@ typedef struct virtual_channel {
   int              pkt_buf_count;          // Number of packets in a channel: e.g., SHM=2, DMAt=1, DMAr=16
   pkt_info         rx[MAX_PKTS_PER_CHAN];  // RX packet info from RX thread (needs mutex lock)
   shm_channel     *shm_addr;               // Ptr to mmap'ed SHM struct: virtual addr + offset
+  thread_args      thd_args;               // arguements passed rx thread for this tag
+  pthread_t        thread_id;              // thread id for the rx thread
 } vchan;
 
 typedef struct _virtual_chan_list {
