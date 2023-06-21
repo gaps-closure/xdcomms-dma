@@ -65,12 +65,6 @@
 
 #define PRINT_STATE_LEVEL  2
 
-/* RX thread arguments when starting thread */
-typedef struct _thread_args {
-  vchan          *cp;               // Channel RX thread is looking for
-  int             buffer_id_start;  // Device buffer index
-} thread_args;
-
 void rcvr_thread_start(vchan *cp);
 
 char            enclave_name[STR_SIZE] = "";  // enclave name (e.g., green)
@@ -698,16 +692,10 @@ void *rcvr_thread_function(thread_args *vargs) {
 
 /* Start a receiver thread */
 void rcvr_thread_start(vchan *cp) {
-  static thread_args rxargs;
-  static pthread_t   tid;
-
-  /* Open rx channel and receive threads (only once) */
-  log_trace("%s: ctag=0x%08x dev=%s dir=%c", __func__, ntohl(cp->ctag), cp->dev_name, cp->dir);
-// Moved into get_channel_info  pthread_mutex_lock(&chan_create);
-  rxargs.cp = cp;
-  rxargs.buffer_id_start = 0;
-  if (pthread_create(&tid, NULL, (void *) rcvr_thread_function, (void *)&rxargs) != 0) FATAL;
-//  pthread_mutex_unlock(&vchan_create);
+  log_info("%s: ctag=0x%08x dev=%s dir=%c", __func__, ntohl(cp->ctag), cp->dev_name, cp->dir);
+  cp->thd_args.cp = cp;
+  cp->thd_args.buffer_id_start = 0;
+  if (pthread_create(&(cp->thread_id), NULL, (void *) rcvr_thread_function, (void *)&(cp->thd_args)) != 0) FATAL;
 }
 
 /* Receive packet from driver (via rx thread), storing data and length in ADU */
