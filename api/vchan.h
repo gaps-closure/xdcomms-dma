@@ -14,7 +14,7 @@
 
 // RX thread arguments when starting thread
 typedef struct _thread_args {
-  vchan          *cp;               // Channel RX thread is looking for
+  void           *cp;               // Virtual Channel for RX thread is looking for
   int             buffer_id_start;  // Device buffer index
 } thread_args;
 
