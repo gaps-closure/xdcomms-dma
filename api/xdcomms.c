@@ -305,7 +305,7 @@ void shm_send(vchan *cp, void *adu, gaps_tag *tag) {
     nanosleep(&ts, NULL);       // Give time to finish reading before writing into last
   }
   if (*last_ptr < 0) *last_ptr = 0;   // If the first written packet
-  time_trace("XDC_Tx1 ready to encode for ctag=%08x (next = %d last = %d)", ntohl(cp->ctag), write_index, *last_ptr);
+//  time_trace("XDC_Tx1 ready to encode for ctag=%08x (next = %d last = %d)", ntohl(cp->ctag), write_index, *last_ptr);
   
   // B) Encode Data into SHM
   cmap_encode(cp->shm_addr->pdata[write_index].data, adu, &adu_len, tag);
@@ -315,8 +315,8 @@ void shm_send(vchan *cp, void *adu, gaps_tag *tag) {
   *next_ptr = (write_index + 1) % SHM_PKT_COUNT;
 //  log_trace("data[19]=%0x", cp->shm_addr->pdata[write_index].data[19]);
   
+  time_trace("TX %08x (len=&d index=%d)", ntohl(cp->ctag), data_length, write_index);
 #if 1 >= PRINT_STATE_LEVEL
-  time_trace("XDC_Tx2 sent data (for index=%d)", write_index);
   shm_info_print(cp->shm_addr);
 #endif  // PRINT_STATE
 }
@@ -870,7 +870,7 @@ int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   while ((ntries--) > 0)  {
 //    if (nonblock_recv(adu, tag, cp) > 0)  return 0;
     if ((x=nonblock_recv(adu, tag, cp)) > 0) {
-      log_info("RX len=%d", x);
+      time_trace("RX %08x (len=&d)", ntohl(cp->ctag), x);
       return x;
     }
 //    log_trace("LOOP timeout %s: tag=<%d,%d,%d>: remaining tries = %d ", __func__, tag->mux, tag->sec, tag->typ, ntries);
