@@ -669,7 +669,7 @@ void asyn_send(void *adu, gaps_tag *tag) {
 
 // Receive packets via DMA in a loop (rate controled by FINISH_XFER blocking call)
 void *rcvr_thread_function(thread_args *vargs) {
-  vchan *cp = (vchan *) (vargs->cp);
+  vchan *cp = (vchan *) vargs->cp;
   int    buffer_id = 0;
 
   while (1) {
