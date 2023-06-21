@@ -301,6 +301,7 @@ void shm_send(vchan *cp, void *adu, gaps_tag *tag) {
 //  time_trace("XDC_Tx1 ready to encode for ctag=%08x (next = %d last = %d)", ntohl(cp->ctag), write_index, *last_ptr);
   
   // B) Encode Data into SHM
+  time_trace("TX1 %08x (index=%d)", ntohl(cp->ctag), write_index);
   cmap_encode(cp->shm_addr->pdata[write_index].data, adu, &adu_len, tag);
 //  XXX TODO: incoprate naive_memcpy into cmap_encode/decode
 //  naive_memcpy(cp->shm_addr->pdata[pkt_index_nxt].data, adu, adu_len);  // TX adds new data
@@ -308,10 +309,10 @@ void shm_send(vchan *cp, void *adu, gaps_tag *tag) {
   *next_ptr = (write_index + 1) % SHM_PKT_COUNT;
 //  log_trace("data[19]=%0x", cp->shm_addr->pdata[write_index].data[19]);
   
-  time_trace("TX %08x (len=%d index=%d)", ntohl(cp->ctag), adu_len, write_index);
 #if 1 >= PRINT_STATE_LEVEL
   shm_info_print(cp->shm_addr);
 #endif  // PRINT_STATE
+  time_trace("TX2 %08x (len=%d)", ntohl(cp->ctag), adu_len);
 }
 
 // Check that SHM TX has matches RX tag and crc. Also, (optionally) has newer timestamp
@@ -687,11 +688,12 @@ void *rcvr_thread_function(thread_args *vargs) {
     buffer_id = (buffer_id + 1) % (cp->pkt_buf_count);
     log_trace("THREAD-4 index=%d", buffer_id);
   }
+  time_trace("RX1 %08x (index=%d)", ntohl(cp->ctag), buffer_id);
 }
 
 /* Start a receiver thread */
 void rcvr_thread_start(vchan *cp) {
-  log_info("%s: ctag=0x%08x dev=%s dir=%c", __func__, ntohl(cp->ctag), cp->dev_name, cp->dir);
+  log_trace("%s: ctag=0x%08x dev=%s dir=%c", __func__, ntohl(cp->ctag), cp->dev_name, cp->dir);
   cp->thd_args.cp = cp;
   cp->thd_args.buffer_id_start = 0;
   if (pthread_create(&(cp->thread_id), NULL, (void *) rcvr_thread_function, (void *)&(cp->thd_args)) != 0) FATAL;
@@ -709,6 +711,8 @@ int nonblock_recv(void *adu, gaps_tag *tag, vchan *cp) {
     fprintf(stderr, "%s on buff index=%d", __func__, index_buf);
     vchan_print(cp, enclave_name);
 #endif
+    time_trace("RX2 %08x (index=%d)", ntohl(cp->ctag), cp->pkt_buf_index);
+
     cmap_decode(cp->rx[index_buf].data, cp->rx[index_buf].data_len, adu, tag);   /* Put packet into ADU */
 //    log_trace("XDCOMMS reads from buff=%p (index=%d): len=%d", cp->rx[index_buf].data, index_buf, cp->rx[index_buf].data_len);
     cp->rx[index_buf].newd = 0;                      // unmark newdata
