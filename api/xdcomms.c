@@ -95,7 +95,7 @@ void dma_open_channel(vchan *cp) {
   cp->mm.len = sizeof(struct channel_buffer) * buffer_count;
   cp->mm.virt_addr = mmap(NULL, cp->mm.len, cp->mm.prot, cp->mm.flags, cp->fd, cp->mm.phys_addr);
   if (cp->mm.virt_addr == MAP_FAILED) FATAL;
-  log_debug("Opened and mmap'ed DMA channel %s: virt_addr=0x%lx, len=0x%x fd=%d", cp->dev_name, cp->mm.virt_addr, cp->mm.len, cp->fd);
+  log_debug("Opened and mmap'ed DMA channel %s: addr=(v=0x%lx p=0x%lx) len=0x%x fd=%d", cp->dev_name, cp->mm.virt_addr, cp->mm.phys_addr, cp->mm.len, cp->fd);
   log_debug("Chan_Buff=0x%lx Bytes (Bytes/PKT=0x%lx Packets/channel=%d) Channels/dev={Tx=%d Rx=%d}", BUFFER_SIZE, sizeof(bw), BUFFER_SIZE / sizeof(bw), DMA_PKT_COUNT_TX, DMA_PKT_COUNT_RX);
 }
 
@@ -231,7 +231,7 @@ void shm_open_channel(vchan *cp) {
   pa_virt_addr       = mmap(0, pa_mmap_len, cp->mm.prot, cp->mm.flags, cp->fd, pa_phys_addr);
   if (pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
   cp->mm.virt_addr = pa_virt_addr + cp->mm.phys_addr - pa_phys_addr;   // add offset to page aligned addr
-  log_debug("Opened and mmap'ed SHM channel %s (fd=%d): virt addr: %p - %p = 0x%x ", cp->dev_name, cp->fd, cp->mm.virt_addr, ((unsigned long) cp->mm.virt_addr) + pa_mmap_len - 1, pa_mmap_len);
+  log_debug("Opened and mmap'ed SHM channel %s (fd=%d): addr=(p=0x%lx v=%0x%lx - %p = len=0x%x ", cp->dev_name, cp->fd, cp->mm.virt_addr, pa_phys_addr, ((unsigned long) cp->mm.virt_addr) + pa_mmap_len - 1, pa_mmap_len);
 }
 
 void shm_info_print(shm_channel *cip) {
@@ -859,7 +859,7 @@ int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   vchan           *cp;
   struct timespec  request;
   int              ntries;
-//  int x=0;
+  int              x = 0;
 
 //  log_debug("Start of %s: tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
   cp              = get_chan_info(tag, 'r', 0);     // get buffer for tag (to communicate with thread)
@@ -868,11 +868,11 @@ int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   ntries          = 1 + (cp->retries);           // number of tries to rx packet
 //  log_trace("%s: test %d times every %d (%d.%09d) ns", __func__, ntries, RX_POLL_INTERVAL_NSEC, request.tv_sec, request.tv_nsec);
   while ((ntries--) > 0)  {
-    if (nonblock_recv(adu, tag, cp) > 0)  return 0;
-//    if ((x=nonblock_recv(adu, tag, cp)) > 0) {
-//      log_trace("%s RXed packet len=%d", __func__, x);
-//      return x;
-//    }
+//    if (nonblock_recv(adu, tag, cp) > 0)  return 0;
+    if ((x=nonblock_recv(adu, tag, cp)) > 0) {
+      log_info("RX len=%d", x);
+      return x;
+    }
 //    log_trace("LOOP timeout %s: tag=<%d,%d,%d>: remaining tries = %d ", __func__, tag->mux, tag->sec, tag->typ, ntries);
     nanosleep(&request, NULL);
   }
