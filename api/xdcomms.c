@@ -216,7 +216,7 @@ void shm_open_channel(vchan *cp) {
   unsigned long  pa_phys_addr, pa_mmap_len;       /* page aligned physical address (offset) */
 
   // a) Open device
-  if ((cp->fd = open(cp->dev_name, O_RDWR)) == -1) FATAL;    // Higher perfromance by removing file sync | O_SYNC
+  if ((cp->fd = open(cp->dev_name, O_RDWR | O_SYNC)) == -1) FATAL;    // Higher perfromance by removing file sync | O_SYNC
   // b) mmpp device: reduce address to be a multiple of page size and add the diff to length
   pa_phys_addr       = cp->mm.phys_addr & ~MMAP_PAGE_MASK;
   pa_mmap_len        = cp->mm.len + cp->mm.phys_addr - pa_phys_addr;
