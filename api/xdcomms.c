@@ -598,14 +598,14 @@ void json_process_all_flows(int m, struct json_object *j_envlave_halmaps) {
     // Match and Group Indexes (see function description)
     if ((strcmp(from_name, enclave_name)) == 0) {
       if (j==0) { dir_0 = 't'; t = 0; r = m-1; }
-      log_debug("    %s j=%d t=%d: tag=<%d,%d,%d>", enclave_name, j, t, tag.mux, tag.sec, tag.typ);
+      log_debug("    from %s j=%d t=%d: tag=<%d,%d,%d>", enclave_name, j, t, tag.mux, tag.sec, tag.typ);
       get_chan_info(&tag, 't', t);
       if (dir_0 == 't') t++;
       else              t--;
     }
     if ((strcmp(to_name, enclave_name)) == 0) {
       if (j==0) { dir_0 = 'r'; r = 0; t = m-1; }
-      log_debug("    %s j=%d r=%d: tag=<%d,%d,%d>", enclave_name, j, r, tag.mux, tag.sec, tag.typ);
+      log_debug("    to   %s j=%d r=%d: tag=<%d,%d,%d>", enclave_name, j, r, tag.mux, tag.sec, tag.typ);
       get_chan_info(&tag, 'r', r);
       if (dir_0 == 't') r--;
       else              r++;
