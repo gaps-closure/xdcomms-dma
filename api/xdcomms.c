@@ -63,7 +63,7 @@
 #include "vchan.h"
 
 #define PRINT_STATE_LEVEL  2
-#define PRINT_US_TRACE
+//#define PRINT_US_TRACE   // print Performance traces when defined
 
 void rcvr_thread_start(vchan *cp);
 
