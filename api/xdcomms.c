@@ -611,7 +611,7 @@ void json_process_all_flows(int m, struct json_object *j_envlave_halmaps) {
       else              r++;
     }
   }
-  log_debug("dir_0 tag=<%d,%d,%d>", dir_0, tag.mux, tag.sec, tag.typ);
+  log_debug("%c tag=<%d,%d,%d>", dir_0, tag.mux, tag.sec, tag.typ);
 }
 
 // Open and parse JSON configuration file (using json-c library)
