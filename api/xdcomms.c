@@ -227,7 +227,7 @@ void shm_open_channel(vchan *cp) {
   pa_virt_addr       = mmap(0, pa_mmap_len, cp->mm.prot, cp->mm.flags, cp->fd, pa_phys_addr);
   if (pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
   cp->mm.virt_addr = pa_virt_addr + cp->mm.phys_addr - pa_phys_addr;   // add offset to page aligned addr
-  log_debug("Opened and mmap'ed SHM channel %s (fd=%d): addr=(p=0x%lx v=%0x%lx - %p = len=0x%x ", cp->dev_name, cp->fd, cp->mm.virt_addr, pa_phys_addr, ((unsigned long) cp->mm.virt_addr) + pa_mmap_len - 1, pa_mmap_len);
+  log_debug("Opened + mmap'ed SHM channel %s: fd=%d, v_addr=0x%lx p_addr=0x%lx len=0x%x", cp->dev_name, cp->fd, cp->mm.virt_addr, pa_phys_addr, pa_mmap_len);
 }
 
 void shm_info_print(shm_channel *cip) {
@@ -349,11 +349,11 @@ void shm_rcvr(vchan *cp, int index_buf) {
     while (wait_if_old(cp)) { ; }
     once = 0;
   }
-  log_debug("THREAD-2 waiting for %s tag=0x%08x on dev=%s with index=%d (last=%d)", cp->dev_type, ntohl(cp->ctag), cp->dev_name, index_buf, cp->shm_addr->pkt_index_next);
+  log_trace("THREAD-2 waiting for %s tag=0x%08x on dev=%s with index=%d (last=%d)", cp->dev_type, ntohl(cp->ctag), cp->dev_name, index_buf, cp->shm_addr->pkt_index_next);
   while (index_buf == (cp->shm_addr->pkt_index_next)) { ; }
 //  log_trace("THREAD-3a got packet index=%d (next=%d last=%d) len=%d [tr=0x%lx - tt=0x%lx = 0x%lx]", index_buf, cp->shm_addr->pkt_index_next, cp->shm_addr->pkt_index_last, cp->shm_addr->pinfo[index_buf].data_length, cp->unix_seconds, (cp->unix_seconds) - (cp->shm_addr->cinfo.unix_seconds), cp->shm_addr->cinfo.unix_seconds);
   pthread_mutex_lock(&(cp->lock));
-  log_debug("THREAD-3 rx packet ctag=0x%08x len=%d id=%d", ntohl(cp->ctag), cp->shm_addr->pinfo[index_buf].data_length, index_buf);
+  log_trace("THREAD-3 rx packet ctag=0x%08x len=%d id=%d", ntohl(cp->ctag), cp->shm_addr->pinfo[index_buf].data_length, index_buf);
 #if 1 >= PRINT_STATE_LEVEL
   shm_info_print(cp->shm_addr);
 #endif  // PRINT_STATE
@@ -400,7 +400,7 @@ void dev_open_if_new(vchan *cp) {
       clist[i].cp = cp;
       (clist[i].count)++;
       open_device(cp);           // Open new device
-      log_debug("%s: Opened new device %s dir=%c ctag=0x%08x i=%d", __func__, cp->dev_name, cp->dir, ntohl(cp->ctag), i);
+      log_trace("%s: Opened new device %s dir=%c ctag=0x%08x i=%d", __func__, cp->dev_name, cp->dir, ntohl(cp->ctag), i);
       return;  // new device
     }
     // b2) See if device is already open
@@ -408,7 +408,7 @@ void dev_open_if_new(vchan *cp) {
       cp->fd = clist[i].cp->fd;
       cp->mm.virt_addr = clist[i].cp->mm.virt_addr;
       (clist[i].count)++;
-      log_debug("%s: %s device shared %d times for i=%d", __func__, cp->dev_name, clist[i].count, i);
+      log_trace("%s: %s device shared %d times for i=%d", __func__, cp->dev_name, clist[i].count, i);
       return;
     }
   }
@@ -598,19 +598,20 @@ void json_process_all_flows(int m, struct json_object *j_envlave_halmaps) {
     // Match and Group Indexes (see function description)
     if ((strcmp(from_name, enclave_name)) == 0) {
       if (j==0) { dir_0 = 't'; t = 0; r = m-1; }
-      log_debug("    %s j=%d t=%d: tag=<%d,%d,%d>", enclave_name, j, t, tag.mux, tag.sec, tag.typ);
+      log_trace("    %s j=%d t=%d: tag=<%d,%d,%d>", enclave_name, j, t, tag.mux, tag.sec, tag.typ);
       get_chan_info(&tag, 't', t);
       if (dir_0 == 't') t++;
       else              t--;
     }
     if ((strcmp(to_name, enclave_name)) == 0) {
       if (j==0) { dir_0 = 'r'; r = 0; t = m-1; }
-      log_debug("    %s j=%d r=%d: tag=<%d,%d,%d>", enclave_name, j, r, tag.mux, tag.sec, tag.typ);
+      log_trace("    %s j=%d r=%d: tag=<%d,%d,%d>", enclave_name, j, r, tag.mux, tag.sec, tag.typ);
       get_chan_info(&tag, 'r', r);
       if (dir_0 == 't') r--;
       else              r++;
     }
   }
+  log_debug("dir_0 tag=<%d,%d,%d>", dir_0, tag.mux, tag.sec, tag.typ);
 }
 
 // Open and parse JSON configuration file (using json-c library)
@@ -666,7 +667,7 @@ void asyn_send(void *adu, gaps_tag *tag) {
   vchan  *cp;        // abstract channel struct pointer for any device type
 
   // a) Open channel once (and get device type, device name and channel struct
-  log_debug("Start of %s for tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
+  log_trace("Start of %s for tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
   cp = get_chan_info(tag, 't', 0);
   pthread_mutex_lock(&(cp->lock));
   // b) encode packet into TX buffer and send */
@@ -726,7 +727,7 @@ int nonblock_recv(void *adu, gaps_tag *tag, vchan *cp) {
     cmap_decode(cp->rx[index_buf].data, cp->rx[index_buf].data_len, adu, tag);   /* Put packet into ADU */
 //    log_trace("XDCOMMS reads from buff=%p (index=%d): len=%d", cp->rx[index_buf].data, index_buf, cp->rx[index_buf].data_len);
     cp->rx[index_buf].newd = 0;                      // unmark newdata
-    log_debug("XDCOMMS rx packet tag=<%d,%d,%d> len=%d", tag->mux, tag->sec, tag->typ, cp->rx[index_buf].data_len);
+    log_trace("XDCOMMS rx packet tag=<%d,%d,%d> len=%d", tag->mux, tag->sec, tag->typ, cp->rx[index_buf].data_len);
     if (cp->rx[index_buf].data_len > 0) rv = cp->rx[index_buf].data_len;
     cp->pkt_buf_index = (index_buf + 1) % (cp->pkt_buf_count);
   }
@@ -845,7 +846,7 @@ void xdc_register(codec_func_ptr encode, codec_func_ptr decode, int typ) {
 
 // Only kept to allow setting receiver timeout value
 void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout) {
-  log_debug("Start of %s: timeout = %d ms for tag=<%d,%d,%d>", __func__, timeout, tag.mux, tag.sec, tag.typ);
+  log_trace("Start of %s: timeout = %d ms for tag=<%d,%d,%d>", __func__, timeout, tag.mux, tag.sec, tag.typ);
   config_channels();
   vchan *cp = get_chan_info(&tag, 'r', 0);
 //  fprintf(stderr, "timeout = %d ms for tag=<%d,%d,%d>\n", timeout, tag.mux, tag.sec, tag.typ);
@@ -885,6 +886,6 @@ int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
 
 /* Receive ADU from HAL - retry until a valid ADU */
 void xdc_blocking_recv(void *socket, void *adu, gaps_tag *tag) {
-  log_debug("Start of %s: tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
+  log_trace("Start of %s: tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
   while (xdc_recv(socket, adu, tag) < 0);
 }
