@@ -63,6 +63,7 @@
 #include "vchan.h"
 
 #define PRINT_STATE_LEVEL  2
+#define PRINT_US_TRACE
 
 void rcvr_thread_start(vchan *cp);
 
@@ -174,7 +175,9 @@ void dma_send(vchan *cp, void *adu, gaps_tag *tag) {
   size_t    packet_len;
   
   p = (bw *) &(dma_tx_chan->buffer);      // point to a DMA packet buffer */
+#ifdef PRINT_US_TRACE
   time_trace("XDC_Tx1 ready to encode for ctag=%08x into %p", ntohl(cp->ctag), p);
+#endif
   cmap_encode(p->data, adu, &adu_len, tag);
   bw_gaps_header_encode(p, &packet_len, adu, &adu_len, tag);  /* Put packet into channel buffer */
   log_debug("len: a=%d p=%d p2=%d", adu_len, packet_len, ntohs(p->data_len));
@@ -301,7 +304,9 @@ void shm_send(vchan *cp, void *adu, gaps_tag *tag) {
 //  time_trace("XDC_Tx1 ready to encode for ctag=%08x (next = %d last = %d)", ntohl(cp->ctag), write_index, *last_ptr);
   
   // B) Encode Data into SHM
+#ifdef PRINT_US_TRACE
   time_trace("TX1 %08x (index=%d)", ntohl(cp->ctag), write_index);
+#endif
   cmap_encode(cp->shm_addr->pdata[write_index].data, adu, &adu_len, tag);
 //  XXX TODO: incoprate naive_memcpy into cmap_encode/decode
 //  naive_memcpy(cp->shm_addr->pdata[pkt_index_nxt].data, adu, adu_len);  // TX adds new data
@@ -312,7 +317,9 @@ void shm_send(vchan *cp, void *adu, gaps_tag *tag) {
 #if 1 >= PRINT_STATE_LEVEL
   shm_info_print(cp->shm_addr);
 #endif  // PRINT_STATE
+#ifdef PRINT_US_TRACE
   time_trace("TX2 %08x (len=%d)", ntohl(cp->ctag), adu_len);
+#endif
 }
 
 // Check that SHM TX has matches RX tag and crc. Also, (optionally) has newer timestamp
@@ -687,7 +694,9 @@ void *rcvr_thread_function(thread_args *vargs) {
     }
     buffer_id = (buffer_id + 1) % (cp->pkt_buf_count);
     log_trace("THREAD-4 index=%d", buffer_id);
+#ifdef PRINT_US_TRACE
     time_trace("RX1 %08x (index=%d)", ntohl(cp->ctag), buffer_id);
+#endif
   }
 }
 
@@ -711,8 +720,9 @@ int nonblock_recv(void *adu, gaps_tag *tag, vchan *cp) {
     fprintf(stderr, "%s on buff index=%d", __func__, index_buf);
     vchan_print(cp, enclave_name);
 #endif
+#ifdef PRINT_US_TRACE
     time_trace("RX2 %08x (index=%d)", ntohl(cp->ctag), cp->pkt_buf_index);
-
+#endif
     cmap_decode(cp->rx[index_buf].data, cp->rx[index_buf].data_len, adu, tag);   /* Put packet into ADU */
 //    log_trace("XDCOMMS reads from buff=%p (index=%d): len=%d", cp->rx[index_buf].data, index_buf, cp->rx[index_buf].data_len);
     cp->rx[index_buf].newd = 0;                      // unmark newdata
@@ -861,7 +871,9 @@ int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   while ((ntries--) > 0)  {
 //    if (nonblock_recv(adu, tag, cp) > 0)  return 0;
     if ((x=nonblock_recv(adu, tag, cp)) > 0) {
+#ifdef PRINT_US_TRACE
       time_trace("RX3 %08x (len=%d)", ntohl(cp->ctag), x);
+#endif
       return x;
     }
 //    log_trace("LOOP timeout %s: tag=<%d,%d,%d>: remaining tries = %d ", __func__, tag->mux, tag->sec, tag->typ, ntries);
