@@ -194,7 +194,7 @@ void dma_rcvr(vchan *cp, int index_buf) {
 
 //  log_trace("%s ctag=%x %s cp=%p va=%p dma=%p ID=%d len=%ld", __func__, ntohl(cp->ctag), cp->dev_name, cp, cp->mm.virt_addr, dma_cb_ptr, index_buf, sizeof(bw));
   dma_cb_ptr[dma_cb_index].length = sizeof(bw);      /* Receive up to make length Max size */
-  log_debug("THREAD-2 waiting for %s tag=0x%08x on dev=%s with cb_index=%d, max_len=%d)", cp->dev_type, ntohl(cp->ctag), cp->dev_name, dma_cb_index, dma_cb_ptr[dma_cb_index].length);
+  log_debug("THREAD-2 waiting for %s with any tag on dev=%s with cb_index=%d, max_len=%d)", cp->dev_type, cp->dev_name, dma_cb_index, dma_cb_ptr[dma_cb_index].length);
   while (dma_start_to_finish(cp->fd, &dma_cb_index, &(dma_cb_ptr[dma_cb_index])) != 0) { ; }
   p = (bw *) &(dma_cb_ptr[dma_cb_index].buffer);    /* XXX: DMA buffer must be larger than size of BW */
   
@@ -202,7 +202,7 @@ void dma_rcvr(vchan *cp, int index_buf) {
   log_trace("%s len=%d data[0] = %p 0x%08x 0x%08x", __func__, ntohs(p->data_len), data_ptr, ntohl(data_ptr[0]), ntohl(data_ptr[1]));
   pthread_mutex_lock(&(cp->lock));
   bw_len_decode(&(cp->rx[index_buf].data_len), p->data_len);
-  log_trace("THREAD-3 rx packet cb_index=%d status=%d len=%d", dma_cb_index, dma_cb_ptr[dma_cb_index].status, cp->rx[index_buf].data_len);
+  log_trace("THREAD-3 rx packet cb_index=%d status=%d len=%d tag=0x%08x", dma_cb_index, dma_cb_ptr[dma_cb_index].status, cp->rx[index_buf].data_len, p->message_tag_ID);
   cp->rx[index_buf].data = (uint8_t *) p->data;
   cp->rx[index_buf].newd = 1;
   pthread_mutex_unlock(&(cp->lock));
@@ -681,7 +681,7 @@ void *rcvr_thread_function(thread_args *vargs) {
   int    buffer_id = 0;
 
   while (1) {
-    log_trace("THREAD-1 %s: tag=0x%08x fd=%d index=%d (base_id=%d)", __func__, ntohl(cp->ctag), cp->fd, buffer_id, vargs->buffer_id_start);
+    log_trace("THREAD-1 %s: tag=0x%08x fd=%d index = %d of %d (base_id=%d)", __func__, ntohl(cp->ctag), cp->fd, buffer_id, cp->pkt_buf_count, vargs->buffer_id_start);
 #if 0 >= PRINT_STATE_LEVEL
     vchan_print(cp, enclave_name);
 #endif  // PRINT_STATE_LEVEL
