@@ -31,7 +31,7 @@ typedef struct _memmap {
 // Dynamic (per packet) Received Packet information
 typedef struct _pkt_info {
   char             newd;      // RX thread sets on new packet, xdcomms resets after reading
-//  gaps_tag  tag;       // Received tag
+  uint32_t         ctag;      // Received tag used for DMA (1 RX thread) not for SHM (1 RX thread/tag)
   size_t           data_len;  // length of data
   uint8_t         *data;      // data buffer
   int              tid;       // transaction ID
