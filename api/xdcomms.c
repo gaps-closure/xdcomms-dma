@@ -202,7 +202,7 @@ void dma_rcvr(vchan *cp, int index_buf) {
   log_trace("%s len=%d data[0] = %p 0x%08x 0x%08x", __func__, ntohs(p->data_len), data_ptr, ntohl(data_ptr[0]), ntohl(data_ptr[1]));
   pthread_mutex_lock(&(cp->lock));
   bw_len_decode(&(cp->rx[index_buf].data_len), p->data_len);
-  log_trace("THREAD-3 rx packet cb_index=%d status=%d len=%d tag=0x%08x", dma_cb_index, dma_cb_ptr[dma_cb_index].status, cp->rx[index_buf].data_len, p->message_tag_ID);
+  log_trace("THREAD-3 rx packet cb_index=%d status=%d len=%d tag=0x%08x", dma_cb_index, dma_cb_ptr[dma_cb_index].status, cp->rx[index_buf].data_len, ntohl(p->message_tag_ID));
   cp->rx[index_buf].data = (uint8_t *) p->data;
   cp->rx[index_buf].newd = 1;
   pthread_mutex_unlock(&(cp->lock));
