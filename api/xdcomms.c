@@ -174,13 +174,14 @@ void dma_send(vchan *cp, void *adu, gaps_tag *tag) {
   size_t    adu_len;    // encoder calculates length */
   size_t    packet_len;
   
-  p = (bw *) &(dma_tx_chan->buffer);      // point to a DMA packet buffer */
+  p = (bw *) &(dma_tx_chan->buffer);      // DMA packet buffer pointer, where we put the packet */
 #ifdef PRINT_US_TRACE
   time_trace("XDC_Tx1 ready to encode for ctag=%08x into %p", ntohl(cp->ctag), p);
 #endif
-  cmap_encode(p->data, adu, &adu_len, tag);
-  bw_gaps_header_encode(p, &packet_len, adu, &adu_len, tag);  /* Put packet into channel buffer */
-  log_debug("len: a=%d p=%d p2=%d", adu_len, packet_len, ntohs(p->data_len));
+  cmap_encode(p->data, adu, &adu_len, tag);                   // Put packet data into DMA buffer
+  bw_gaps_header_encode(p, &packet_len, adu, &adu_len, tag);  // Put packet header into DMA buffer
+  dma_tx_chan->length = packet_len;                           // Tell DMA buffer packet length (data + header)
+  log_debug("Send packet on ctag=%08x fd=%d buf_id=%d of len: a=%d p=%d p2=%d", ntohl(cp->ctag), cp->fd, buffer_id, adu_len, packet_len, ntohs(p->data_len));
   if (packet_len <= sizeof(bw)) log_buf_trace("TX_PKT", (uint8_t *) &(dma_tx_chan->buffer), packet_len);
   dma_start_to_finish(cp->fd, &buffer_id, dma_tx_chan);
   log_debug("XDCOMMS tx packet tag=<%d,%d,%d> len=%ld", tag->mux, tag->sec, tag->typ, packet_len);
