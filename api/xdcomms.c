@@ -181,11 +181,10 @@ void dma_send(vchan *cp, void *adu, gaps_tag *tag) {
   cmap_encode(p->data, adu, &adu_len, tag);                   // Put packet data into DMA buffer
   bw_gaps_header_encode(p, &packet_len, adu, &adu_len, tag);  // Put packet header into DMA buffer
   dma_tx_chan->length = packet_len;                           // Tell DMA buffer packet length (data + header)
-  log_debug("Send packet on ctag=%08x fd=%d buf_id=%d of len: a=%d p=%d p2=%d", ntohl(cp->ctag), cp->fd, buffer_id, adu_len, packet_len, ntohs(p->data_len));
+  log_trace("Send packet on ctag=%08x fd=%d buf_id=%d of len: adu=%d packet=%d Bytes", ntohl(cp->ctag), cp->fd, buffer_id, ntohs(p->data_len), packet_len);
   if (packet_len <= sizeof(bw)) log_buf_trace("TX_PKT", (uint8_t *) &(dma_tx_chan->buffer), packet_len);
   dma_start_to_finish(cp->fd, &buffer_id, dma_tx_chan);
   log_debug("XDCOMMS tx packet tag=<%d,%d,%d> len=%ld", tag->mux, tag->sec, tag->typ, packet_len);
-//  log_trace("%s: Buffer id = %d packet pointer=%p", buffer_id, p);
 }
 
 void dma_rcvr(vchan *cp, int index_buf) {
