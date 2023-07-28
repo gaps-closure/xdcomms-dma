@@ -161,7 +161,7 @@ int dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *cbuf_
   ioctl(fd, START_XFER,  buffer_id_ptr);
 //  time_trace("DMA Proxy transfer 2 (fd=%d, id=%d)", fd, *buffer_id_ptr);
   ioctl(fd, FINISH_XFER, buffer_id_ptr);
-  time_trace("DMA Proxy transfer 3 (fd=%d, id=%d): status=%d", fd, *buffer_id_ptr, cbuf_ptr->status);
+//  time_trace("DMA Proxy transfer 3 (fd=%d, id=%d): status=%d", fd, *buffer_id_ptr, cbuf_ptr->status);
   if (cbuf_ptr->status != PROXY_NO_ERROR) {
 //    log_trace("DMA Proxy transfer error (fd=%d, id=%d): st=%d (BUSY=1, TIMEOUT=2, ERROR=3)", fd, *buffer_id_ptr, cbuf_ptr->status);
     return -1;
