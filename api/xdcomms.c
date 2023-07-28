@@ -187,25 +187,34 @@ void dma_send(vchan *cp, void *adu, gaps_tag *tag) {
   log_debug("XDCOMMS tx packet tag=<%d,%d,%d> len=%ld", tag->mux, tag->sec, tag->typ, packet_len);
 }
 
-void dma_rcvr(vchan *cp, int index_buf) {
+// Copy from DMA channel buffer (index = dma_cb_index) to virtual channel buffer (index = vb_index)
+void dma_rcvr(vchan *cp, int vb_index) {
   bw                    *p;
   struct channel_buffer *dma_cb_ptr = (struct channel_buffer *) cp->mm.virt_addr;  /* start of channel buffer */
-  static int             dma_cb_index=0;
+  static int             dma_cb_index=0;      // DMA channel buffer index
 
-//  log_trace("%s ctag=%x %s cp=%p va=%p dma=%p ID=%d len=%ld", __func__, ntohl(cp->ctag), cp->dev_name, cp, cp->mm.virt_addr, dma_cb_ptr, index_buf, sizeof(bw));
   dma_cb_ptr[dma_cb_index].length = sizeof(bw);      /* Receive up to make length Max size */
-  log_debug("THREAD-2 waiting for %s with any tag on dev=%s with cb_index=%d, max_len=%d)", cp->dev_type, cp->dev_name, dma_cb_index, dma_cb_ptr[dma_cb_index].length);
+  log_debug("THREAD-2 waiting for %s with any tag on dev=%s fd=%d max_len=%d cb_index=%d)", cp->dev_type, cp->dev_name, cp->fd, dma_cb_ptr[dma_cb_index].length, dma_cb_index);
   while (dma_start_to_finish(cp->fd, &dma_cb_index, &(dma_cb_ptr[dma_cb_index])) != 0) { ; }
   p = (bw *) &(dma_cb_ptr[dma_cb_index].buffer);    /* XXX: DMA buffer must be larger than size of BW */
   
-  unsigned long *data_ptr = (unsigned long *) &(dma_cb_ptr[dma_cb_index].buffer);
+  // Delete this trace - temporary check
+  unsigned long *data_ptr = (unsigned long *) p;
   log_trace("%s len=%d data[0] = %p 0x%08x 0x%08x", __func__, ntohs(p->data_len), data_ptr, ntohl(data_ptr[0]), ntohl(data_ptr[1]));
+  // Delete this trace
+  
   pthread_mutex_lock(&(cp->lock));
-  bw_len_decode(&(cp->rx[index_buf].data_len), p->data_len);
-  log_trace("THREAD-3 rx packet cb_index=%d status=%d len=%d tag=0x%08x", dma_cb_index, dma_cb_ptr[dma_cb_index].status, cp->rx[index_buf].data_len, ntohl(p->message_tag_ID));
-  cp->rx[index_buf].data = (uint8_t *) p->data;
-  cp->rx[index_buf].ctag = ntohl(p->message_tag_ID);
-  cp->rx[index_buf].newd = 1;
+  bw_len_decode(&(cp->rx[vb_index].data_len), p->data_len);
+  log_trace("THREAD-3 rx packet cb_index=%d status=%d len=%d tag=0x%08x", dma_cb_index, dma_cb_ptr[dma_cb_index].status, cp->rx[vb_index].data_len, ntohl(p->message_tag_ID));
+  
+// vb_index increments by 1 each time
+// Need cp to get correct  cp->rx receive buffer
+// ctag_decode(gaps_tag *tag, uint32_t *ctag)
+// get_chan_info(&tag, 'r', 0);
+  
+  cp->rx[vb_index].data = (uint8_t *) p->data;
+  cp->rx[vb_index].ctag = ntohl(p->message_tag_ID);
+  cp->rx[vb_index].newd = 1;
   pthread_mutex_unlock(&(cp->lock));
   dma_cb_index++;
 }
@@ -344,24 +353,25 @@ int wait_if_old(vchan *cp) {
   return(0);
 }
 
-void shm_rcvr(vchan *cp, int index_buf) {
+// Copy from SHM  buffer (index = vb_index) to virtual channel buffer (index = vb_index)
+void shm_rcvr(vchan *cp, int vb_index) {
   static int once = 1;
   if (once == 1) {
     while (wait_if_old(cp)) { ; }
     once = 0;
   }
-  log_trace("THREAD-2 waiting for %s tag=0x%08x on dev=%s with index=%d (last=%d)", cp->dev_type, ntohl(cp->ctag), cp->dev_name, index_buf, cp->shm_addr->pkt_index_next);
-  while (index_buf == (cp->shm_addr->pkt_index_next)) { ; }
-//  log_trace("THREAD-3a got packet index=%d (next=%d last=%d) len=%d [tr=0x%lx - tt=0x%lx = 0x%lx]", index_buf, cp->shm_addr->pkt_index_next, cp->shm_addr->pkt_index_last, cp->shm_addr->pinfo[index_buf].data_length, cp->unix_seconds, (cp->unix_seconds) - (cp->shm_addr->cinfo.unix_seconds), cp->shm_addr->cinfo.unix_seconds);
+  log_trace("THREAD-2 waiting for %s tag=0x%08x on dev=%s with index=%d (last=%d)", cp->dev_type, ntohl(cp->ctag), cp->dev_name, vb_index, cp->shm_addr->pkt_index_next);
+  while (vb_index == (cp->shm_addr->pkt_index_next)) { ; }
+//  log_trace("THREAD-3a got packet index=%d (next=%d last=%d) len=%d [tr=0x%lx - tt=0x%lx = 0x%lx]", vb_index, cp->shm_addr->pkt_index_next, cp->shm_addr->pkt_index_last, cp->shm_addr->pinfo[vb_index].data_length, cp->unix_seconds, (cp->unix_seconds) - (cp->shm_addr->cinfo.unix_seconds), cp->shm_addr->cinfo.unix_seconds);
   pthread_mutex_lock(&(cp->lock));
-  log_trace("THREAD-3 rx packet ctag=0x%08x len=%d id=%d", ntohl(cp->ctag), cp->shm_addr->pinfo[index_buf].data_length, index_buf);
+  log_trace("THREAD-3 rx packet ctag=0x%08x len=%d id=%d", ntohl(cp->ctag), cp->shm_addr->pinfo[vb_index].data_length, vb_index);
 #if 1 >= PRINT_STATE_LEVEL
   shm_info_print(cp->shm_addr);
 #endif  // PRINT_STATE
-  cp->rx[index_buf].data_len = cp->shm_addr->pinfo[index_buf].data_length;
-  cp->rx[index_buf].data     = (uint8_t *) (cp->shm_addr->pdata[index_buf].data);
-  cp->rx[index_buf].newd     = 1;
-//  fprintf(stderr, "PPP %p = %08x ", cp->shm_addr->pdata[index_buf].data, ntohl(cp->shm_addr->pdata[index_buf].data[4]));
+  cp->rx[vb_index].data_len = cp->shm_addr->pinfo[vb_index].data_length;
+  cp->rx[vb_index].data     = (uint8_t *) (cp->shm_addr->pdata[vb_index].data);
+  cp->rx[vb_index].newd     = 1;
+//  fprintf(stderr, "PPP %p = %08x ", cp->shm_addr->pdata[vb_index].data, ntohl(cp->shm_addr->pdata[vb_index].data[4]));
   pthread_mutex_unlock(&(cp->lock));
 }
 
@@ -502,7 +512,7 @@ void init_new_chan_from_envi(vchan *cp, uint32_t ctag, char dir) {
 //  log_trace("%s Env Vars: type=%s name=%s mlen=%s", __func__, getenv("DEV_TYPE_RX"), getenv("DEV_NAME_RX"), , getenv("DEV_MMAP_LE"));
 }
 
-// Configure new channel
+// Configure new channel, using 'index' to locate SHM block (not needed for DMA)
 void init_new_chan(vchan *cp, uint32_t ctag, char dir, int index) {
   static int once=1;
 
@@ -537,7 +547,7 @@ void init_new_chan(vchan *cp, uint32_t ctag, char dir, int index) {
 }
 
 // Return pointer to Rx packet buffer for specified tag
-//  a) If first call, then initialize all channels
+//  a) If first call, then 'index' '
 //  b) If first call for a tag: 1) config channel info, 2) open device if new, 3) start thread
 vchan *get_chan_info(gaps_tag *tag, char dir, int index) {
   uint32_t  ctag;
@@ -553,7 +563,7 @@ vchan *get_chan_info(gaps_tag *tag, char dir, int index) {
     cp = &(vchan_info[chan_index]);
     if (cp->ctag == ctag) break;             // found existing slot for tag
     if (cp->ctag == 0) {                     // found empty slot (before tag)
-      init_new_chan(cp, ctag, dir, index);
+      init_new_chan(cp, ctag, dir, index);   // config new channel info, using 'index' to locate SHM block
       break;
     }
   }
@@ -682,7 +692,7 @@ void *rcvr_thread_function(thread_args *vargs) {
   int    buffer_id = 0;
 
   while (1) {
-    log_trace("THREAD-1 %s: tag=0x%08x fd=%d index = %d of %d (base_id=%d)", __func__, ntohl(cp->ctag), cp->fd, buffer_id, cp->pkt_buf_count, vargs->buffer_id_start);
+    log_trace("THREAD-1 %s: wrong-tag=0x%08x fd=%d index = %d of %d (base_id=%d)", __func__, ntohl(cp->ctag), cp->fd, buffer_id, cp->pkt_buf_count, vargs->buffer_id_start);
 #if 0 >= PRINT_STATE_LEVEL
     vchan_print(cp, enclave_name);
 #endif  // PRINT_STATE_LEVEL
