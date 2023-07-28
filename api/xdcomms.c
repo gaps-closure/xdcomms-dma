@@ -547,7 +547,7 @@ void init_new_chan(vchan *cp, uint32_t ctag, char dir, int index) {
 
 // Search for channel with this ctag
 //   If new ctag, then initialize (based on direction and index
-vchan *get_chan_info(uint32_t ctag, char dir, int json_index) {
+vchan *get_cp_from_ctag(uint32_t ctag, char dir, int json_index) {
   int       chan_index;
   vchan    *cp;
   
