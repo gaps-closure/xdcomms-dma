@@ -75,212 +75,6 @@ pthread_mutex_t vchan_create;
 // XXX DMA and SHM functions should be put into separate functions, with
 // xdcomms including DMA + SHM, and DMA + SHM functions including Codec
 
-
-/**********************************************************************/
-/* A) Virtual Device open                                               */
-/**********************************************************************/
-// Open channel device (based on name and type) and return its channel structure
-void open_device(vchan *cp) {
-  log_trace("%s of type=%s name=%s", __func__, cp->dev_type, cp->dev_name);
-  if      (strcmp(cp->dev_type, "dma") == 0) dma_open_channel(cp);
-  else if (strcmp(cp->dev_type, "shm") == 0) shm_open_channel(cp);
-  else {log_warn("Unknown type=%s (name=%s)", cp->dev_type, cp->dev_name); FATAL;}
-}
-
-// If new device, then open it (and remember it in local list)
-//   Assumes new tag
-void dev_open_if_new(vchan *cp) {
-  static vchan_list  clist[MAX_DEV_COUNT];
-  static int        once=1;
-  int               i;
-  
-  if (once==1) {
-    // a) initialize list
-    for (i=0; i<MAX_DEV_COUNT; i++) {
-      clist[i].cp = NULL;
-      strcpy(clist[i].dev_name, "");
-      clist[i].count = 0;
-    }
-    once = 0;
-  }
-  
-  for(i=0; i<MAX_DEV_COUNT; i++) {
-    // b) See if device is not open
-    if (clist[i].count == 0) {   // Not set, so put new device name into list
-      strcpy(clist[i].dev_name, cp->dev_name);
-      clist[i].cp = cp;
-      (clist[i].count)++;
-      open_device(cp);           // Open new device
-      log_trace("%s: Opened new device %s dir=%c ctag=0x%08x i=%d", __func__, cp->dev_name, cp->dir, ntohl(cp->ctag), i);
-      return;  // new device
-    }
-    // b2) See if device is already open
-    if (strcmp(cp->dev_name, clist[i].cp->dev_name) == 0) {    // Already set, so open info
-      cp->fd = clist[i].cp->fd;
-      cp->mm.virt_addr = clist[i].cp->mm.virt_addr;
-      (clist[i].count)++;
-      log_trace("%s: %s device shared %d times for i=%d", __func__, cp->dev_name, clist[i].count, i);
-      return;
-    }
-  }
-  FATAL;    // Only here if list cannot store all devices (> MAX_DEV_COUNT)
-}
-
-
-/**********************************************************************/
-/* B) Virtual Channel Configuration  (for all devices and TX/RX)      */
-/**********************************************************************/
-// Initialize channel information for all (GAPS_TAG_MAX) possible tags
-//   Set retries from one of three possible timeout values (in msecs).
-//   In order of precedence (highest first) they are the:
-//    a) Input parameter specified in a xdc_sub_socket_non_blocking() call
-//       (this is the only way to specify a different value for each flow).
-//    b) Environment variable (TIMEOUT_MS) speciied when starting app
-//    c) Default (RX_POLL_TIMEOUT_MSEC_DEFAULT) from xdcomms.h
-void vchan_init_all_once(void) {
-  static int once=1;
-  int        i, index_buf, t_in_ms;
-  char      *t_env = getenv("TIMEOUT_MS");
-
-  if (once==1) {
-    t_in_ms = (t_env == NULL) ? RX_POLL_TIMEOUT_MSEC_DEFAULT : atoi(t_env);
-    if (pthread_mutex_init(&vchan_create, NULL) != 0)   FATAL;
-    for(i=0; i < GAPS_TAG_MAX; i++) {
-      vchan_info[i].ctag            = 0;
-      vchan_info[i].mm.prot         = PROT_READ | PROT_WRITE;
-      vchan_info[i].mm.flags        = MAP_SHARED;
-      vchan_info[i].retries         = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;
-      vchan_info[i].unix_seconds    = time(NULL);
-      vchan_info[i].wait4new_client = 0;    // Do not check time transmitter started
-      for (index_buf=0; index_buf<MAX_PKTS_PER_CHAN; index_buf++) {
-        vchan_info[i].rx[index_buf].newd = 0;
-        vchan_info[i].rx[index_buf].data_len = 0;
-        vchan_info[i].rx[index_buf].data = NULL;
-      }
-      if (pthread_mutex_init(&(vchan_info[i].lock), NULL) != 0)   FATAL;
-    }
-    once=0;
-  }
-}
-
-// Get channel device type
-void get_dev_type(char *dev_type, char *env_type, char *def_type) {
-  (env_type == NULL) ? strcat(dev_type, def_type) : strcat(dev_type, env_type);
-}
-
-// Get channel device name (*dev_name) from enivronment or default (for that type)
-void get_dev_name(char *dev_name, char *env_name, char *def_name_dma, char *def_name_shm, char *dev_type) {
-  strcpy(dev_name, "/dev/");        // prefix device name
-  if      ((strcmp(dev_type, "dma")) == 0) {
-    (env_name == NULL) ? strcat(dev_name, def_name_dma) : strcat(dev_name, env_name);
-  }
-  else if ((strcmp(dev_type, "shm")) == 0) {
-    (env_name == NULL) ? strcat(dev_name, def_name_shm) : strcat(dev_name, env_name);
-  }
-  else FATAL;
-}
-
-// Get channel device number (*val) from enivronment or default (for that type)
-void get_dev_val(unsigned long *val, char *env_val, unsigned long def_val_dma, unsigned long def_val_shm, char *dev_type) {
-  if (env_val == NULL) {
-    if       (strcmp(dev_type, "dma") == 0) *val = def_val_dma;
-    else if  (strcmp(dev_type, "shm") == 0) *val = def_val_shm;
-    else     FATAL;
-  }
-  else       *val = strtol(env_val, NULL, 16);
-}
-
-// Initialize configuration for a new tag based on environment variables
-void init_new_chan_from_envi(vchan *cp, uint32_t ctag, char dir) {
-  cp->ctag = ctag;
-  cp->dir  = dir;
-
-  log_trace("%s: ctag=0x%08x dir=%c TX=%s RX=%s", __func__, ntohl(ctag), dir, getenv("DEV_NAME_TX"), getenv("DEV_NAME_RX"));
-  if (dir == 't') { // TX
-    get_dev_type(cp->dev_type,     getenv("DEV_TYPE_TX"), "dma");
-    get_dev_name(cp->dev_name,     getenv("DEV_NAME_TX"), "dma_proxy_tx", "mem", cp->dev_type);
-    get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * DMA_PKT_COUNT_TX), SHM_MMAP_LEN, cp->dev_type);
-  }
-  else {            // RX
-    get_dev_type(cp->dev_type,     getenv("DEV_TYPE_RX"), "dma");
-    get_dev_name(cp->dev_name,     getenv("DEV_NAME_RX"), "dma_proxy_rx", "mem", cp->dev_type);
-    get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * DMA_PKT_COUNT_RX), SHM_MMAP_LEN, cp->dev_type);   // XXX dma default is an over estimate
-    get_dev_val (&(cp->wait4new_client), getenv("DEV_WAIT_NE"), 0x0, 0x0, cp->dev_type);
-  }
-  get_dev_val(&(cp->mm.phys_addr), getenv("DEV_MMAP_AD"), DMA_ADDR_HOST, SHM_MMAP_ADDR, cp->dev_type);
-//  log_trace("%s Env Vars: type=%s name=%s mlen=%s (%", __func__, getenv("DEV_TYPE_TX"), getenv("DEV_NAME_TX"), getenv("DEV_MMAP_LE"));
-//  log_trace("%s Env Vars: type=%s name=%s mlen=%s", __func__, getenv("DEV_TYPE_RX"), getenv("DEV_NAME_RX"), , getenv("DEV_MMAP_LE"));
-}
-
-// Configure new channel, using 'index' to locate SHM block (not needed for DMA)
-void init_new_chan(vchan *cp, uint32_t ctag, char dir, int index) {
-  static int once=1;
-
-  init_new_chan_from_envi(cp, ctag, dir);   // 1) Configure new tag
-  dev_open_if_new(cp);                   // 2) Open device (if not already open)
-//      log_trace("%s: Using %s device %s for ctag=0x%08x dir=%c", __func__, cp->dev_type, cp->dev_name, ntohl(cp->ctag), cp->dir);
-  cp->pkt_buf_index = 0;
-  if ((strcmp(cp->dev_type, "shm")) == 0) {
-    cp->shm_addr      = cp->mm.virt_addr + (index * sizeof(shm_channel));
-    cp->pkt_buf_count = SHM_PKT_COUNT;
-    if ((cp->dir) == 't') shm_init_config_one(cp);  // 3) Configure SHM structure for new channel
-    if ((cp->dir) == 'r') {
-      rcvr_thread_start(cp);      // 4) Start rx thread for new receive tag
-    }
-  }
-  else if ((strcmp(cp->dev_type, "dma")) == 0) {
-    if ((cp->dir) == 'r') {
-      cp->pkt_buf_count = DMA_PKT_COUNT_RX;
-      if (once==1) {
-        rcvr_thread_start(cp);      // 4) Start rx thread only once
-        once = 0;
-      }
-    }
-    else {
-      cp->pkt_buf_count = DMA_PKT_COUNT_TX;
-    }
-  }
-  else {log_warn("Unknown type=%s (name=%s)", cp->dev_type, cp->dev_name); FATAL;}
-#if 1 >= PRINT_STATE_LEVEL
-  vchan_print(cp, enclave_name);
-#endif  // LOG_LEVEL_MIN
-}
-
-// Search for channel with this ctag
-//   If new ctag, then initialize (based on direction and index
-vchan *get_chan_info(uint32_t ctag, char dir, int json_index) {
-  int       chan_index;
-  vchan    *cp;
-  
-  /* a) Initilize all channels (after locking from other application threads) */
-  pthread_mutex_lock(&vchan_create);
-  vchan_init_all_once();
-  /* b) Find info for this tag (and possibly initialize*/
-  for(chan_index=0; chan_index < GAPS_TAG_MAX; chan_index++) {  // Break on finding tag or empty
-    cp = &(vchan_info[chan_index]);
-    if (cp->ctag == ctag) break;             // found existing slot for tag
-    if (cp->ctag == 0) {                     // found empty slot (before tag)
-      init_new_chan(cp, ctag, dir, json_index);   // config new channel info, using 'index' to locate SHM block
-      break;
-    }
-  }
-  /* c) Unlock and return chan_info pointer */
-  if (chan_index >= GAPS_TAG_MAX) FATAL;
-//  log_trace("%s chan_index=%d: ctag=0x%08x", __func__, chan_index, ctag);
-  pthread_mutex_unlock(&vchan_create);
-  return (cp);
-}
-  
-// Return pointer to Rx packet buffer for specified tag
-vchan *get_chan_info(gaps_tag *tag, char dir, int index) {
-  uint32_t  ctag;
-  
-  ctag_encode(&ctag, tag);                   // Encoded ctag
-  return (get_cp_from_ctag(ctag, dir, index));
-}
-
-
-
 /**********************************************************************/
 /* D1) Open/Configure DMA device                                      */
 /**********************************************************************/
@@ -579,6 +373,211 @@ void shm_rcvr(vchan *cp, int vb_index) {
 //  fprintf(stderr, "PPP %p = %08x ", cp->shm_addr->pdata[vb_index].data, ntohl(cp->shm_addr->pdata[vb_index].data[4]));
   pthread_mutex_unlock(&(cp->lock));
 }
+
+
+/**********************************************************************/
+/* A) Virtual Device open                                               */
+/**********************************************************************/
+// Open channel device (based on name and type) and return its channel structure
+void open_device(vchan *cp) {
+  log_trace("%s of type=%s name=%s", __func__, cp->dev_type, cp->dev_name);
+  if      (strcmp(cp->dev_type, "dma") == 0) dma_open_channel(cp);
+  else if (strcmp(cp->dev_type, "shm") == 0) shm_open_channel(cp);
+  else {log_warn("Unknown type=%s (name=%s)", cp->dev_type, cp->dev_name); FATAL;}
+}
+
+// If new device, then open it (and remember it in local list)
+//   Assumes new tag
+void dev_open_if_new(vchan *cp) {
+  static vchan_list  clist[MAX_DEV_COUNT];
+  static int        once=1;
+  int               i;
+  
+  if (once==1) {
+    // a) initialize list
+    for (i=0; i<MAX_DEV_COUNT; i++) {
+      clist[i].cp = NULL;
+      strcpy(clist[i].dev_name, "");
+      clist[i].count = 0;
+    }
+    once = 0;
+  }
+  
+  for(i=0; i<MAX_DEV_COUNT; i++) {
+    // b) See if device is not open
+    if (clist[i].count == 0) {   // Not set, so put new device name into list
+      strcpy(clist[i].dev_name, cp->dev_name);
+      clist[i].cp = cp;
+      (clist[i].count)++;
+      open_device(cp);           // Open new device
+      log_trace("%s: Opened new device %s dir=%c ctag=0x%08x i=%d", __func__, cp->dev_name, cp->dir, ntohl(cp->ctag), i);
+      return;  // new device
+    }
+    // b2) See if device is already open
+    if (strcmp(cp->dev_name, clist[i].cp->dev_name) == 0) {    // Already set, so open info
+      cp->fd = clist[i].cp->fd;
+      cp->mm.virt_addr = clist[i].cp->mm.virt_addr;
+      (clist[i].count)++;
+      log_trace("%s: %s device shared %d times for i=%d", __func__, cp->dev_name, clist[i].count, i);
+      return;
+    }
+  }
+  FATAL;    // Only here if list cannot store all devices (> MAX_DEV_COUNT)
+}
+
+
+/**********************************************************************/
+/* B) Virtual Channel Configuration  (for all devices and TX/RX)      */
+/**********************************************************************/
+// Initialize channel information for all (GAPS_TAG_MAX) possible tags
+//   Set retries from one of three possible timeout values (in msecs).
+//   In order of precedence (highest first) they are the:
+//    a) Input parameter specified in a xdc_sub_socket_non_blocking() call
+//       (this is the only way to specify a different value for each flow).
+//    b) Environment variable (TIMEOUT_MS) speciied when starting app
+//    c) Default (RX_POLL_TIMEOUT_MSEC_DEFAULT) from xdcomms.h
+void vchan_init_all_once(void) {
+  static int once=1;
+  int        i, index_buf, t_in_ms;
+  char      *t_env = getenv("TIMEOUT_MS");
+
+  if (once==1) {
+    t_in_ms = (t_env == NULL) ? RX_POLL_TIMEOUT_MSEC_DEFAULT : atoi(t_env);
+    if (pthread_mutex_init(&vchan_create, NULL) != 0)   FATAL;
+    for(i=0; i < GAPS_TAG_MAX; i++) {
+      vchan_info[i].ctag            = 0;
+      vchan_info[i].mm.prot         = PROT_READ | PROT_WRITE;
+      vchan_info[i].mm.flags        = MAP_SHARED;
+      vchan_info[i].retries         = (t_in_ms * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;
+      vchan_info[i].unix_seconds    = time(NULL);
+      vchan_info[i].wait4new_client = 0;    // Do not check time transmitter started
+      for (index_buf=0; index_buf<MAX_PKTS_PER_CHAN; index_buf++) {
+        vchan_info[i].rx[index_buf].newd = 0;
+        vchan_info[i].rx[index_buf].data_len = 0;
+        vchan_info[i].rx[index_buf].data = NULL;
+      }
+      if (pthread_mutex_init(&(vchan_info[i].lock), NULL) != 0)   FATAL;
+    }
+    once=0;
+  }
+}
+
+// Get channel device type
+void get_dev_type(char *dev_type, char *env_type, char *def_type) {
+  (env_type == NULL) ? strcat(dev_type, def_type) : strcat(dev_type, env_type);
+}
+
+// Get channel device name (*dev_name) from enivronment or default (for that type)
+void get_dev_name(char *dev_name, char *env_name, char *def_name_dma, char *def_name_shm, char *dev_type) {
+  strcpy(dev_name, "/dev/");        // prefix device name
+  if      ((strcmp(dev_type, "dma")) == 0) {
+    (env_name == NULL) ? strcat(dev_name, def_name_dma) : strcat(dev_name, env_name);
+  }
+  else if ((strcmp(dev_type, "shm")) == 0) {
+    (env_name == NULL) ? strcat(dev_name, def_name_shm) : strcat(dev_name, env_name);
+  }
+  else FATAL;
+}
+
+// Get channel device number (*val) from enivronment or default (for that type)
+void get_dev_val(unsigned long *val, char *env_val, unsigned long def_val_dma, unsigned long def_val_shm, char *dev_type) {
+  if (env_val == NULL) {
+    if       (strcmp(dev_type, "dma") == 0) *val = def_val_dma;
+    else if  (strcmp(dev_type, "shm") == 0) *val = def_val_shm;
+    else     FATAL;
+  }
+  else       *val = strtol(env_val, NULL, 16);
+}
+
+// Initialize configuration for a new tag based on environment variables
+void init_new_chan_from_envi(vchan *cp, uint32_t ctag, char dir) {
+  cp->ctag = ctag;
+  cp->dir  = dir;
+
+  log_trace("%s: ctag=0x%08x dir=%c TX=%s RX=%s", __func__, ntohl(ctag), dir, getenv("DEV_NAME_TX"), getenv("DEV_NAME_RX"));
+  if (dir == 't') { // TX
+    get_dev_type(cp->dev_type,     getenv("DEV_TYPE_TX"), "dma");
+    get_dev_name(cp->dev_name,     getenv("DEV_NAME_TX"), "dma_proxy_tx", "mem", cp->dev_type);
+    get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * DMA_PKT_COUNT_TX), SHM_MMAP_LEN, cp->dev_type);
+  }
+  else {            // RX
+    get_dev_type(cp->dev_type,     getenv("DEV_TYPE_RX"), "dma");
+    get_dev_name(cp->dev_name,     getenv("DEV_NAME_RX"), "dma_proxy_rx", "mem", cp->dev_type);
+    get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * DMA_PKT_COUNT_RX), SHM_MMAP_LEN, cp->dev_type);   // XXX dma default is an over estimate
+    get_dev_val (&(cp->wait4new_client), getenv("DEV_WAIT_NE"), 0x0, 0x0, cp->dev_type);
+  }
+  get_dev_val(&(cp->mm.phys_addr), getenv("DEV_MMAP_AD"), DMA_ADDR_HOST, SHM_MMAP_ADDR, cp->dev_type);
+//  log_trace("%s Env Vars: type=%s name=%s mlen=%s (%", __func__, getenv("DEV_TYPE_TX"), getenv("DEV_NAME_TX"), getenv("DEV_MMAP_LE"));
+//  log_trace("%s Env Vars: type=%s name=%s mlen=%s", __func__, getenv("DEV_TYPE_RX"), getenv("DEV_NAME_RX"), , getenv("DEV_MMAP_LE"));
+}
+
+// Configure new channel, using 'index' to locate SHM block (not needed for DMA)
+void init_new_chan(vchan *cp, uint32_t ctag, char dir, int index) {
+  static int once=1;
+
+  init_new_chan_from_envi(cp, ctag, dir);   // 1) Configure new tag
+  dev_open_if_new(cp);                   // 2) Open device (if not already open)
+//      log_trace("%s: Using %s device %s for ctag=0x%08x dir=%c", __func__, cp->dev_type, cp->dev_name, ntohl(cp->ctag), cp->dir);
+  cp->pkt_buf_index = 0;
+  if ((strcmp(cp->dev_type, "shm")) == 0) {
+    cp->shm_addr      = cp->mm.virt_addr + (index * sizeof(shm_channel));
+    cp->pkt_buf_count = SHM_PKT_COUNT;
+    if ((cp->dir) == 't') shm_init_config_one(cp);  // 3) Configure SHM structure for new channel
+    if ((cp->dir) == 'r') {
+      rcvr_thread_start(cp);      // 4) Start rx thread for new receive tag
+    }
+  }
+  else if ((strcmp(cp->dev_type, "dma")) == 0) {
+    if ((cp->dir) == 'r') {
+      cp->pkt_buf_count = DMA_PKT_COUNT_RX;
+      if (once==1) {
+        rcvr_thread_start(cp);      // 4) Start rx thread only once
+        once = 0;
+      }
+    }
+    else {
+      cp->pkt_buf_count = DMA_PKT_COUNT_TX;
+    }
+  }
+  else {log_warn("Unknown type=%s (name=%s)", cp->dev_type, cp->dev_name); FATAL;}
+#if 1 >= PRINT_STATE_LEVEL
+  vchan_print(cp, enclave_name);
+#endif  // LOG_LEVEL_MIN
+}
+
+// Search for channel with this ctag
+//   If new ctag, then initialize (based on direction and index
+vchan *get_chan_info(uint32_t ctag, char dir, int json_index) {
+  int       chan_index;
+  vchan    *cp;
+  
+  /* a) Initilize all channels (after locking from other application threads) */
+  pthread_mutex_lock(&vchan_create);
+  vchan_init_all_once();
+  /* b) Find info for this tag (and possibly initialize*/
+  for(chan_index=0; chan_index < GAPS_TAG_MAX; chan_index++) {  // Break on finding tag or empty
+    cp = &(vchan_info[chan_index]);
+    if (cp->ctag == ctag) break;             // found existing slot for tag
+    if (cp->ctag == 0) {                     // found empty slot (before tag)
+      init_new_chan(cp, ctag, dir, json_index);   // config new channel info, using 'index' to locate SHM block
+      break;
+    }
+  }
+  /* c) Unlock and return chan_info pointer */
+  if (chan_index >= GAPS_TAG_MAX) FATAL;
+//  log_trace("%s chan_index=%d: ctag=0x%08x", __func__, chan_index, ctag);
+  pthread_mutex_unlock(&vchan_create);
+  return (cp);
+}
+  
+// Return pointer to Rx packet buffer for specified tag
+vchan *get_chan_info(gaps_tag *tag, char dir, int index) {
+  uint32_t  ctag;
+  
+  ctag_encode(&ctag, tag);                   // Encoded ctag
+  return (get_cp_from_ctag(ctag, dir, index));
+}
+
 
 /**********************************************************************/
 /* C) Extract JSON Configuration Info (for all devices and TX/RX)     */
