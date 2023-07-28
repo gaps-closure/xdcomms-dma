@@ -66,6 +66,8 @@
 //#define PRINT_US_TRACE   // print Performance traces when defined
 
 void rcvr_thread_start(vchan *cp);
+vchan *get_cp_from_ctag(uint32_t ctag, char dir, int json_index);
+
 
 char            enclave_name[STR_SIZE] = "";  // enclave name (e.g., green)
 vchan           vchan_info[GAPS_TAG_MAX];      // array of buffers to store local virtual channel info per tag
@@ -210,7 +212,9 @@ void dma_rcvr(vchan *cp, int vb_index) {
 // Need cp to get correct  cp->rx receive buffer
 // ctag_decode(gaps_tag *tag, uint32_t *ctag)
 // get_chan_info(&tag, 'r', 0);
-  
+  cp = get_cp_from_ctag(ntohl(p->message_tag_ID), 'r', 0);
+  log_trace("cp=%p", cp);
+    
   cp->rx[vb_index].data = (uint8_t *) p->data;
   cp->rx[vb_index].ctag = ntohl(p->message_tag_ID);
   cp->rx[vb_index].newd = 1;
