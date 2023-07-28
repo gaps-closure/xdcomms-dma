@@ -205,16 +205,10 @@ void dma_rcvr(vchan *cp, int vb_index) {
 //  log_trace("%s len=%d data[0] = %p 0x%08x 0x%08x", __func__, ntohs(p->data_len), data_ptr, ntohl(data_ptr[0]), ntohl(data_ptr[1]));
   
   pthread_mutex_lock(&(cp->lock));
-  bw_len_decode(&(cp->rx[vb_index].data_len), p->data_len);
-  log_trace("THREAD-3 rx packet cb/vb index=%d status=%d data-len=%d tag=0x%08x", dma_cb_index, dma_cb_ptr[dma_cb_index].status, cp->rx[vb_index].data_len, ntohl(p->message_tag_ID));
-  
-// vb_index increments by 1 each time
-// Need cp to get correct  cp->rx receive buffer
-// ctag_decode(gaps_tag *tag, uint32_t *ctag)
-// get_chan_info(&tag, 'r', 0);
   cp = get_cp_from_ctag(p->message_tag_ID, 'r', 0);
-  log_trace("cp=%p tag=0x%08x", cp, ntohl(p->message_tag_ID));
-    
+  log_trace("THREAD-3 rx packet cb/vb index=%d status=%d data-len=%d tag=0x%08x cp=%p", dma_cb_index, dma_cb_ptr[dma_cb_index].status, cp->rx[vb_index].data_len, ntohl(p->message_tag_ID), cp);
+
+  bw_len_decode(&(cp->rx[vb_index].data_len), p->data_len);
   cp->rx[vb_index].data = (uint8_t *) p->data;
   cp->rx[vb_index].ctag = ntohl(p->message_tag_ID);
   cp->rx[vb_index].newd = 1;
@@ -734,7 +728,7 @@ int nonblock_recv(void *adu, gaps_tag *tag, vchan *cp) {
   int rv = -1;
   
   pthread_mutex_lock(&(cp->lock));
-  log_trace("%s: Check for received packet on tag=<%d,%d,%d> cp=%p ix=%d new%d", __func__, tag->mux, tag->sec, tag->typ, cp, cp->pkt_buf_index, cp->rx[index_buf].newd);
+//  log_trace("%s: Check for received packet on tag=<%d,%d,%d> cp=%p ix=%d new%d", __func__, tag->mux, tag->sec, tag->typ, cp, cp->pkt_buf_index, cp->rx[index_buf].newd);
   if (cp->rx[index_buf].newd == 1) {                            // get packet from buffer if available)
 #if 0 >= PRINT_STATE_LEVEL
     fprintf(stderr, "%s on buff index=%d", __func__, index_buf);
