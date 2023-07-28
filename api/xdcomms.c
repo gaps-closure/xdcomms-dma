@@ -213,7 +213,7 @@ void dma_rcvr(vchan *cp, int vb_index) {
 // ctag_decode(gaps_tag *tag, uint32_t *ctag)
 // get_chan_info(&tag, 'r', 0);
   cp = get_cp_from_ctag(p->message_tag_ID, 'r', 0);
-  log_trace("cp=%p tag=0x%08x", cp, cp->ctag);
+  log_trace("cp=%p tag=0x%08x", cp, ntohl(p->message_tag_ID));
     
   cp->rx[vb_index].data = (uint8_t *) p->data;
   cp->rx[vb_index].ctag = ntohl(p->message_tag_ID);
