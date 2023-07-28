@@ -734,7 +734,7 @@ int nonblock_recv(void *adu, gaps_tag *tag, vchan *cp) {
   int rv = -1;
   
   pthread_mutex_lock(&(cp->lock));
-//  log_trace("%s: Check for received packet on tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
+  log_trace("%s: Check for received packet on tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
   if (cp->rx[index_buf].newd == 1) {                            // get packet from buffer if available)
 #if 0 >= PRINT_STATE_LEVEL
     fprintf(stderr, "%s on buff index=%d", __func__, index_buf);
