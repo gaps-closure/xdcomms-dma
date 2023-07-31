@@ -712,9 +712,6 @@ void *rcvr_thread_function(thread_args *vargs) {
       log_fatal("Unsupported device type %s\n", cp->dev_type);
       FATAL;
     }
-#ifdef PRINT_US_TRACE
-    time_trace("RX1 %08x (index=%d)", ntohl(cp->ctag), vb_index);
-#endif
   }
 }
 
