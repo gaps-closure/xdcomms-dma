@@ -49,9 +49,12 @@ typedef struct virtual_channel {
   unsigned long    wait4new_client;        // 1 = RX server checks if client started later (0 = no check)
   pthread_mutex_t  lock;                   // Ensure RX thread does not write while xdcomms reads
   memmap           mm;                     // Mmap configuration
-  int              pkt_buf_index;          // Buf index between Rx Thread nad RX virtual channel
-  int              pkt_buf_count;          // Number of packets in a channel: e.g., SHM=2, DMAt=1, DMAr=16
-  pkt_info         rx[MAX_PKTS_PER_CHAN];  // RX packet info from RX thread (needs mutex lock)
+  // Receive Virtual Packet buffers between thread (reading from device) and nonblock_recv (sending to user)
+  pkt_info         rvpb[MAX_PKTS_PER_CHAN];  // RX packet info from RX thread (needs mutex lock)
+  int              rvpb_count;             // Number of Receive Virtual Packet buffers: e.g., SHM=2, DMAt=1, DMAr=16
+  int              rvpb_index_thrd;        // Thread's cyrrent Receive Virtual Packet buffer index
+  int              rvpb_index_recv;        // Nonblock_recv cyrrent Receive Virtual Packet buffer index
+  
   shm_channel     *shm_addr;               // Ptr to mmap'ed SHM struct: virtual addr + offset
   thread_args      thd_args;               // arguements passed rx thread for this tag
   pthread_t        thread_id;              // thread id for the rx thread
