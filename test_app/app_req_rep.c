@@ -33,7 +33,7 @@
  *      green:   ./app_req_rep
  *      oprange: ./app_req_rep -e 2 -a
  *
- *    [e] Raw Data: Green enclave-1 sends raw data <1,1,3>; Orange replies with posiiton <2,2,1>
+ *    [e] Big Unidirectional Raw Data: Green enclave-1 sends raw data <1,1,3>; Orange replies with posiiton <2,2,1>
  *        The '-g 0' option, means orange expect to receive a request with raw data (of any size)
  *      orange:  ./app_req_rep -e 2 -g 0
  *          The Green APP sends raw data <1,1,3>, sending a buffer of sequenctial numbers
@@ -56,7 +56,7 @@
  *          We can repeat the orange's command to respond to the second request:
  *      orange:  ./app_req_rep -e 2 -o 100
  *
- *    [h] Big: Green enclave sends raw data <1,1,3> of size 400 Bytes;
+ *    [h] Big Bidirectional: Green enclave sends raw data <1,1,3> of size 400 Bytes;
           Orange replies with raw data <2,2,3> of size 800 Bytes
  *        (HAL must be configured to use BE (ILIP device) Pyaload Mode in both directions)
  *      orange:  ./app_req_rep -e 2 -o 800 -g 0

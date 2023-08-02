@@ -11,7 +11,15 @@
           "mux": 1,
           "sec": 1,
           "typ": 1,
-          "name": "client_request"
+          "name": "client_request_position"
+        },
+        {
+          "from": "green",
+          "to": "orange",
+          "mux": 1,
+          "sec": 1,
+          "typ": 3,
+          "name": "client_request_raw"
         },
         {
           "from": "orange",
@@ -19,7 +27,15 @@
           "mux": 2,
           "sec": 2,
           "typ": 1,
-          "name": "server_response"
+          "name": "server_response_position"
+        },
+        {
+          "from": "orange",
+          "to": "green",
+          "mux": 2,
+          "sec": 2,
+          "typ": 3,
+          "name": "server_response_raw"
         }
       ]
     },
@@ -34,7 +50,15 @@
           "mux": 1,
           "sec": 1,
           "typ": 1,
-          "name": "client_request"
+          "name": "client_request_position"
+        },
+        {
+          "from": "green",
+          "to": "orange",
+          "mux": 1,
+          "sec": 1,
+          "typ": 3,
+          "name": "client_request_raw"
         },
         {
           "from": "orange",
@@ -42,7 +66,15 @@
           "mux": 2,
           "sec": 2,
           "typ": 1,
-          "name": "server_response"
+          "name": "server_response_position"
+        },
+        {
+          "from": "orange",
+          "to": "green",
+          "mux": 2,
+          "sec": 2,
+          "typ": 3,
+          "name": "server_response_raw"
         }
       ]
     }
