@@ -110,9 +110,9 @@ int  sub_block_timeout_ms = -1;
 int  copy_buf_size        = -1;
 int  receive_first        = 0;
 
-# define IPC_ADDR_MAX 128
+# define IPC_ADDR_MAX 400
 char log_filename[IPC_ADDR_MAX]        = "z_";
-char experimental_mode[IPC_ADDR_MAX]   = "m1";
+char experimental_mode[IPC_ADDR_MAX]   = "CLOSURE Request-Reply Performance over ESCAPE";
 char xdc_addr_sub_enc1[IPC_ADDR_MAX]   = "ipc:///tmp/halsubgreen";
 char xdc_addr_pub_enc1[IPC_ADDR_MAX]   = "ipc:///tmp/halpubgreen";
 char xdc_addr_sub_enc2[IPC_ADDR_MAX]   = "ipc:///tmp/halsuborange";
@@ -120,14 +120,14 @@ char xdc_addr_pub_enc2[IPC_ADDR_MAX]   = "ipc:///tmp/halpuborange";
 
 /* Print options */
 void opts_print(void) {
-  printf("Test program for sending requests and replies using the GAPS Hardware Abstraction Layer (HAL)\n");
+  printf("Test program to send and log requests and replies using GAPS Cross Domain Communication (XDCOMMS)\n");
   printf("Usage: ./app_req_rep [Options]\n");
   printf("[Options]:\n");
   printf(" -a : Receive from any sender\n");
   printf(" -b : Burst size: default = 1 (send and receive one message per request-response loop)\n");
   printf(" -e : Enclave index. Currently support 1 or 2: default = 1\n");
   printf(" -f : Log filename prefix: default = %s\n", log_filename);
-  printf(" -g : Raw (3) data type from enclave 1 to 2 (enclave 1 specified size (in bytes); enclave 2 size must be 0: default = position (1)\n");
+  printf(" -g : Raw (3) data type from enclave 1 to 2 (enclave 1 specified size (in bytes); enclave 2 size must be 0: default = position type (1)\n");
   printf(" -G : BIG data type (0x01234567) sent from enclave 1 to 2 (both sides must specify): default = position type (1) \n");
   printf(" -h : Print this message\n");
   printf(" -l : log level: 0=TRACE, 1=DEBUG, 2=INFO, 3=WARN, 4=ERROR, 5=FATAL (default = 2)\n");
@@ -140,7 +140,7 @@ void opts_print(void) {
   printf(" -s : Sleep (nanoseconds) before a send: default = 0 \n");
   printf(" -t : Timeout for subscriber receive (in milliseconds): default = -1 (blocking) \n");
   printf(" -u : Unidirectional mode (Enclave 1 = source, Enclave 2 = sink): default = RPC mode (Enclave 1 = client, Enclave 2 = server), \n");
-  printf(" -z : URL index for HAL API : Default = ipc:///tmp/halsubgreen, 1=ipc:///tmp/example1suborange 2=ipc:///tmp/sock_suborange 5=ipc:///tmp/halsubbegreen 6=ipc:///tmp/halsubbwgreen\n");
+  printf(" -z : URL index for HAL API (ONLY USED FOR LEGACY HAL): Default = ipc:///tmp/halsubgreen, 1=ipc:///tmp/example1suborange 2=ipc:///tmp/sock_suborange 5=ipc:///tmp/halsubbegreen 6=ipc:///tmp/halsubbwgreen\n");
   printf(" -v : Verbose mode\n");
 }
 
@@ -419,26 +419,28 @@ void send_and_recv(gaps_tag *tag_pub, gaps_tag *tag_sub, void *socket_pub, void 
 /* Conifgure API, Run experiment and collect results */
 /*********t************************************************************/
 void log_results(long elapsed_us) {
-  FILE             *fp;
-  char              header_str[IPC_ADDR_MAX], enclave_str[IPC_ADDR_MAX];
-  int               send_count, expected_count=0;
-  double            duration_seconds;
-  
+  FILE       *fp;
+  char        header_str[IPC_ADDR_MAX], str[IPC_ADDR_MAX];
+  int         send_count, expected_count=0;
+  double      duration_seconds;
+
   send_count       = loop_count * burst_size;
   duration_seconds = (double) elapsed_us/1000000;
   if ( (mode_uni == 0) || (receive_first == 1) )  expected_count = send_count;
-  fprintf(stderr, "Elapsed = %ld us, rate = %f msgs/sec (%d of %d expected)\n", elapsed_us, (double) 1000000*send_count/elapsed_us, rx_count, expected_count);
+//  fprintf(stderr, "%ld, %d, %d, %f, %d, %ld\n", elapsed_us, rx_count, expected_count, (double) 1000000 * send_count / elapsed_us, copy_buf_size, 1000000 * copy_buf_size / elapsed_us);
   
   /* Write results to log file */
-  sprintf(enclave_str, "%d", enclave);
-  strcat(log_filename, enclave_str);
+  sprintf(str, "%d", enclave);
+  strcat(log_filename, str);
   strcpy(header_str, "");
   if( access(log_filename, F_OK) != 0 ) {
-    sprintf(header_str, "%lu\nMode_%d, Tx_Count_%d, Tx_Burst_%d, Rx_Count_%d, Loss_%d %%, Sleep_%d ns, Duration_%d sec, Rate_%d msgs/sec\n", (unsigned long)time(NULL), enclave, enclave, enclave, enclave, enclave, enclave, enclave, enclave);
+    strcpy(header_str, experimental_mode);
+    sprintf(str, "\nEnclave_%d, Enclave %d Tx Count (Messages), Enclave %d Tx Burst (Messages), Enclave %d Expected Rx Count (Messages), Enclave %d Rx Count (Messages), Enclave %d Reliability (%%), Enclave %d Sleep (ns), Enclave %d Duration (seconds), Enclave %d Req-Rep Messages/sec, Enclave %d Tx Count (Bytes), Enclave %d Req-Rep MB/sec\n", enclave, enclave, enclave, enclave, enclave, enclave, enclave, enclave, enclave, enclave, enclave);    //(unsigned long)time(NULL)
+    strcat(header_str, str);
   }
   fp = fopen(log_filename, "a");
   fprintf(fp, "%s", header_str);
-  fprintf(fp, "%s, %d, %d, %d, %.3f, %d, %.3f, %.3f\n", experimental_mode, send_count, burst_size, rx_count, (double) 100*rx_count/send_count, sleep_nano, duration_seconds, (double) send_count/duration_seconds);
+  fprintf(fp, "%d, %d, %d, %d, %d, %.3f, %d, %.3f, %.3f, %d, %.03f\n", enclave, send_count, burst_size, expected_count, rx_count, (double) 100*rx_count/send_count, sleep_nano, duration_seconds, (double) send_count/duration_seconds, copy_buf_size, (double) send_count * copy_buf_size / duration_seconds / 1000000);
   fclose(fp);
 }
 
@@ -499,7 +501,7 @@ void set_tags_and_addresses(gaps_tag *tag_pub, gaps_tag *tag_sub) {
       exit(3);
     }
   if (any_rx)  tag_sub->mux = 0;  /* Receive from any tag */
-  print_tags(tag_pub, tag_sub);
+  if (verbose) print_tags(tag_pub, tag_sub);
 }
 
 /* B) Configure XDC Encoders and Decoders for all data types (same for both enclaves) */
