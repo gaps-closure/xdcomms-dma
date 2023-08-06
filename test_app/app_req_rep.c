@@ -111,12 +111,12 @@ int  copy_buf_size        = -1;
 int  receive_first        = 0;
 
 # define IPC_ADDR_MAX 400
-char log_filename[IPC_ADDR_MAX]        = "z_";
-char experimental_mode[IPC_ADDR_MAX]   = "CLOSURE Request-Reply Performance over ESCAPE";
-char xdc_addr_sub_enc1[IPC_ADDR_MAX]   = "ipc:///tmp/halsubgreen";
-char xdc_addr_pub_enc1[IPC_ADDR_MAX]   = "ipc:///tmp/halpubgreen";
-char xdc_addr_sub_enc2[IPC_ADDR_MAX]   = "ipc:///tmp/halsuborange";
-char xdc_addr_pub_enc2[IPC_ADDR_MAX]   = "ipc:///tmp/halpuborange";
+char xdc_addr_sub_enc1[IPC_ADDR_MAX] = "ipc:///tmp/halsubgreen";
+char xdc_addr_pub_enc1[IPC_ADDR_MAX] = "ipc:///tmp/halpubgreen";
+char xdc_addr_sub_enc2[IPC_ADDR_MAX] = "ipc:///tmp/halsuborange";
+char xdc_addr_pub_enc2[IPC_ADDR_MAX] = "ipc:///tmp/halpuborange";
+char log_filename[IPC_ADDR_MAX]      = "z_";
+char experiment_description[IPC_ADDR_MAX]   = "CLOSURE Request-Reply Performance over ESCAPE";
 
 /* Print options */
 void opts_print(void) {
@@ -131,7 +131,7 @@ void opts_print(void) {
   printf(" -G : BIG data type (0x01234567) sent from enclave 1 to 2 (both sides must specify): default = position type (1) \n");
   printf(" -h : Print this message\n");
   printf(" -l : log level: 0=TRACE, 1=DEBUG, 2=INFO, 3=WARN, 4=ERROR, 5=FATAL (default = 2)\n");
-  printf(" -m : Experimental Mode: default = %s\n", experimental_mode);
+  printf(" -m : Experimental Mode: default = %s\n", experiment_description);
   printf(" -n : Number of request-response loops: Default = 1\n");
   printf(" -o : Raw (3) data type from enclave 1 to 2. Both enclaves must set and enclave 1 specified size (in bytes): default = position (1)\n");
   printf(" -p : HAL Loopback test <mux,sec,typ>: Send and Receive <1,1,1>\n");
@@ -156,7 +156,7 @@ void print_parameters(void) {
       fprintf(stderr, "enc2_sub=%s, enc2_pub=%s", xdc_addr_sub_enc2, xdc_addr_pub_enc2);
       break;
   }
-  fprintf(stderr, "\nExperiment Mode=%s, Log prefix=%s\n", experimental_mode, log_filename);
+  fprintf(stderr, "\nLog prefix=%s\nExperiment Description=%s\n", log_filename, experiment_description);
 }
 
 /* Parse the configuration file */
@@ -193,7 +193,7 @@ void opts_get(int argc, char **argv) {
         log_level = atoi(optarg);;
         break;
       case 'm':
-        strcpy(experimental_mode, optarg);
+        strcpy(experiment_description, optarg);
         break;
       case 'n':
         loop_count = atoi(optarg);
@@ -424,23 +424,26 @@ void log_results(long elapsed_us) {
   int         send_count, expected_count=0;
   double      duration_seconds;
 
+  // A) Initialize
   send_count       = loop_count * burst_size;
   duration_seconds = (double) elapsed_us/1000000;
   if ( (mode_uni == 0) || (receive_first == 1) )  expected_count = send_count;
-//  fprintf(stderr, "%ld, %d, %d, %f, %d, %ld\n", elapsed_us, rx_count, expected_count, (double) 1000000 * send_count / elapsed_us, copy_buf_size, 1000000 * copy_buf_size / elapsed_us);
-  
-  /* Write results to log file */
   sprintf(str, "%d", enclave);
-  strcat(log_filename, str);
+  strcat(log_filename, str);    // append filename with enclave ID
+  // B) Create Initial Lines for log file (only first time)
   strcpy(header_str, "");
   if( access(log_filename, F_OK) != 0 ) {
-    strcpy(header_str, experimental_mode);
-    sprintf(str, "\nEnclave_%d, Enclave %d Tx Count (Messages), Enclave %d Tx Burst (Messages), Enclave %d Expected Rx Count (Messages), Enclave %d Rx Count (Messages), Enclave %d Reliability (%%), Enclave %d Sleep (ns), Enclave %d Duration (seconds), Enclave %d Req-Rep Messages/sec, Enclave %d Tx Count (Bytes), Enclave %d Req-Rep MB/sec\n", enclave, enclave, enclave, enclave, enclave, enclave, enclave, enclave, enclave, enclave, enclave);    //(unsigned long)time(NULL)
-    strcat(header_str, str);
+    strcpy(header_str, experiment_description);
+    // Bidirectional results
+    strcat(header_str, "\nEnclave ID, Messages Sent, Messages Received, Experiment Duration (seconds), Reqest-Reply Messages/Sec, Message Size (Bytes), Reqest-Reply MB/Sec");
+    // Unidiretional results with bursts of requests (since no replies)
+    strcat(header_str, "  Message Count per Burst, Intra-Burst Sleep (ns), Expected Messages Received, Messages Reliability (%%)\n");
   }
+  // C) Write log file
   fp = fopen(log_filename, "a");
   fprintf(fp, "%s", header_str);
-  fprintf(fp, "%d, %d, %d, %d, %d, %.3f, %d, %.3f, %.3f, %d, %.03f\n", enclave, send_count, burst_size, expected_count, rx_count, (double) 100*rx_count/send_count, sleep_nano, duration_seconds, (double) send_count/duration_seconds, copy_buf_size, (double) send_count * copy_buf_size / duration_seconds / 1000000);
+  fprintf(fp, "%d, %d, %d, %.3f, %.3f, %d, %.03f", enclave, send_count, rx_count, duration_seconds, (double) send_count/duration_seconds, copy_buf_size, (double) send_count * copy_buf_size / duration_seconds / 1000000);
+  fprintf(fp, ", %d, %d, %d, %.3f\n", burst_size, sleep_nano, expected_count, (double) 100 * rx_count / send_count);
   fclose(fp);
 }
 

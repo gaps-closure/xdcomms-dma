@@ -8,9 +8,9 @@ from pprint import pprint
 
 # Plot app_req_rep performance: (Auguest, 2023) from csv file input
 # Frist line in csv has time; second line has column legends:
-COL_L = 9   # Length (in Bytes) per request packet column
-COL_M = 8   # Messages per second column
-COL_B = 10   # Bytes per second column
+COL_L = 5   # Length (in Bytes) per request packet column
+COL_M = 4   # Messages per second column
+COL_B = 6   # Bytes per second column
 
 
 # Read results from input file (CSV format) into 'rows' and 'fields' lists
@@ -56,6 +56,6 @@ if __name__=='__main__':
   parser.add_argument('-v', '--verbose',          help='Print debug', action='store_true')
   args = parser.parse_args()
   title, fields, rows = read_values(args.in_file_prefixes)
-#  print(rows)
+  print(rows[0])
 #  plot_xy(COL_L, COL_M)  # x=data length, y=Msgs/sec
   plot_xy(COL_L, COL_B)  # x=data length,  y=Bytes/sec
