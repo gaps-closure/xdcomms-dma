@@ -127,7 +127,11 @@ void raw_data_encode (void *buff_out, void *buff_in, size_t *len_out) {
   p2->data_len  = htonl(data_len);
 // fprintf(stderr, "%s: ", __func__); raw_print (p1);
   trailer_into_packet(&(p2->trailer), &(p1->trailer));
-  memcpy(d_out, d_in, data_len);
+//  Replace byte copies with 8-byte naive-memcpy for speed test of app_req_rep (assuumes length is multiple of 8!)
+        unsigned long *d = (unsigned long *) d_out;
+  const unsigned long *s = (unsigned long *) d_in;
+  for (int i=0; i<(data_len/8); i++) *d++ = *s++;
+//  memcpy(d_out, d_in, data_len);
   *len_out = sizeof(*p1) + data_len;
 }
 
@@ -140,7 +144,11 @@ void raw_data_decode (void *buff_out, void *buff_in, size_t *len_in) {
 
   p2->data_len  = data_len;
   trailer_from_packet(&(p2->trailer), &(p1->trailer));
-  memcpy(d_out, d_in, data_len);
+//  Replace byte copies with 8-byte naive-memcpy for speed test of app_req_rep (assuumes length is multiple of 8!)
+        unsigned long *d = (unsigned long *) d_out;
+  const unsigned long *s = (unsigned long *) d_in;
+  for (int i=0; i<(data_len/8); i++) *d++ = *s++;
+//  memcpy(d_out, d_in, data_len);
 // fprintf(stderr, "%s len: %ld->%d\n", __func__, *len_in, p2->data_len);
 //raw_print (p1);
 }
