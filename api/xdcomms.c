@@ -600,7 +600,7 @@ vchan *get_chan_info(gaps_tag *tag, char dir, int index) {
 //      orange j=9 t=5: tag=<2,2,10>   green j=9 r=5: tag=<2,2,10>
 void json_process_all_flows(int m, struct json_object *j_envlave_halmaps) {
   int                 j, r, t;
-  char                dir_0, from_name[STR_SIZE], to_name[STR_SIZE];
+  char                dir_0 = 't', from_name[STR_SIZE], to_name[STR_SIZE];
   gaps_tag            tag;
   struct json_object *j_halmap_element, *j_halmap_from, *j_halmap_to;
   struct json_object *j_halmap_mux, *j_halmap_sec, *j_halmap_typ;
