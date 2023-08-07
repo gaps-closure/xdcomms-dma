@@ -63,7 +63,7 @@
 #include "vchan.h"
 
 #define PRINT_STATE_LEVEL  2    // Reduce level to help debug (min=0)
-//#define PRINT_US_TRACE          // print Performance traces when defined
+#define PRINT_US_TRACE          // print Performance traces when defined
 
 void rcvr_thread_start(vchan *cp);
 vchan *get_cp_from_ctag(uint32_t ctag, char dir, int json_index);
