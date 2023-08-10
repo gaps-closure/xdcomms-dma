@@ -62,6 +62,7 @@
 #include "xdcomms.h"
 #include "vchan.h"
 
+#define OPEN_WITH_NO_O_SYNC
 #define PRINT_STATE_LEVEL  2    // Reduce level to help debug (min=0)
 //#define PRINT_US_TRACE          // print Performance traces when defined
 
@@ -230,7 +231,11 @@ void shm_open_channel(vchan *cp) {
   unsigned long  pa_phys_addr, pa_mmap_len;       /* page aligned physical address (offset) */
 
   // a) Open device
-  if ((cp->fd = open(cp->dev_name, O_RDWR | O_SYNC)) == -1) FATAL;    // Higher perfromance by removing file sync | O_SYNC
+#ifdef OPEN_WITH_NO_O_SYNC    // Much faster if remove O_SYNC, but then must guaranteed write is complete
+  if ((cp->fd = open(cp->dev_name, O_RDWR)) == -1) FATAL;
+#else                         // ESCAPE memory sync'ed, but much alower
+  if ((cp->fd = open(cp->dev_name, O_RDWR | O_SYNC)) == -1) FATAL;
+#emdif
   // b) mmpp device: reduce address to be a multiple of page size and add the diff to length
   pa_phys_addr       = cp->mm.phys_addr & ~MMAP_PAGE_MASK;
   pa_mmap_len        = cp->mm.len + cp->mm.phys_addr - pa_phys_addr;

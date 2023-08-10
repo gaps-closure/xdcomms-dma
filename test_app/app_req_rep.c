@@ -437,7 +437,7 @@ void log_results(long elapsed_us) {
     // Bidirectional results
     strcat(header_str, "\nEnclave ID, Messages Sent, Messages Received, Experiment Duration (seconds), Reqest-Reply Messages/Sec, Message Size (Bytes), Reqest-Reply MB/Sec");
     // Unidiretional results with bursts of requests (since no replies)
-    strcat(header_str, "  Message Count per Burst, Intra-Burst Sleep (ns), Expected Messages Received, Messages Reliability (%%)\n");
+    strcat(header_str, ", Message Count per Burst, Intra-Burst Sleep (ns), Expected Messages Received, Messages Reliability (%%)\n");
   }
   // C) Write log file
   fp = fopen(log_filename, "a");
