@@ -330,6 +330,8 @@ void shm_send(vchan *cp, void *adu, gaps_tag *tag) {
   *next_ptr = (write_index + 1) % SHM_PKT_COUNT;
 //  log_trace("data[19]=%0x", cp->shm_addr->pdata[write_index].data[19]);
   
+  dmac_map_area( cp->shm_addr->pdata[write_index].data, adu_len, DMA_TO_DEVICE);
+  
 #if 1 >= PRINT_STATE_LEVEL
   shm_info_print(cp->shm_addr);
 #endif  // PRINT_STATE
