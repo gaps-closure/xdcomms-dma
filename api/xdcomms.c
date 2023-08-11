@@ -62,7 +62,8 @@
 #include "xdcomms.h"
 #include "vchan.h"
 
-#include <asm/cachectl.h>   // cacheflush
+// #include <asm/cachectl.h>   // cacheflush
+// needs sudo ln -s /usr/src/linux-hwe-5.15-headers-5.15.0-76/arch/arc/include/uapi/asm/ /usr/include/asm
 
 #define OPEN_WITH_NO_O_SYNC
 #define PRINT_STATE_LEVEL  2    // Reduce level to help debug (min=0)
@@ -337,7 +338,7 @@ void shm_send(vchan *cp, void *adu, gaps_tag *tag) {
 //  int rv = cacheflush((char *) &(cp->shm_addr), sizeof(shm_channel), DCACHE);
 //  log_info("%s rv=%d addr=%p len=%d", __func__, rv, sizeof(shm_channel));
 
-  __builtin___clear_cache((void *) &(cp->shm_addr), (void *) &(cp->shm_addr) + sizeof(shm_channel));
+//  __builtin___clear_cache((void *) &(cp->shm_addr), (void *) &(cp->shm_addr) + sizeof(shm_channel));
   
   
 #if 1 >= PRINT_STATE_LEVEL
