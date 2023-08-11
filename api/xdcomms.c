@@ -333,8 +333,12 @@ void shm_send(vchan *cp, void *adu, gaps_tag *tag) {
 //  log_trace("data[19]=%0x", cp->shm_addr->pdata[write_index].data[19]);
   
 //  dmac_map_area( cp->shm_addr->pdata[write_index].data, adu_len, DMA_TO_DEVICE);
-  int rv = cacheflush((char *) &(cp->shm_addr), sizeof(shm_channel), DCACHE);
-  log_info("%s rv=%d addr=%p len=%d", __func__, rv, sizeof(shm_channel));
+
+//  int rv = cacheflush((char *) &(cp->shm_addr), sizeof(shm_channel), DCACHE);
+//  log_info("%s rv=%d addr=%p len=%d", __func__, rv, sizeof(shm_channel));
+
+  __builtin___clear_cache((void *) &(cp->shm_addr), (void *) &(cp->shm_addr) + 100);
+  
   
 #if 1 >= PRINT_STATE_LEVEL
   shm_info_print(cp->shm_addr);
