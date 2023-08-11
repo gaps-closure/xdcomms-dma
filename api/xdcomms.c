@@ -65,7 +65,7 @@
 // #include <asm/cachectl.h>   // cacheflush
 // needs sudo ln -s /usr/src/linux-hwe-5.15-headers-5.15.0-76/arch/arc/include/uapi/asm/ /usr/include/asm
 
-#define OPEN_WITH_NO_O_SYNC
+//#define OPEN_WITH_NO_O_SYNC
 #define PRINT_STATE_LEVEL  2    // Reduce level to help debug (min=0)
 //#define PRINT_US_TRACE          // print Performance traces when defined
 
