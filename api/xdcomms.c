@@ -62,6 +62,8 @@
 #include "xdcomms.h"
 #include "vchan.h"
 
+#include <asm/cachectl.h>   // cacheflush
+
 #define OPEN_WITH_NO_O_SYNC
 #define PRINT_STATE_LEVEL  2    // Reduce level to help debug (min=0)
 //#define PRINT_US_TRACE          // print Performance traces when defined
@@ -330,7 +332,9 @@ void shm_send(vchan *cp, void *adu, gaps_tag *tag) {
   *next_ptr = (write_index + 1) % SHM_PKT_COUNT;
 //  log_trace("data[19]=%0x", cp->shm_addr->pdata[write_index].data[19]);
   
-  dmac_map_area( cp->shm_addr->pdata[write_index].data, adu_len, DMA_TO_DEVICE);
+//  dmac_map_area( cp->shm_addr->pdata[write_index].data, adu_len, DMA_TO_DEVICE);
+  int rv = cacheflush((char *) &(cp->shm_addraddr), sizeof(shm_channel), DCACHE);
+  log_info("%s rv=%d addr=%p len=%d", __func__, rv, sizeof(shm_channel));
   
 #if 1 >= PRINT_STATE_LEVEL
   shm_info_print(cp->shm_addr);
