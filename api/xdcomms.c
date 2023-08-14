@@ -304,7 +304,7 @@ void shm_init_config_one(vchan *cp) {
 
 // int msync(void addr, size_t length, int flags);
 void shm_sync(void *addr) {
-  int rv = msync(addr, sizeof(shm_channel), O_ASYNC);
+  int rv = msync(addr, sizeof(shm_channel), MS_ASYNC);
   log_info("%s rv = %d addr=%p", __func__, rv, addr);
   if (rv < 0) {
      perror("msync failed");
@@ -331,8 +331,6 @@ void shm_sync2(void *addr) {
 // }
 
 //  dmac_map_area( cp->shm_addr->pdata[write_index].data, adu_len, DMA_TO_DEVICE);
-
-  
 
 void shm_send(vchan *cp, void *adu, gaps_tag *tag) {
   int            *last_ptr    = &(cp->shm_addr->pkt_index_last);
