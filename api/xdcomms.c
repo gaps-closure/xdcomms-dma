@@ -366,7 +366,7 @@ void shm_send(vchan *cp, void *adu, gaps_tag *tag) {
 
   // C) Sync data (if not open /dev/mem with 'slow' O_SYNC)
 #ifdef OPEN_WITH_NO_O_SYNC
-  shm_sync((void *) (cp->shm_addr);
+  shm_sync((void *) (cp->shm_addr));
 #endif
 #ifdef PRINT_US_TRACE
   time_trace("TX2 %08x (len=%d)", ntohl(cp->ctag), adu_len);
