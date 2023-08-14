@@ -305,7 +305,7 @@ void shm_init_config_one(vchan *cp) {
 // int msync(void addr, size_t length, int flags);
 void shm_sync(void *addr) {
   int rv = msync(addr, sizeof(shm_channel), O_ASYNC);
-  log_trace("%s rv = %d addr=%p", __func__, rv, addr);
+  log_info("%s rv = %d addr=%p", __func__, rv, addr);
   if (rv < 0) {
      perror("msync failed");
      exit(0);
