@@ -365,7 +365,7 @@ void shm_send(vchan *cp, void *adu, gaps_tag *tag) {
 #endif  // PRINT_STATE
 
   // C) Sync data (if not open /dev/mem with 'slow' O_SYNC)
-#ifdev OPEN_WITH_NO_O_SYNC
+#ifdef OPEN_WITH_NO_O_SYNC
   shm_sync((void *) &(cp->shm_addr), sizeof(shm_channel));
 #endif
 #ifdef PRINT_US_TRACE
