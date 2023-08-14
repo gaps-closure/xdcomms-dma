@@ -62,8 +62,6 @@
 #include "xdcomms.h"
 #include "vchan.h"
 
-// #include <asm/cachectl.h>   // cacheflush
-// needs sudo ln -s /usr/src/linux-hwe-5.15-headers-5.15.0-76/arch/arc/include/uapi/asm/ /usr/include/asm
 
 //#define OPEN_WITH_NO_O_SYNC
 #define PRINT_STATE_LEVEL  2    // Reduce level to help debug (min=0)
@@ -304,6 +302,38 @@ void shm_init_config_one(vchan *cp) {
 //  for (int i = 0; i < len_in_words; i++) *d++ = *s++;
 //}
 
+// int msync(void addr, size_t length, int flags);
+void shm_sync(void *addr) {
+  int rv = msync(addr, sizeof(shm_channel), O_ASYNC);
+  log_trace("%s rv = %d", __func__, rv);
+  if (rv < 0) {
+     perror("msync failed");
+     exit(0);
+  }
+}
+
+// void __builtin___clear_cache(void *begin, void *end);
+void shm_sync2(void *addr) {
+  __builtin___clear_cache(addr, addr + sizeof(shm_channel));
+}
+
+
+// int cacheflush(char *addr, int nbytes, int cache);
+// #include <asm/cachectl.h>   // cacheflush
+// needs sudo ln -s /usr/src/linux-hwe-5.15-headers-5.15.0-76/arch/arc/include/uapi/asm/ /usr/include/asm
+// void shm_sync3(void *addr) {
+//   int rv = cacheflush((char *) addr, sizeof(shm_channel), DCACHE);
+//  log_trace("%s rv = %d", __func__, rv);
+//  if (rv < 0) {
+//    perror("msync failed");
+//    exit(0);
+//  }
+// }
+
+//  dmac_map_area( cp->shm_addr->pdata[write_index].data, adu_len, DMA_TO_DEVICE);
+
+  
+
 void shm_send(vchan *cp, void *adu, gaps_tag *tag) {
   int            *last_ptr    = &(cp->shm_addr->pkt_index_last);
   int            *next_ptr    = &(cp->shm_addr->pkt_index_next);
@@ -317,11 +347,10 @@ void shm_send(vchan *cp, void *adu, gaps_tag *tag) {
   // A) Delete oldest message?
   if (*last_ptr == write_index) {
     *last_ptr = ((*last_ptr) + 1) % SHM_PKT_COUNT;
-    nanosleep(&ts, NULL);       // Give time to finish reading before writing into last
+    nanosleep(&ts, NULL);       // Give time for other enclave to finish reading before writing into last
   }
   if (*last_ptr < 0) *last_ptr = 0;   // If the first written packet
-//  time_trace("XDC_Tx1 ready to encode for ctag=%08x (next = %d last = %d)", ntohl(cp->ctag), write_index, *last_ptr);
-  
+
   // B) Encode Data into SHM
 #ifdef PRINT_US_TRACE
   time_trace("TX1 %08x (index=%d)", ntohl(cp->ctag), write_index);
@@ -331,19 +360,12 @@ void shm_send(vchan *cp, void *adu, gaps_tag *tag) {
 //  naive_memcpy(cp->shm_addr->pdata[pkt_index_nxt].data, adu, adu_len);  // TX adds new data
   cp->shm_addr->pinfo[write_index].data_length = adu_len;
   *next_ptr = (write_index + 1) % SHM_PKT_COUNT;
-//  log_trace("data[19]=%0x", cp->shm_addr->pdata[write_index].data[19]);
-  
-//  dmac_map_area( cp->shm_addr->pdata[write_index].data, adu_len, DMA_TO_DEVICE);
-
-//  int rv = cacheflush((char *) &(cp->shm_addr), sizeof(shm_channel), DCACHE);
-//  log_info("%s rv=%d addr=%p len=%d", __func__, rv, sizeof(shm_channel));
-
-//  __builtin___clear_cache((void *) &(cp->shm_addr), (void *) &(cp->shm_addr) + sizeof(shm_channel));
-  
-  
 #if 1 >= PRINT_STATE_LEVEL
   shm_info_print(cp->shm_addr);
 #endif  // PRINT_STATE
+
+  // C) Sync data (if not open /dev/mem with 'slow' O_SYNC)
+//  shm_sync((void *) &(cp->shm_addr), sizeof(shm_channel));
 #ifdef PRINT_US_TRACE
   time_trace("TX2 %08x (len=%d)", ntohl(cp->ctag), adu_len);
 #endif
