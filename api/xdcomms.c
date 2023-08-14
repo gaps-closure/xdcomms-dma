@@ -572,6 +572,7 @@ void init_new_chan(vchan *cp, uint32_t ctag, char dir, int json_index) {
     if ((cp->dir) == 'r') {
       rcvr_thread_start(cp);      // 4) Start rx thread for new receive tag
     }
+    log_trace("%s: shm_addr=%p", __func__, cp->shm_addr);
   }
   else if ((strcmp(cp->dev_type, "dma")) == 0) {
     if ((cp->dir) == 'r') {
