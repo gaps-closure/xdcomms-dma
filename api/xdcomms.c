@@ -63,7 +63,7 @@
 #include "vchan.h"
 
 
-#define OPEN_WITH_NO_O_SYNC
+//#define OPEN_WITH_NO_O_SYNC
 #define PRINT_STATE_LEVEL  2    // Reduce level to help debug (min=0)
 //#define PRINT_US_TRACE          // print Performance traces when defined
 
@@ -305,7 +305,7 @@ void shm_init_config_one(vchan *cp) {
 // int msync(void addr, size_t length, int flags);
 void shm_sync(void *addr) {
   int rv = msync(addr, sizeof(shm_channel), MS_ASYNC);
-  log_info("%s rv = %d addr=%p", __func__, rv, addr);
+  log_info("%s rv = %d addr=%p len=%ld", __func__, rv, addr, sizeof(shm_channel));
   if (rv < 0) {
      perror("msync failed");
      exit(0);
