@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 //#include <stdio.h>
-#include <json-c/json.h>
+//#include <json-c/json.h>
 #include "cmap.h"
 
 #define GAPS_TAG_MAX                      32   // MAX mnumber of Tags for this node
