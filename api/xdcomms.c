@@ -629,74 +629,6 @@ vchan *get_chan_info(gaps_tag *tag, char dir, int index) {
 /**********************************************************************/
 /* C) Extract JSON Configuration Info (for all devices and TX/RX)     */
 /**********************************************************************/
-
-// OLD JSON-C Code: For each (of m) halmaps in JSON file, proces the flow
-void json_process_all_flows(int m, struct json_object *j_envlave_halmaps) {
-  int                 j, r=0, t=0;
-  char                dir_0 = 't', from_name[STR_SIZE], to_name[STR_SIZE];
-  gaps_tag            tag;
-  struct json_object *j_halmap_element, *j_halmap_from, *j_halmap_to;
-  struct json_object *j_halmap_mux, *j_halmap_sec, *j_halmap_typ;
-  
-  for (j=0; j<m; j++) {
-    j_halmap_element = json_object_array_get_idx(j_envlave_halmaps, j);
-    j_halmap_from    = json_object_object_get(j_halmap_element, "from");
-    j_halmap_to      = json_object_object_get(j_halmap_element, "to");
-    strcpy(from_name, json_object_get_string(j_halmap_from));
-    strcpy(to_name,   json_object_get_string(j_halmap_to));
-    j_halmap_mux = json_object_object_get(j_halmap_element, "mux");
-    j_halmap_sec = json_object_object_get(j_halmap_element, "sec");
-    j_halmap_typ = json_object_object_get(j_halmap_element, "typ");
-    tag.mux = json_object_get_int(j_halmap_mux);
-    tag.sec = json_object_get_int(j_halmap_sec);
-    tag.typ = json_object_get_int(j_halmap_typ);
-    // Match and Group Indexes (see function description)
-    if ((strcmp(from_name, enclave_name)) == 0) {
-      if (j==0) { dir_0 = 't'; t = 0; r = m-1; }
-      log_debug("    tag=<%d,%d,%d> from %s (j=%d t=%d)", tag.mux, tag.sec, tag.typ, enclave_name, j, t);
-      get_chan_info(&tag, 't', t);
-      if (dir_0 == 't') t++;
-      else              t--;
-    }
-    if ((strcmp(to_name, enclave_name)) == 0) {
-      if (j==0) { dir_0 = 'r'; r = 0; t = m-1; }
-      log_debug("    tag=<%d,%d,%d> to   %s (j=%d r=%d)", tag.mux, tag.sec, tag.typ, enclave_name, j, r);
-      get_chan_info(&tag, 'r', r);
-      if (dir_0 == 't') r--;
-      else              r++;
-    }
-  }
-}
-
-// OLD JSON-C Code: Open and parse JSON configuration file (using json-c library)
-void read_json_config_file(char *xcf) {
-  int                 n, i, m;
-  char                encl_name[STR_SIZE];
-  struct json_object *j_root, *j_enclaves;
-  struct json_object *j_enclave_element, *j_enclave_name, *j_envlave_halmaps;
-
-  j_root = json_object_from_file(xcf);
-  if (!j_root) { log_fatal("Could not find JSON file: %s", xcf); FATAL; }
-  // A) Get all enclaves
-  j_enclaves = json_object_object_get(j_root, "enclaves");
-  n = json_object_array_length(j_enclaves);
-  log_trace("%d enclaves in %s file", n, xcf);
-  // B) For each (of n) enclaves in JSON list, get enclave information and halmaps
-  for (i=0; i<n; i++) {
-    j_enclave_element = json_object_array_get_idx(j_enclaves, i);
-    j_enclave_name = json_object_object_get(j_enclave_element, "enclave");
-    strcpy(encl_name, json_object_get_string(j_enclave_name));
-    log_trace("  %d: enclave=%s", i, json_object_get_string(j_enclave_name));
-    // C) Take halmaps from this nodes enclave
-    if ((strcmp(enclave_name, encl_name)) == 0) {
-      j_envlave_halmaps = json_object_object_get(j_enclave_element, "halmaps");
-      m = json_object_array_length(j_envlave_halmaps);
-      log_trace("  halmaps len=%d", m);
-      json_process_all_flows(m, j_envlave_halmaps);
-    }
-  }
-}
-
 // Configure channel information
 //   Ensure a) Both sides use the same index for the same tag
 //          b) Group indexes for same direction
@@ -764,7 +696,7 @@ int get_json_len(json_t const *j_node) {
 }
 
 // Get json_object_from_file
-json_t const *json_open_file(char *xcf) {
+json_t const *json_open_file(char *xcf, json_t *mem, int len) {
   json_t const *j_root;                          // JSON Root node
   FILE         *fp;                              // JSON File
   char          file_as_str[JSON_OBJECT_SIZE];   // JSON file as a String
@@ -777,21 +709,22 @@ json_t const *json_open_file(char *xcf) {
 //  printf("JSON FILE = \n%s\n", file_as_str);
   
   // B) Copy buffer into tiny-json object (mem)
-  json_t mem[JSON_OBJECT_SIZE];
-  j_root = json_create(file_as_str, mem, sizeof mem / sizeof *mem );
+  j_root = json_create(file_as_str, mem,  len);
   assert(j_root);
   return(j_root);
 }
 
 // Open and parse JSON configuration file (using json-c library)
 void read_tiny_json_config_file(char *xcf) {
+  json_t        mem[JSON_OBJECT_SIZE];
   int           helmap_len;
   gaps_tag      tag;
   json_t const *j_root, *j_child, *j_enclaves, *j_envlave_halmaps, *j_halmap_element;
   char   const *jstr, *jfrom, *jto;
   
+  
   // A) Get List of Enclaves
-  j_root = json_open_file(xcf);
+  j_root = json_open_file(xcf, mem, sizeof mem / sizeof *mem);
   j_enclaves = json_getProperty( j_root, "enclaves" );
   if ( !j_enclaves || JSON_ARRAY != json_getType( j_enclaves ) ) {
       puts("Error, friend list property is not found.");
@@ -835,7 +768,6 @@ void config_channels(void) {
     exit (-1);
   }
   read_tiny_json_config_file(e_xcf);
-//  read_json_config_file(e_xcf);
 }
 
 
