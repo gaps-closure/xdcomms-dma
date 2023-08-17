@@ -700,14 +700,14 @@ json_t const *json_open_file(char *xcf, json_t *mem, int len) {
   json_t const *j_root;                          // JSON Root node
   FILE         *fp;                              // JSON File
   char          file_as_str[JSON_OBJECT_SIZE];   // JSON file as a String
-
+  int           x;
   // A) Copy JSON file into buffer
   fp = fopen(xcf, "rb");
   assert(fp != NULL);
-  fread(file_as_str, JSON_OBJECT_SIZE, 1, fp);
+  x = fread(file_as_str, 1, JSON_OBJECT_SIZE, fp);
+  log_trace("JSON FILE len = %d\n", x);
   fclose(fp);
-//  printf("JSON FILE = \n%s\n", file_as_str);
-  
+
   // B) Copy buffer into tiny-json object (mem)
   j_root = json_create(file_as_str, mem,  len);
   assert(j_root);
