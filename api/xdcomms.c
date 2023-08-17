@@ -834,8 +834,8 @@ void config_channels(void) {
     log_fatal("Must specify environment variables 'ENCLAVE' and 'CONFIG_FILE'");
     exit (-1);
   }
-//  read_tiny_json_config_file(e_xcf);
-  read_json_config_file(e_xcf);
+  read_tiny_json_config_file(e_xcf);
+//  read_json_config_file(e_xcf);
 }
 
 
