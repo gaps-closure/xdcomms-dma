@@ -52,7 +52,7 @@
 #include <sched.h>
 #include <errno.h>
 #include <sys/param.h>
-
+#include <assert.h>
 
 #include <string.h>
 #include <stdlib.h>
@@ -61,8 +61,10 @@
 
 #include "xdcomms.h"
 #include "vchan.h"
+#include "../tiny-json/tiny-json.h"
 
 
+#define JSON_OBJECT_SIZE 10000
 //#define OPEN_WITH_NO_O_SYNC
 #define PRINT_STATE_LEVEL  2    // Reduce level to help debug (min=0)
 //#define PRINT_US_TRACE          // print Performance traces when defined
@@ -627,16 +629,8 @@ vchan *get_chan_info(gaps_tag *tag, char dir, int index) {
 /**********************************************************************/
 /* C) Extract JSON Configuration Info (for all devices and TX/RX)     */
 /**********************************************************************/
-// For each (of m) halmaps in JSON file, proces the flow
-//   Ensure a) Both sides use the same index for the same tag
-//          b) Group indexes for same direction
-//   For example using websrv app:
-//      orange j=0 r=0: tag=<1,1,1>   green j=0 t=0: tag=<1,1,1>
-//      orange j=1 t=9: tag=<2,2,2>   green j=1 r=9: tag=<2,2,2>
-//      orange j=2 r=1: tag=<1,1,3>   green j=2 t=1: tag=<1,1,3>
-//      orange j=3 t=8: tag=<2,2,4>   green j=3 r=8: tag=<2,2,4>
-//      ...
-//      orange j=9 t=5: tag=<2,2,10>   green j=9 r=5: tag=<2,2,10>
+
+// OLD JSON-C Code: For each (of m) halmaps in JSON file, proces the flow
 void json_process_all_flows(int m, struct json_object *j_envlave_halmaps) {
   int                 j, r=0, t=0;
   char                dir_0 = 't', from_name[STR_SIZE], to_name[STR_SIZE];
@@ -674,7 +668,7 @@ void json_process_all_flows(int m, struct json_object *j_envlave_halmaps) {
   }
 }
 
-// Open and parse JSON configuration file (using json-c library)
+// OLD JSON-C Code: Open and parse JSON configuration file (using json-c library)
 void read_json_config_file(char *xcf) {
   int                 n, i, m;
   char                encl_name[STR_SIZE];
@@ -703,6 +697,131 @@ void read_json_config_file(char *xcf) {
   }
 }
 
+// Configure channel information
+//   Ensure a) Both sides use the same index for the same tag
+//          b) Group indexes for same direction
+//   For example using websrv app:
+//      orange j=0 r=0: tag=<1,1,1>   green j=0 t=0: tag=<1,1,1>
+//      orange j=1 t=9: tag=<2,2,2>   green j=1 r=9: tag=<2,2,2>
+//      orange j=2 r=1: tag=<1,1,3>   green j=2 t=1: tag=<1,1,3>
+//      orange j=3 t=8: tag=<2,2,4>   green j=3 r=8: tag=<2,2,4>
+//      ...
+//      orange j=9 t=5: tag=<2,2,10>   green j=9 r=5: tag=<2,2,10>
+
+void config_from_jsom(int m, char const *from_name, char const *to_name, gaps_tag tag) {
+  static int  j=0, r=0, t=0;
+  char        dir_0 = 't';
+  
+  if ((strcmp(from_name, enclave_name)) == 0) {
+    if (j==0) { dir_0 = 't'; t = 0; r = m-1; }
+    log_debug("    tag=<%d,%d,%d> from %s (j=%d t=%d)", tag.mux, tag.sec, tag.typ, enclave_name, j, t);
+    get_chan_info(&tag, 't', t);
+    if (dir_0 == 't') t++;
+    else              t--;
+  }
+  if ((strcmp(to_name, enclave_name)) == 0) {
+    if (j==0) { dir_0 = 'r'; r = 0; t = m-1; }
+    log_debug("    tag=<%d,%d,%d> to   %s (j=%d r=%d)", tag.mux, tag.sec, tag.typ, enclave_name, j, r);
+    get_chan_info(&tag, 'r', r);
+    if (dir_0 == 't') r--;
+    else              r++;
+  }
+  j++;
+}
+
+// Get value of string from json object that has matches match_str
+char const *json_get_str(json_t const *j_node, char *match_str) {
+  json_t const *j_prop;           // JSON property (e.g., "name")
+
+  j_prop = json_getProperty(j_node, match_str);
+  if ( !j_prop || JSON_TEXT != json_getType(j_prop) ) {
+    puts("Error, string value is not found.");
+    exit(-1);
+  }
+//  printf( "Value=%s.\n", json_getValue(j_prop));
+  return(json_getValue(j_prop));
+}
+
+// Get value of integer from json object that has matches match_str
+int json_get_int(json_t const *j_node, char *match_str) {
+  json_t const *j_prop;           // JSON property (e.g., "name")
+
+  j_prop = json_getProperty(j_node, match_str);
+  if ( !j_prop || JSON_INTEGER != json_getType(j_prop) ) {
+    puts("Error, integer value is not found.");
+    exit(-1);
+  }
+  return(atoi(json_getValue(j_prop)));
+}
+
+// Get length of json object
+int get_json_len(json_t const *j_node) {
+  int           m=0;
+  json_t const *j;
+  
+  for(j = json_getChild(j_node); j != 0; j = json_getSibling(j)) m++;
+  return m;
+}
+
+// Get json_object_from_file
+json_t const *json_open_file(char *xcf) {
+  json_t const *j_root;                          // JSON Root node
+  FILE         *fp;                              // JSON File
+  char          file_as_str[JSON_OBJECT_SIZE];   // JSON file as a String
+
+  // A) Copy JSON file into buffer
+  fp = fopen(xcf, "rb");
+  assert(fp != NULL);
+  fread(file_as_str, JSON_OBJECT_SIZE, 1, fp);
+  fclose(fp);
+//  printf("JSON FILE = \n%s\n", file_as_str);
+  
+  // B) Copy buffer into tiny-json object (mem)
+  json_t mem[JSON_OBJECT_SIZE];
+  j_root = json_create(file_as_str, mem, sizeof mem / sizeof *mem );
+  assert(j_root);
+  return(j_root);
+}
+
+// Open and parse JSON configuration file (using json-c library)
+void read_tiny_json_config_file(char *xcf) {
+  int           helmap_len;
+  gaps_tag      tag;
+  json_t const *j_root, *j_child, *j_enclaves, *j_envlave_halmaps, *j_halmap_element;
+  char   const *jstr, *jfrom, *jto;
+  
+  // A) Get List of Enclaves
+  j_root = json_open_file(xcf);
+  j_enclaves = json_getProperty( j_root, "enclaves" );
+  if ( !j_enclaves || JSON_ARRAY != json_getType( j_enclaves ) ) {
+      puts("Error, friend list property is not found.");
+      exit(-1);
+  }
+
+  // B) Get Each Enclave
+  for(j_child = json_getChild(j_enclaves); j_child != 0; j_child = json_getSibling(j_child)) {
+    if (JSON_OBJ == json_getType(j_child)) {
+      jstr = json_get_str(j_child, "enclave");
+//      printf( "JSON Enclave=%s.\n", jstr);
+      
+      // C) Get Each helmap for this node's enclave
+      if ((strcmp(enclave_name, jstr)) == 0) {
+        j_envlave_halmaps = json_getProperty(j_child, "halmaps");
+        helmap_len = get_json_len(j_envlave_halmaps);
+        for(j_halmap_element = json_getChild(j_envlave_halmaps); j_halmap_element != 0; j_halmap_element = json_getSibling(j_halmap_element)) {
+          jfrom   = json_get_str(j_halmap_element, "from");
+          jto     = json_get_str(j_halmap_element, "to");
+          tag.mux = json_get_int(j_halmap_element, "mux");
+          tag.sec = json_get_int(j_halmap_element, "sec");
+          tag.typ = json_get_int(j_halmap_element, "typ");
+//          printf( "%s->%s tag=<%d,%d,%d>\n", jfrom, jto, tag.mux, tag.sec, tag.typ);
+          config_from_jsom(helmap_len, jfrom, jto, tag);
+        }
+      }
+    }
+  }
+}
+
 // initializing configuration using config file
 void config_channels(void) {
   char  *e_env = getenv("ENCLAVE");
@@ -715,7 +834,9 @@ void config_channels(void) {
     log_fatal("Must specify environment variables 'ENCLAVE' and 'CONFIG_FILE'");
     exit (-1);
   }
+//  read_tiny_json_config_file(e_xcf);
   read_json_config_file(e_xcf);
+  exit(22);
 }
 
 
