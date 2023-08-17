@@ -7,8 +7,6 @@
 #include "crc.h"
 #include <arpa/inet.h>
 
-#define DATA_TYP_MAX  50
-
 /* CLOSURE tag structure */
 typedef struct _tag {
   uint32_t         mux;      /* APP ID */
@@ -16,7 +14,7 @@ typedef struct _tag {
   uint32_t         typ;      /* data type */
 } gaps_tag;
 
-/* Table of codec per data types (Max of DATA_TYP_MAX types) */
+/* Table of codec per data types */
 typedef void (*codec_func_ptr)(void *, void *, size_t *);
 typedef struct _codec_map {
   int             valid;
@@ -25,10 +23,8 @@ typedef struct _codec_map {
   codec_func_ptr  decode;
 } codec_map;
 
-codec_map       cmap[DATA_TYP_MAX];           // maps data type to its data encode + decode functions
-
-void cmap_encode(uint8_t *data, uint8_t *buff_in, size_t *buff_len, gaps_tag *tag);
-void cmap_decode(uint8_t *data, size_t data_len, uint8_t *buff_out, gaps_tag *tag);
+void cmap_encode(uint8_t *data, uint8_t *buff_in, size_t *buff_len, gaps_tag *tag, codec_map *cmap_root);
+void cmap_decode(uint8_t *data, size_t data_len, uint8_t *buff_out, gaps_tag *tag, codec_map *cmap_root);
 void buf_print_hex(uint8_t *buf, int len_bytes);
 
 #endif /* CMAP_HEADER_FILE */

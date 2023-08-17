@@ -64,11 +64,13 @@
 #include "../tiny-json/tiny-json.h"
 
 
+#define DATA_TYP_MAX        50
 #define JSON_OBJECT_SIZE 10000
 //#define OPEN_WITH_NO_O_SYNC
-#define PRINT_STATE_LEVEL  2    // Reduce level to help debug (min=0)
+#define PRINT_STATE_LEVEL    2    // Reduce level to help debug (min=0)
 //#define PRINT_US_TRACE          // print Performance traces when defined
 
+codec_map     xdc_cmap[DATA_TYP_MAX];    // maps data type to its data encode + decode functions
 void rcvr_thread_start(vchan *cp);
 vchan *get_cp_from_ctag(uint32_t ctag, char dir, int json_index);
 
@@ -184,7 +186,7 @@ void dma_send(vchan *cp, void *adu, gaps_tag *tag) {
 #ifdef PRINT_US_TRACE
   time_trace("XDC_Tx1 ready to encode for ctag=%08x into %p", ntohl(cp->ctag), p);
 #endif
-  cmap_encode(p->data, adu, &adu_len, tag);                   // Put packet data into DMA buffer
+  cmap_encode(p->data, adu, &adu_len, tag, xdc_cmap);         // Put packet data into DMA buffer
   bw_gaps_header_encode(p, &packet_len, adu, &adu_len, tag);  // Put packet header into DMA buffer
   dma_tx_chan->length = packet_len;                           // Tell DMA buffer packet length (data + header)
   log_trace("Send packet on ctag=%08x fd=%d buf_id=%d of len: adu=%d packet=%d Bytes", ntohl(cp->ctag), cp->fd, buffer_id, ntohs(p->data_len), packet_len);
@@ -355,7 +357,7 @@ void shm_send(vchan *cp, void *adu, gaps_tag *tag) {
 #ifdef PRINT_US_TRACE
   time_trace("TX1 %08x (index=%d)", ntohl(cp->ctag), write_index);
 #endif
-  cmap_encode(cp->shm_addr->pdata[write_index].data, adu, &adu_len, tag);
+  cmap_encode(cp->shm_addr->pdata[write_index].data, adu, &adu_len, tag, xdc_cmap);
 //  XXX TODO: incoprate naive_memcpy into cmap_encode/decode
 //  naive_memcpy(cp->shm_addr->pdata[pkt_index_nxt].data, adu, adu_len);  // TX adds new data
   cp->shm_addr->pinfo[write_index].data_length = adu_len;
@@ -830,7 +832,7 @@ int nonblock_recv(void *adu, gaps_tag *tag, vchan *cp) {
 #ifdef PRINT_US_TRACE
     time_trace("RX2 %08x (index=%d)", ntohl(cp->ctag), cp->rvpb_index_recv);
 #endif
-    cmap_decode(cp->rvpb[index_buf].data, cp->rvpb[index_buf].data_len, adu, tag);   /* Put packet into ADU */
+    cmap_decode(cp->rvpb[index_buf].data, cp->rvpb[index_buf].data_len, adu, tag, xdc_cmap);   /* Put packet into ADU */
 //    log_trace("XDCOMMS reads from buff=%p (index=%d): len=%d", cp->rvpb[index_buf].data, index_buf, cp->rvpb[index_buf].data_len);
     cp->rvpb[index_buf].newd = 0;                      // unmark newdata
     log_trace("XDCOMMS rx packet tag=<%d,%d,%d> len=%d", tag->mux, tag->sec, tag->typ, cp->rvpb[index_buf].data_len);
@@ -931,21 +933,21 @@ void xdc_register(codec_func_ptr encode, codec_func_ptr decode, int typ) {
 
   if (do_once == 1) {
     do_once = 0;
-    for (i=0; i < DATA_TYP_MAX; i++) cmap[i].valid=0;   /* mark all cmap entries invalid */
+    for (i=0; i < DATA_TYP_MAX; i++) xdc_cmap[i].valid=0;   /* mark all cmap entries invalid */
   }
 
   for (i=0; i < DATA_TYP_MAX; i++) {
-    if (cmap[i].data_type == typ) break;
-    if (cmap[i].valid == 0) break;
+    if (xdc_cmap[i].data_type == typ) break;
+    if (xdc_cmap[i].valid == 0) break;
   }
   if (i >= DATA_TYP_MAX) {
     log_fatal("CMAP table is full (DATA_TYP_MAX=%d)\n", i);
     exit(EXIT_FAILURE);
   }
-  cmap[i].data_type = typ;
-  cmap[i].valid     = 1;
-  cmap[i].encode    = encode;
-  cmap[i].decode    = decode;
+  xdc_cmap[i].data_type = typ;
+  xdc_cmap[i].valid     = 1;
+  xdc_cmap[i].encode    = encode;
+  xdc_cmap[i].decode    = decode;
   log_trace("API registered new data typ = %d (index=%d)", typ, i);
   config_channels();
 }
