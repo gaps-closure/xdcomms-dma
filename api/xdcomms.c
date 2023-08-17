@@ -836,7 +836,6 @@ void config_channels(void) {
   }
 //  read_tiny_json_config_file(e_xcf);
   read_json_config_file(e_xcf);
-  exit(22);
 }
 
 
