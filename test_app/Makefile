@@ -4,7 +4,7 @@ INCL         = -I ~/gaps/xdcomms-dma/api -I ~/gaps/xdcomms-dma/log -I ~/gaps/xdc
 LDFLAGS     += -L ~/gaps/xdcomms-dma/api -lxdcomms #-Wl,-R$~/gaps/xdcomms-dma/api
 SRCS         = $(wildcard *.c) $(wildcard ./6month-demo/*.c)
 OBJS        := $(SRCS:%.c=%.o)
-$(info "$(CC) $(CFLAGS) -o $@ $(OBJS) -pthread $(LDFLAGS)")
+#$(info "$(CC) $(CFLAGS) -o $@ $(OBJS) -pthread $(LDFLAGS)")
 
 all: 	app_req_rep
 
