@@ -394,7 +394,7 @@ int wait_if_old(vchan *cp) {
   if (tx_crc != rx_crc ) return(-1);  // wait for good data
 //  log_trace("time: SHM=0x%04x Loc=0x%04x (nnew=%d)", tx_tim, rx_tim, cp->wait4new_client);
   if      ((cp->wait4new_client) == 0) log_trace("Not wait for client");
-  else if (rx_tim <= tx_tim) log_trace("New client");
+  else if (rx_tim <= tx_tim) log_trace("New client tags: TX=0x%08x RX=0x%08x", rx_tag, tx_tag);
   else return(-1);                    // wait for new client
   return(0);
 }
@@ -647,7 +647,7 @@ vchan *get_chan_info(gaps_tag *tag, char dir, int index) {
 
 void config_from_jsom(int m, char const *from_name, char const *to_name, gaps_tag tag) {
   static int  j=0, r=0, t=0;
-  char        dir_0 = 't';
+  static char dir_0 = 't';
   
   if ((strcmp(from_name, enclave_name)) == 0) {
     if (j==0) { dir_0 = 't'; t = 0; r = m-1; }
@@ -798,7 +798,7 @@ void *rcvr_thread_function(thread_args *vargs) {
   vchan       *cp = (vchan *) vargs->cp;
 
   while (1) {
-    log_trace("THREAD-1 %s: wrong-tag=0x%08x fd=%d (base_id=%d)", __func__, ntohl(cp->ctag), cp->fd, vargs->buffer_id_start);
+    log_trace("THREAD-1 %s: tag=0x%08x fd=%d (base_id=%d)", __func__, ntohl(cp->ctag), cp->fd, vargs->buffer_id_start);
 #if 0 >= PRINT_STATE_LEVEL
     vchan_print(cp, enclave_name);
 #endif  // PRINT_STATE_LEVEL
