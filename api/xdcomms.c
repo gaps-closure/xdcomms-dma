@@ -68,15 +68,14 @@
 #define JSON_OBJECT_SIZE 10000
 //#define OPEN_WITH_NO_O_SYNC     // Define if want speed (and does not cause issues???)
 #define PRINT_STATE_LEVEL    2    // Reduce level to help debug (min=0)
-//#define PRINT_US_TRACE          // print Performance traces when defined
+#define PRINT_US_TRACE            // print Performance traces when defined
 
 codec_map     xdc_cmap[DATA_TYP_MAX];    // maps data type to its data encode + decode functions
 void rcvr_thread_start(vchan *cp);
 vchan *get_cp_from_ctag(uint32_t ctag, char dir, int json_index);
 
-
 char            enclave_name[STR_SIZE] = "";  // enclave name (e.g., green)
-vchan           vchan_info[GAPS_TAG_MAX];      // array of buffers to store local virtual channel info per tag
+vchan           vchan_info[GAPS_TAG_MAX];     // buffer array to store local virtual channel info per tag
 pthread_mutex_t vchan_create;
 
 
