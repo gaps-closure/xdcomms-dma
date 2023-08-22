@@ -66,7 +66,7 @@
 
 #define DATA_TYP_MAX        50
 #define JSON_OBJECT_SIZE 10000
-//#define OPEN_WITH_NO_O_SYNC
+//#define OPEN_WITH_NO_O_SYNC     // Define if want speed (and does not cause issues???)
 #define PRINT_STATE_LEVEL    2    // Reduce level to help debug (min=0)
 //#define PRINT_US_TRACE          // print Performance traces when defined
 
@@ -234,13 +234,14 @@ void dma_rcvr(vchan *cp) {
 void shm_open_channel(vchan *cp) {
   void          *pa_virt_addr;
   unsigned long  pa_phys_addr, pa_mmap_len;       /* page aligned physical address (offset) */
-
-  // a) Open device
-#ifdef OPEN_WITH_NO_O_SYNC    // Much faster if remove O_SYNC, but then must guaranteed write is complete
-  if ((cp->fd = open(cp->dev_name, O_RDWR)) == -1) FATAL;
-#else                         // ESCAPE memory sync'ed, but much alower
-  if ((cp->fd = open(cp->dev_name, O_RDWR | O_SYNC)) == -1) FATAL;
+  int            open_flags=O_RDWR;
+  
+  // a) Open device (Default is to SYNC per write (much slower, but no manual map sync required)
+#ifndef OPEN_WITH_NO_O_SYNC
+  open_flags |= O_SYNC;
 #endif
+  if ((cp->fd = open(cp->dev_name, open_flags)) == -1) FATAL;
+
   // b) mmpp device: reduce address to be a multiple of page size and add the diff to length
   pa_phys_addr       = cp->mm.phys_addr & ~MMAP_PAGE_MASK;
   pa_mmap_len        = cp->mm.len + cp->mm.phys_addr - pa_phys_addr;
@@ -248,7 +249,7 @@ void shm_open_channel(vchan *cp) {
   pa_virt_addr       = mmap(0, pa_mmap_len, cp->mm.prot, cp->mm.flags, cp->fd, pa_phys_addr);
   if (pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
   cp->mm.virt_addr = pa_virt_addr + cp->mm.phys_addr - pa_phys_addr;   // add offset to page aligned addr
-  log_debug("Opened + mmap'ed SHM channel %s: fd=%d, v_addr=0x%lx p_addr=0x%lx len=0x%x", cp->dev_name, cp->fd, cp->mm.virt_addr, pa_phys_addr, pa_mmap_len);
+  log_debug("Opened + mmap'ed SHM channel %s: fd=%d, v_addr=0x%lx p_addr=0x%lx len=0x%x: Open flags=%x (RDWR=%x, SYNC=%x) Mmap flags0x%x (SHARED=%x)", cp->dev_name, cp->fd, cp->mm.virt_addr, pa_phys_addr, pa_mmap_len, open_flags, O_RDWR, O_SYNC, cp->mm.flags, MAP_SHARED);
 }
 
 void shm_info_print(shm_channel *cip) {
@@ -306,10 +307,11 @@ void shm_init_config_one(vchan *cp) {
 //  for (int i = 0; i < len_in_words; i++) *d++ = *s++;
 //}
 
+#ifdef OPEN_WITH_NO_O_SYNC
 // int msync(void addr, size_t length, int flags);
-void shm_sync(void *addr) {
-  int rv = msync(addr, sizeof(shm_channel), MS_ASYNC);
-  log_info("%s rv = %d addr=%p len=%ld", __func__, rv, addr, sizeof(shm_channel));
+void shm_sync(void *addr, unsigned long len, int flags) {
+  int rv = msync(addr, len, flags);
+  log_info("%s rv = %d addr=%p len=%ld flags=%x", __func__, rv, addr, len, flags);
   if (rv < 0) {
      perror("msync failed");
      exit(0);
@@ -317,10 +319,9 @@ void shm_sync(void *addr) {
 }
 
 // void __builtin___clear_cache(void *begin, void *end);
-void shm_sync2(void *addr) {
-  __builtin___clear_cache(addr, addr + sizeof(shm_channel));
-}
-
+// void shm_sync2(void *addr) {
+//   __builtin___clear_cache(addr, addr + sizeof(shm_channel));
+// }
 
 // int cacheflush(char *addr, int nbytes, int cache);
 // #include <asm/cachectl.h>   // cacheflush
@@ -335,6 +336,7 @@ void shm_sync2(void *addr) {
 // }
 
 //  dmac_map_area( cp->shm_addr->pdata[write_index].data, adu_len, DMA_TO_DEVICE);
+#endif
 
 void shm_send(vchan *cp, void *adu, gaps_tag *tag) {
   int            *last_ptr    = &(cp->shm_addr->pkt_index_last);
@@ -368,7 +370,8 @@ void shm_send(vchan *cp, void *adu, gaps_tag *tag) {
 
   // C) Sync data (if not open /dev/mem with 'slow' O_SYNC)
 #ifdef OPEN_WITH_NO_O_SYNC
-  shm_sync((void *) (cp->shm_addr));
+//  shm_sync((void *) (cp->shm_addr), sizeof(shm_channel), MS_ASYNC);
+  shm_sync(cp->mm.virt_addr, cp->mm.len, MS_ASYNC);
 #endif
 #ifdef PRINT_US_TRACE
   time_trace("TX2 %08x (len=%d)", ntohl(cp->ctag), adu_len);
