@@ -66,9 +66,9 @@
 
 #define DATA_TYP_MAX        50
 #define JSON_OBJECT_SIZE 10000
-//#define OPEN_WITH_NO_O_SYNC     // Define if want speed (and does not cause issues???)
+//#define OPEN_WITH_NO_O_SYNC     // Replaces slow open-O_SYNC with msync ***DOES NOT WORK
 #define PRINT_STATE_LEVEL    2    // Reduce level to help debug (min=0)
-#define PRINT_US_TRACE            // print Performance traces when defined
+//#define PRINT_US_TRACE            // print Performance traces when defined
 
 codec_map     xdc_cmap[DATA_TYP_MAX];    // maps data type to its data encode + decode functions
 void rcvr_thread_start(vchan *cp);
@@ -233,13 +233,14 @@ void dma_rcvr(vchan *cp) {
 void shm_open_channel(vchan *cp) {
   void          *pa_virt_addr;
   unsigned long  pa_phys_addr, pa_mmap_len;       /* page aligned physical address (offset) */
-  int            open_flags=O_RDWR;
+  int            shm_open_flags=O_RDWR;
   
   // a) Open device (Default is to SYNC per write (much slower, but no manual map sync required)
-#ifndef OPEN_WITH_NO_O_SYNC
-  open_flags |= O_SYNC;
+#ifndef OPEN_WITH_NO_O_SYNC   // double-negative means open with SYNC which is the default
+  shm_open_flags |= O_SYNC;
+//  shm_open_flags |= O_DIRECT;       // Works the same as O_SYNC
 #endif
-  if ((cp->fd = open(cp->dev_name, open_flags)) == -1) FATAL;
+  if ((cp->fd = open(cp->dev_name, shm_open_flags)) == -1) FATAL;
 
   // b) mmpp device: reduce address to be a multiple of page size and add the diff to length
   pa_phys_addr       = cp->mm.phys_addr & ~MMAP_PAGE_MASK;
@@ -248,7 +249,7 @@ void shm_open_channel(vchan *cp) {
   pa_virt_addr       = mmap(0, pa_mmap_len, cp->mm.prot, cp->mm.flags, cp->fd, pa_phys_addr);
   if (pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
   cp->mm.virt_addr = pa_virt_addr + cp->mm.phys_addr - pa_phys_addr;   // add offset to page aligned addr
-  log_debug("Opened + mmap'ed SHM channel %s: fd=%d, v_addr=0x%lx p_addr=0x%lx len=0x%x: Open flags=%x (RDWR=%x, SYNC=%x) Mmap flags0x%x (SHARED=%x)", cp->dev_name, cp->fd, cp->mm.virt_addr, pa_phys_addr, pa_mmap_len, open_flags, O_RDWR, O_SYNC, cp->mm.flags, MAP_SHARED);
+  log_debug("Opened + mmap'ed SHM channel %s: fd=%d, v_addr=0x%lx p_addr=0x%lx len=0x%x: Open flags=%x (RDWR=%x, SYNC=%x) Mmap flags0x%x (SHARED=%x)", cp->dev_name, cp->fd, cp->mm.virt_addr, pa_phys_addr, pa_mmap_len, shm_open_flags, O_RDWR, O_SYNC, cp->mm.flags, MAP_SHARED);
 }
 
 void shm_info_print(shm_channel *cip) {
@@ -573,10 +574,8 @@ void init_new_chan(vchan *cp, uint32_t ctag, char dir, int json_index) {
     cp->shm_addr   = cp->mm.virt_addr + (json_index * sizeof(shm_channel));
     cp->rvpb_count = SHM_PKT_COUNT;
     if ((cp->dir) == 't') shm_init_config_one(cp);  // 3) Configure SHM structure for new channel
-    if ((cp->dir) == 'r') {
-      rcvr_thread_start(cp);      // 4) Start rx thread for new receive tag
-    }
-    log_trace("%s: shm_addr=%p", __func__, cp->shm_addr);
+    if ((cp->dir) == 'r') rcvr_thread_start(cp);    // 4) Start rx thread for new receive tag
+    log_trace("ctag=0x%08x: VA=%p PA=%p", ctag, cp->shm_addr, (cp->mm.phys_addr & ~MMAP_PAGE_MASK) + (json_index * sizeof(shm_channel)));
   }
   else if ((strcmp(cp->dev_type, "dma")) == 0) {
     if ((cp->dir) == 'r') {
