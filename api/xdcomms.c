@@ -3,13 +3,13 @@
  * partitioned applications and a GAP's Cross Domain Guard (CDG).
  *
  *
- * v0.4 June 2023: Hardware abstraction layer defines abstract one-way
+ * v0.4 August 2023: Hardware abstraction layer defines abstract one-way
  * channels (as a vchan) insread of just DMA channels (so renamed
  * 'xdcomms-dma.c' to 'xdcomms.c'). It now supports:
  *   - MIND-DMA XDG:   Direct Memory Access device (see v0.3)
  *   - ESCAPE-SHM XDG: Reading and writing to a specified region of
- *     shared host mmap'ed memory under the control of the ESCAPE.
- *     FPGA boardFor testing, xdcomms can also communicate without
+ *     shared host mmap'ed memory under the control of the ESCAPE
+ *     FPGA board.  For testing, xdcomms can also communicate without
  *     a XDG using any mmap'ed memory area.
  * Xdcomms configuration is done through:
  *   a) Environment variables that specify device and other parameters
@@ -21,7 +21,6 @@
  * commands. The driver uses kernel space DMA control to the XILINX AXI
  * DMA/MCDMA driver on the GE MIND ZCU102 FPGA board. For testing, it
  * can also communicate without a XDG using a Pseudo driver emulation.
- *
  *
  * Example commands using test request-reply application (found in ../test/)
  *   p) Enclave 2 responds to a request from enclave 1 over pseudo DMA channels:
@@ -79,7 +78,7 @@ vchan           vchan_info[GAPS_TAG_MAX];     // buffer array to store local vir
 pthread_mutex_t vchan_create;
 
 
-// XXX DMA and SHM functions should be put into separate functions, with
+// XXX DMA and SHM functions can be put into separate functions, with
 // xdcomms including DMA + SHM, and DMA + SHM functions including Codec
 
 /**********************************************************************/
@@ -122,7 +121,7 @@ void ctag_decode(gaps_tag *tag, uint32_t *ctag) {
 }
 
 /**********************************************************************/
-/* D3) Read/write DMA device                                           */
+/* D4) Read/write DMA device                                           */
 /**********************************************************************/
 void bw_print(bw *p) {
   fprintf(stderr, "%s: ", __func__);
@@ -225,7 +224,6 @@ void dma_rcvr(vchan *cp) {
   cp->rvpb_index_thrd = (vb_index     + 1) % cp->rvpb_count;
 }
 
-
 /**********************************************************************/
 /* S1) Open/Configure SHM device                                      */
 /**********************************************************************/
@@ -248,7 +246,7 @@ void shm_open_channel(vchan *cp) {
 //  log_trace("SHM len = 0x%x = 0x%x", cp->mm.len, pa_mmap_len);
   pa_virt_addr       = mmap(0, pa_mmap_len, cp->mm.prot, cp->mm.flags, cp->fd, pa_phys_addr);
   if (pa_virt_addr == (void *) MAP_FAILED) FATAL;   // MAP_FAILED = -1
-  cp->mm.virt_addr = pa_virt_addr + cp->mm.phys_addr - pa_phys_addr;   // add offset to page aligned addr
+  cp->mm.virt_addr   = pa_virt_addr + cp->mm.phys_addr - pa_phys_addr;   // add offset to page aligned addr
   log_debug("Opened + mmap'ed SHM channel %s: fd=%d, v_addr=0x%lx p_addr=0x%lx len=0x%x: Open flags=%x (RDWR=%x, SYNC=%x) Mmap flags0x%x (SHARED=%x)", cp->dev_name, cp->fd, cp->mm.virt_addr, pa_phys_addr, pa_mmap_len, shm_open_flags, O_RDWR, O_SYNC, cp->mm.flags, MAP_SHARED);
 }
 
