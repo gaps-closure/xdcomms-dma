@@ -28,14 +28,14 @@
  *     ENCLAVE=green CONFIG_FILE=xdconf_app_req_rep.json DEV_NAME_RX=sue_donimous_rx0 DEV_NAME_TX=sue_donimous_tx0 ./app_req_rep -v -l 1 > ~/log_q.txt 2>&1
  *
  *   q) Enclave 2 responds to a request from enclave 1 over host DRAM SHM channels:
- *     sudo ENCLAVE=orange CONFIG_FILE=xdconf_app_req_rep.json DEV_TYPE_RX=shm DEV_TYPE_TX=shm DEV_WAIT_NE=1 ./app_req_rep -v -l 1 -e 2 > ~/log_p.txt 2>&1
+ *     sudo ENCLAVE=orange CONFIG_FILE=xdconf_app_req_rep.json DEV_TYPE_RX=shm DEV_TYPE_TX=shm SHM_WAIT4NEW=1 ./app_req_rep -v -l 1 -e 2 > ~/log_p.txt 2>&1
  *     sudo ENCLAVE=green CONFIG_FILE=xdconf_app_req_rep.json DEV_TYPE_RX=shm DEV_TYPE_TX=shm ./app_req_rep -v -l 1 > ~/log_q.txt 2>&1
  *
  * Example commands using websrv app. Found in ditectories:
- *   v) ENCLAVE=orange CONFIG_FILE=../xdconf.ini DEV_NAME_RX=sue_donimous_rx0 DEV_NAME_TX=sue_donimous_tx0 DEV_WAIT_NE=1 XDCLOGLEVEL=0 LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api MYADDR=10.109.23.126 CAMADDR=10.109.23.151 ./websrv > ~/log_v.txt 2>&1
+ *   v) ENCLAVE=orange CONFIG_FILE=../xdconf.ini DEV_NAME_RX=sue_donimous_rx0 DEV_NAME_TX=sue_donimous_tx0 SHM_WAIT4NEW=1 XDCLOGLEVEL=0 LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api MYADDR=10.109.23.126 CAMADDR=10.109.23.151 ./websrv > ~/log_v.txt 2>&1
  *   web) ENCLAVE=green CONFIG_FILE=../xdconf.ini DEV_NAME_RX=sue_donimous_rx1 DEV_NAME_TX=sue_donimous_tx1 LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api XDCLOGLEVEL=0 ./websrv  > ~/log_w.txt 2>&1
  *
- *   w) sudo ENCLAVE=orange CONFIG_FILE=../xdconf.ini DEV_TYPE_RX=shm DEV_TYPE_TX=shm DEV_WAIT_NE=1 XDCLOGLEVEL=0 LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api MYADDR=10.109.23.126 CAMADDR=10.109.23.151 ./websrv > ~/log_v.txt 2>&1
+ *   w) sudo ENCLAVE=orange CONFIG_FILE=../xdconf.ini DEV_TYPE_RX=shm DEV_TYPE_TX=shm SHM_WAIT4NEW=1 XDCLOGLEVEL=0 LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api MYADDR=10.109.23.126 CAMADDR=10.109.23.151 ./websrv > ~/log_v.txt 2>&1
  *   web) sudo ENCLAVE=green CONFIG_FILE=../xdconf.ini DEV_TYPE_RX=shm DEV_TYPE_TX=shm LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api XDCLOGLEVEL=0 ./websrv  > ~/log_w.txt 2>&1
  */
 
@@ -202,7 +202,7 @@ void dma_rcvr(vchan *cp) {
 
   // A) Wait for Packet from DMA
   dma_cb_ptr[dma_cb_index].length = sizeof(bw);      /* Receive up to make length Max size */
-  log_debug("THREAD-2 waiting for %s with any tag on dev=%s fd=%d max_len=%d cb_index=%d)", cp->dev_type, cp->dev_name, cp->fd, dma_cb_ptr[dma_cb_index].length, dma_cb_index);
+  log_debug("THREAD-2 waiting for any tag on dev=%s (fd=%d max_len=%d cb_index=%d)", cp->dev_name, cp->fd, dma_cb_ptr[dma_cb_index].length, dma_cb_index);
   while (dma_start_to_finish(cp->fd, &dma_cb_index, &(dma_cb_ptr[dma_cb_index])) != 0) { ; }
   
   // B) Get Channel Pointer (cp) for received packet (based on tag)
@@ -236,7 +236,8 @@ void shm_open_channel(vchan *cp) {
   // a) Open device (Default is to SYNC per write (much slower, but no manual map sync required)
 #ifndef OPEN_WITH_NO_O_SYNC   // double-negative means open with SYNC which is the default
   shm_open_flags |= O_SYNC;
-//  shm_open_flags |= O_DIRECT;       // Works the same as O_SYNC
+//  shm_open_flags |= O_DSYNC;     // O_SYNC, but does (or does not?) care if file metadata is written to disk
+//  shm_open_flags |= O_DIRECT;      // Works the same as O_SYNC
 #endif
   if ((cp->fd = open(cp->dev_name, shm_open_flags)) == -1) FATAL;
 
@@ -391,7 +392,7 @@ int wait_if_old(vchan *cp) {
 //  log_trace("CRCs: SHM=0x%04x Loc=0x%04x", tx_crc, rx_crc);
   if (tx_crc != rx_crc ) return(-1);  // wait for good data
 //  log_trace("time: SHM=0x%04x Loc=0x%04x (nnew=%d)", tx_tim, rx_tim, cp->wait4new_client);
-  if      ((cp->wait4new_client) == 0) log_trace("Not wait for client");
+  if      ((cp->wait4new_client) == 0) log_trace("Not wait for new client");
   else if (rx_tim <= tx_tim) log_trace("New client tags: TX=0x%08x RX=0x%08x", rx_tag, tx_tag);
   else return(-1);                    // wait for new client
   return(0);
@@ -552,7 +553,7 @@ void init_new_chan_from_envi(vchan *cp, uint32_t ctag, char dir) {
     get_dev_type(cp->dev_type,     getenv("DEV_TYPE_RX"), "dma");
     get_dev_name(cp->dev_name,     getenv("DEV_NAME_RX"), "dma_proxy_rx", "mem", cp->dev_type);
     get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * DMA_PKT_COUNT_RX), SHM_MMAP_LEN, cp->dev_type);   // XXX dma default is an over estimate
-    get_dev_val (&(cp->wait4new_client), getenv("DEV_WAIT_NE"), 0x0, 0x0, cp->dev_type);
+    get_dev_val (&(cp->wait4new_client), getenv("SHM_WAIT4NEW"), 0x0, 0x0, cp->dev_type);
   }
   get_dev_val(&(cp->mm.phys_addr), getenv("DEV_MMAP_AD"), DMA_ADDR_HOST, SHM_MMAP_ADDR, cp->dev_type);
 //  log_trace("%s Env Vars: type=%s name=%s mlen=%s (%", __func__, getenv("DEV_TYPE_TX"), getenv("DEV_NAME_TX"), getenv("DEV_MMAP_LE"));
