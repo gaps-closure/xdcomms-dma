@@ -207,21 +207,25 @@ void dma_rcvr(vchan *cp) {
   
   // B) Get Channel Pointer (cp) for received packet (based on tag)
   p = (bw *) &(dma_cb_ptr[dma_cb_index].buffer);    /* XXX: DMA buffer must be larger than size of BW */
-  cp = get_cp_from_ctag(p->message_tag_ID, 'r', 0);
-  vb_index = cp->rvpb_index_thrd;
-  log_debug("THREAD-3 rx packet tag=0x%08x data-len=%d index=(cb=%d vb=%d) status=%d", ntohl(p->message_tag_ID), cp->rvpb[vb_index].data_len, dma_cb_index, vb_index, dma_cb_ptr[dma_cb_index].status);
-
-  // C) Put packet info into Receive Virtual Packet Buffer
-  pthread_mutex_lock(&(cp->lock));
-  bw_len_decode(&(cp->rvpb[vb_index].data_len), p->data_len);
-  cp->rvpb[vb_index].data = (uint8_t *) p->data;
-  cp->rvpb[vb_index].ctag = ntohl(p->message_tag_ID);
-  cp->rvpb[vb_index].newd = 1;
-  pthread_mutex_unlock(&(cp->lock));
-  
-  // D) Increement buffer indexes
-  dma_cb_index        = (dma_cb_index + 1) % DMA_PKT_COUNT_RX;
-  cp->rvpb_index_thrd = (vb_index     + 1) % cp->rvpb_count;
+  log_debug("THREAD-3 rx packet tag=0x%08x data-len=%d dma_index=%d status=%d", ntohl(p->message_tag_ID), ntohs(p->data_len), dma_cb_index, dma_cb_ptr[dma_cb_index].status);
+  cp = get_cp_from_ctag(p->message_tag_ID, 'r', -1);      // -1 = find context pointer only if flow is already setup
+  if ((cp == NULL) || ((p->data_len) < 1)) {
+    log_trace("Thread-4x Invalid rx packet: len=%d ctag=%08x cp=%p (dma_index=%d)", p->data_len, ntohl(p->message_tag_ID), cp, dma_cb_index);
+  }
+  else {
+    // C) Put packet info into Receive Virtual Packet Buffer
+    vb_index = cp->rvpb_index_thrd;
+    pthread_mutex_lock(&(cp->lock));
+    bw_len_decode(&(cp->rvpb[vb_index].data_len), p->data_len);
+    cp->rvpb[vb_index].data = (uint8_t *) p->data;
+    cp->rvpb[vb_index].ctag = ntohl(p->message_tag_ID);
+    cp->rvpb[vb_index].newd = 1;
+    log_trace("Thread-4 Copy rx packet (len=%d) into rx Virtual Buffer (dma_index=%d vb_index=%d)", cp->rvpb[vb_index].data_len, dma_cb_index, vb_index);
+    // D) Increement buffer indexes
+    cp->rvpb_index_thrd = (vb_index + 1) % cp->rvpb_count;
+    pthread_mutex_unlock(&(cp->lock));
+  }
+  dma_cb_index = (dma_cb_index + 1) % DMA_PKT_COUNT_RX;
 }
 
 /**********************************************************************/
@@ -606,9 +610,10 @@ vchan *get_cp_from_ctag(uint32_t ctag, char dir, int json_index) {
   /* b) Find info for this tag (and possibly initialize*/
   for(chan_index=0; chan_index < GAPS_TAG_MAX; chan_index++) {  // Break on finding tag or empty
     cp = &(vchan_info[chan_index]);
-    if (cp->ctag == ctag) break;             // found existing slot for tag
-    if (cp->ctag == 0) {                     // found empty slot (before tag)
-      init_new_chan(cp, ctag, dir, json_index);   // config new channel info, using 'index' to locate SHM block
+    if (cp->ctag == ctag) break;            // found existing slot for tag
+    if (cp->ctag == 0) {                    // found empty slot (before tag)
+      if (json_index < 0) cp = NULL;        // Cannot find existing tag in database
+      else init_new_chan(cp, ctag, dir, json_index);   // config new channel info, using 'index' to locate SHM block
       break;
     }
   }
