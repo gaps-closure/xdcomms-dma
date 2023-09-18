@@ -717,6 +717,8 @@ json_t const *json_open_file(char *xcf, json_t *mem, int len) {
 
   // B) Copy buffer into tiny-json object (mem)
   j_root = json_create(file_as_str, mem,  len);
+  log_trace( "json=%s", file_as_str);
+
   assert(j_root);
   return(j_root);
 }
@@ -742,7 +744,7 @@ void read_tiny_json_config_file(char *xcf) {
   for(j_child = json_getChild(j_enclaves); j_child != 0; j_child = json_getSibling(j_child)) {
     if (JSON_OBJ == json_getType(j_child)) {
       jstr = json_get_str(j_child, "enclave");
-      log_trace( "JSON Enclave=%s.\n", jstr);
+      log_trace( "JSON Enclave=%s", jstr);
       
       // C) Get Each helmap for this node's enclave
       if ((strcmp(enclave_name, jstr)) == 0) {
