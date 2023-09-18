@@ -717,8 +717,7 @@ json_t const *json_open_file(char *xcf, json_t *mem, int len) {
 
   // B) Copy buffer into tiny-json object (mem)
   j_root = json_create(file_as_str, mem,  len);
-  log_trace( "json=%s", file_as_str);
-
+  log_trace( "First line of json = %s", file_as_str);
   assert(j_root);
   return(j_root);
 }
