@@ -742,7 +742,7 @@ void read_tiny_json_config_file(char *xcf) {
   for(j_child = json_getChild(j_enclaves); j_child != 0; j_child = json_getSibling(j_child)) {
     if (JSON_OBJ == json_getType(j_child)) {
       jstr = json_get_str(j_child, "enclave");
-//      printf( "JSON Enclave=%s.\n", jstr);
+      log_trace( "JSON Enclave=%s.\n", jstr);
       
       // C) Get Each helmap for this node's enclave
       if ((strcmp(enclave_name, jstr)) == 0) {
@@ -775,6 +775,7 @@ void config_channels(void) {
     exit (-1);
   }
   read_tiny_json_config_file(e_xcf);
+  sleep(2);       // ?? ensure receive thread(s) completed before
 }
 
 
@@ -787,7 +788,7 @@ void asyn_send(void *adu, gaps_tag *tag) {
 
   // a) Open channel once (and get device type, device name and channel struct
   log_trace("Start of %s for tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
-  cp = get_chan_info(tag, 't', 0);
+  cp = get_chan_info(tag, 't', -1);
   pthread_mutex_lock(&(cp->lock));
   // b) encode packet into TX buffer and send */
   if (strcmp(cp->dev_type, "dma") == 0) dma_send(cp, adu, tag);
@@ -961,7 +962,7 @@ void xdc_register(codec_func_ptr encode, codec_func_ptr decode, int typ) {
 void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout) {
   log_trace("Start of %s: timeout = %d ms for tag=<%d,%d,%d>", __func__, timeout, tag.mux, tag.sec, tag.typ);
   config_channels();
-  vchan *cp = get_chan_info(&tag, 'r', 0);
+  vchan *cp = get_chan_info(&tag, 'r', -1);
 //  fprintf(stderr, "timeout = %d ms for tag=<%d,%d,%d>\n", timeout, tag.mux, tag.sec, tag.typ);
   if (timeout > 0) cp->retries = (timeout * NSEC_IN_MSEC)/RX_POLL_INTERVAL_NSEC;     // Set value
   log_trace("%s sets RX retries = %d every %d ns (for ctag=%08x)", __func__, cp->retries, RX_POLL_INTERVAL_NSEC, ntohl(cp->ctag));
@@ -977,7 +978,7 @@ int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   int              x = 0;
 
 //  log_debug("Start of %s: tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
-  cp              = get_chan_info(tag, 'r', 0);     // get buffer for tag (to communicate with thread)
+  cp              = get_chan_info(tag, 'r', -1);     // get buffer for tag (to communicate with thread)
   request.tv_sec  = RX_POLL_INTERVAL_NSEC/NSEC_IN_SEC;
   request.tv_nsec = RX_POLL_INTERVAL_NSEC % NSEC_IN_SEC;
   ntries          = 1 + (cp->retries);           // number of tries to rx packet
