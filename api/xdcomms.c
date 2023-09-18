@@ -717,7 +717,7 @@ json_t const *json_open_file(char *xcf, json_t *mem, int len) {
 
   // B) Copy buffer into tiny-json object (mem)
   j_root = json_create(file_as_str, mem,  len);
-  log_trace( "First line of json = %s", file_as_str);
+//  log_trace( "First line of json = %s", file_as_str);
   assert(j_root);
   return(j_root);
 }
@@ -743,19 +743,19 @@ void read_tiny_json_config_file(char *xcf) {
   for(j_child = json_getChild(j_enclaves); j_child != 0; j_child = json_getSibling(j_child)) {
     if (JSON_OBJ == json_getType(j_child)) {
       jstr = json_get_str(j_child, "enclave");
-      log_trace( "JSON Enclave=%s", jstr);
+      log_trace( "JSON Enclave=%s (I am %s)", jstr, enclave_name);
       
       // C) Get Each helmap for this node's enclave
       if ((strcmp(enclave_name, jstr)) == 0) {
         j_envlave_halmaps = json_getProperty(j_child, "halmaps");
         helmap_len = get_json_len(j_envlave_halmaps);
-        for(j_halmap_element = json_getChild(j_envlave_halmaps); j_halmap_element != 0; j_halmap_element = json_getSibling(j_halmap_element)) {
+        for (j_halmap_element = json_getChild(j_envlave_halmaps); j_halmap_element != 0; j_halmap_element = json_getSibling(j_halmap_element)) {
           jfrom   = json_get_str(j_halmap_element, "from");
           jto     = json_get_str(j_halmap_element, "to");
           tag.mux = json_get_int(j_halmap_element, "mux");
           tag.sec = json_get_int(j_halmap_element, "sec");
           tag.typ = json_get_int(j_halmap_element, "typ");
-//          printf( "%s->%s tag=<%d,%d,%d>\n", jfrom, jto, tag.mux, tag.sec, tag.typ);
+          log_trace( "%s->%s tag=<%d,%d,%d>", jfrom, jto, tag.mux, tag.sec, tag.typ);
           config_from_jsom(helmap_len, jfrom, jto, tag);
         }
       }
