@@ -678,7 +678,7 @@ void json_get_str(json_t const *j_node, char *match_str, char *value) {
     exit(-1);
   }
   strcpy(value, json_getValue(j_prop));
-  log_trace("Value=%s", value);
+//  log_trace("Value=%s", value);
 }
 
 // Get value of integer from json object that has matches match_str
