@@ -677,7 +677,7 @@ char const *json_get_str(json_t const *j_node, char *match_str) {
     puts("Error, string value is not found.");
     exit(-1);
   }
-//  printf( "Value=%s.\n", json_getValue(j_prop));
+  log_trace("Value=%s.\n", json_getValue(j_prop));
   return(json_getValue(j_prop));
 }
 
@@ -735,7 +735,7 @@ void read_tiny_json_config_file(char *xcf) {
   j_root = json_open_file(xcf, mem, sizeof mem / sizeof *mem);
   j_enclaves = json_getProperty( j_root, "enclaves" );
   if ( !j_enclaves || JSON_ARRAY != json_getType( j_enclaves ) ) {
-      puts("Error, friend list property is not found.");
+      puts("Error, JSON enclaves entry is not found.");
       exit(-1);
   }
 
