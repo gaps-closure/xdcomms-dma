@@ -677,7 +677,7 @@ char const *json_get_str(json_t const *j_node, char *match_str) {
     puts("Error, string value is not found.");
     exit(-1);
   }
-  log_trace("Value=%s.\n", json_getValue(j_prop));
+  log_trace("Value=%s (%p)\n", json_getValue(j_prop));
   return(json_getValue(j_prop));
 }
 
