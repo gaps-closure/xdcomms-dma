@@ -712,7 +712,7 @@ json_t const *json_open_file(char *xcf, json_t *mem, int len) {
   fp = fopen(xcf, "rb");
   assert(fp != NULL);
   x = fread(file_as_str, 1, JSON_OBJECT_SIZE, fp);
-  log_trace("JSON FILE len = %d\n", x);
+  log_trace("JSON FILE len = %d", x);
   fclose(fp);
 
   // B) Copy buffer into tiny-json object (mem)
