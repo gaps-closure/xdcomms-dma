@@ -749,10 +749,15 @@ void read_tiny_json_config_file(char *xcf) {
                 
       // C) Get Each helmap for this node's enclave
       if ((strcmp(enclave_name, jstr)) == 0) {
+        log_trace("FOUND JSON INFO FOR SPECIFIED ENCLAVE", helmap_len);
         j_envlave_halmaps = json_getProperty(j_child, "halmaps");
         helmap_len = get_json_len(j_envlave_halmaps);
         log_trace("helmap_len=%d", helmap_len);
         for (j_halmap_element = json_getChild(j_envlave_halmaps); j_halmap_element != 0; j_halmap_element = json_getSibling(j_halmap_element)) {
+          if (JSON_OBJ != json_getType(j_halmap_element)) {
+            puts("Halmap element is not found.");
+            exit(-1);
+          }
           json_get_str(j_halmap_element, "from", jfrom);
           json_get_str(j_halmap_element, "to",   jto);
           tag.mux = json_get_int(j_halmap_element, "mux");
