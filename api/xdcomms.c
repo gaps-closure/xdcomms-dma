@@ -743,7 +743,7 @@ void read_tiny_json_config_file(char *xcf) {
   for(j_child = json_getChild(j_enclaves); j_child != 0; j_child = json_getSibling(j_child)) {
     if (JSON_OBJ == json_getType(j_child)) {
       jstr = json_get_str(j_child, "enclave");
-      log_trace("JSON Enclave = %s (I am %s) jstr=%p match=%d", jstr, enclave_name, jstr, strcmp(enclave_name, jstr);
+      log_trace("JSON Enclave = %s (I am %s) jstr=%p match=%d", jstr, enclave_name, jstr, strcmp(enclave_name, jstr));
       log_trace("jstr[0:7] = %c %c %c %c %c %c %c %c", jstr[0], jstr[1], jstr[2], jstr[3], jstr[4], jstr[5], jstr[6], jstr[7]);
       log_trace("jstr[0:7] = 0x %x %x %x %x %x %x %x %x", jstr[0], jstr[1], jstr[2], jstr[3], jstr[4], jstr[5], jstr[6], jstr[7]);
                 
