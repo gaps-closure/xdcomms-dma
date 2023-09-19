@@ -668,8 +668,8 @@ void config_from_jsom(int m, char const *from_name, char const *to_name, gaps_ta
   j++;
 }
 
-// Get value of string from json object that has matches match_str
-char const *json_get_str(json_t const *j_node, char *match_str) {
+// Get value of string from json object that  matches match_str
+void json_get_str(json_t const *j_node, char *match_str, char *value) {
   json_t const *j_prop;           // JSON property (e.g., "name")
 
   j_prop = json_getProperty(j_node, match_str);
@@ -677,8 +677,8 @@ char const *json_get_str(json_t const *j_node, char *match_str) {
     puts("Error, string value is not found.");
     exit(-1);
   }
-  log_trace("Value=%s (%p)\n", json_getValue(j_prop), json_getValue(j_prop));
-  return(json_getValue(j_prop));
+  strcpy(value, json_getValue(j_prop));
+  log_trace("Value=%s", value);
 }
 
 // Get value of integer from json object that has matches match_str
@@ -728,7 +728,7 @@ void read_tiny_json_config_file(char *xcf) {
   int           helmap_len;
   gaps_tag      tag;
   json_t const *j_root, *j_child, *j_enclaves, *j_envlave_halmaps, *j_halmap_element;
-  char   const *jstr, *jfrom, *jto;
+  char         jstr[128], jfrom[128], jto[128];
   
   
   // A) Get List of Enclaves
@@ -742,7 +742,7 @@ void read_tiny_json_config_file(char *xcf) {
   // B) Get Each Enclave
   for(j_child = json_getChild(j_enclaves); j_child != 0; j_child = json_getSibling(j_child)) {
     if (JSON_OBJ == json_getType(j_child)) {
-      jstr = json_get_str(j_child, "enclave");
+      json_get_str(j_child, "enclave", jstr);
       log_trace("JSON Enclave = %s (I am %s) jstr=%p match=%d", jstr, enclave_name, jstr, strcmp(enclave_name, jstr));
       log_trace("jstr[0:7] = %c %c %c %c %c %c %c %c", jstr[0], jstr[1], jstr[2], jstr[3], jstr[4], jstr[5], jstr[6], jstr[7]);
       log_trace("jstr[0:7] = 0x %x %x %x %x %x %x %x %x", jstr[0], jstr[1], jstr[2], jstr[3], jstr[4], jstr[5], jstr[6], jstr[7]);
@@ -752,8 +752,8 @@ void read_tiny_json_config_file(char *xcf) {
         j_envlave_halmaps = json_getProperty(j_child, "halmaps");
         helmap_len = get_json_len(j_envlave_halmaps);
         for (j_halmap_element = json_getChild(j_envlave_halmaps); j_halmap_element != 0; j_halmap_element = json_getSibling(j_halmap_element)) {
-          jfrom   = json_get_str(j_halmap_element, "from");
-          jto     = json_get_str(j_halmap_element, "to");
+          json_get_str(j_halmap_element, "from", jfrom);
+          json_get_str(j_halmap_element, "to", jto);
           tag.mux = json_get_int(j_halmap_element, "mux");
           tag.sec = json_get_int(j_halmap_element, "sec");
           tag.typ = json_get_int(j_halmap_element, "typ");
