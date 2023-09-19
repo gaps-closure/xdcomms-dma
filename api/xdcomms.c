@@ -743,7 +743,7 @@ void read_tiny_json_config_file(char *xcf) {
   for(j_child = json_getChild(j_enclaves); j_child != 0; j_child = json_getSibling(j_child)) {
     if (JSON_OBJ == json_getType(j_child)) {
       jstr = json_get_str(j_child, "enclave");
-      log_trace( "JSON Enclave=%s (I am %s)", jstr, enclave_name);
+      log_trace( "JSON Enclave=%s (I am %s) jstr=%p (j[0:1]= %x %x", jstr, enclave_name, jstr, jstr[0], jstr[1]);
       
       // C) Get Each helmap for this node's enclave
       if ((strcmp(enclave_name, jstr)) == 0) {
