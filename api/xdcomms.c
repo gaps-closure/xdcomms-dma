@@ -776,6 +776,7 @@ void read_tiny_json_config_file(char *xcf) {
       helmap_len = json_get_len(j_envlave_halmaps);
       log_trace("helmap_len=%d", helmap_len);
       for (j_halmap_element = json_getChild(j_envlave_halmaps); j_halmap_element != 0; j_halmap_element = json_getSibling(j_halmap_element)) {
+        // D) Get Each helmap element parameters
         json_get_str(j_halmap_element, "from", jfrom);
         json_get_str(j_halmap_element, "to",   jto);
         tag.mux = json_get_int(j_halmap_element, "mux");
