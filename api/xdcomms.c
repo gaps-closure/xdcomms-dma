@@ -672,6 +672,10 @@ void config_from_jsom(int m, char const *from_name, char const *to_name, gaps_ta
 void json_get_str(json_t const *j_node, char *match_str, char *value) {
   json_t const *j_prop;           // JSON property (e.g., "name")
 
+  if (JSON_OBJ != json_getType(j_node)) {
+    log_fatal("j_node is not a json object");
+    exit(-1);
+  }
   j_prop = json_getProperty(j_node, match_str);
   if ( !j_prop || JSON_TEXT != json_getType(j_prop) ) {
     puts("Error, string value is not found.");
@@ -685,6 +689,10 @@ void json_get_str(json_t const *j_node, char *match_str, char *value) {
 int json_get_int(json_t const *j_node, char *match_str) {
   json_t const *j_prop;           // JSON property (e.g., "name")
 
+  if (JSON_OBJ != json_getType(j_node)) {
+    log_fatal("j_parent is not a json object");
+    exit(-1);
+  }
   j_prop = json_getProperty(j_node, match_str);
   if ( !j_prop || JSON_INTEGER != json_getType(j_prop) ) {
     puts("Error, integer value is not found.");
@@ -694,13 +702,33 @@ int json_get_int(json_t const *j_node, char *match_str) {
 }
 
 // Get length of json object
-int get_json_len(json_t const *j_node) {
+int json_get_len(json_t const *j_node) {
   int           m=0;
   json_t const *j;
   
+  if (JSON_OBJ != json_getType(j_node)) {
+    log_fatal("j_node is not a json object");
+    exit(-1);
+  }
   for(j = json_getChild(j_node); j != 0; j = json_getSibling(j)) m++;
   return m;
 }
+
+json_t const *json_get_j_array(json_t const *j_node char *match_str) {
+  json_t const *j_child;
+  
+  if (JSON_OBJ != json_getType(j_node)) {
+    log_fatal("j_parent is not a json object");
+    exit(-1);
+  }
+  j_child = json_getProperty(j_node, match_str);
+  if ( !j_child || JSON_ARRAY != json_getType(j_child) ) {
+    log_fatal("JSON array not found");
+    exit(-1);
+  }
+  return (j_child);
+}
+
 
 // Get json_object_from_file
 json_t const *json_open_file(char *xcf, json_t *mem, int len) {
@@ -733,39 +761,27 @@ void read_tiny_json_config_file(char *xcf) {
   
   // A) Get List of Enclaves
   j_root = json_open_file(xcf, mem, sizeof mem / sizeof *mem);
-  j_enclaves = json_getProperty( j_root, "enclaves" );
-  if ( !j_enclaves || JSON_ARRAY != json_getType( j_enclaves ) ) {
-      puts("Error, JSON enclaves entry is not found.");
-      exit(-1);
-  }
-
+  j_enclaves = json_get_j_array(j_root, "enclaves");
   // B) Get Each Enclave
   for(j_child = json_getChild(j_enclaves); j_child != 0; j_child = json_getSibling(j_child)) {
-    if (JSON_OBJ == json_getType(j_child)) {
-      json_get_str(j_child, "enclave", jstr);
-      log_trace("JSON Enclave = %s (I am %s)", jstr, enclave_name);
+    json_get_str(j_child, "enclave", jstr);
+    log_trace("JSON Enclave = %s (I am %s)", jstr, enclave_name);
 //      log_trace("jstr[0:7] = %c %c %c %c %c %c %c %c", jstr[0], jstr[1], jstr[2], jstr[3], jstr[4], jstr[5], jstr[6], jstr[7]);
 //      log_trace("jstr=%p match=%d jstr[0:7] = 0x %x %x %x %x %x %x %x %x", jstr, strcmp(enclave_name, jstr), jstr[0], jstr[1], jstr[2], jstr[3], jstr[4], jstr[5], jstr[6], jstr[7]);
-                
-      // C) Get Each helmap for this node's enclave
-      if ((strcmp(enclave_name, jstr)) == 0) {
-        log_trace("FOUND JSON INFO FOR SPECIFIED ENCLAVE", helmap_len);
-        j_envlave_halmaps = json_getProperty(j_child, "halmaps");
-        helmap_len = get_json_len(j_envlave_halmaps);
-        log_trace("helmap_len=%d", helmap_len);
-        for (j_halmap_element = json_getChild(j_envlave_halmaps); j_halmap_element != 0; j_halmap_element = json_getSibling(j_halmap_element)) {
-          if (JSON_OBJ != json_getType(j_halmap_element)) {
-            puts("Halmap element is not found.");
-            exit(-1);
-          }
-          json_get_str(j_halmap_element, "from", jfrom);
-          json_get_str(j_halmap_element, "to",   jto);
-          tag.mux = json_get_int(j_halmap_element, "mux");
-          tag.sec = json_get_int(j_halmap_element, "sec");
-          tag.typ = json_get_int(j_halmap_element, "typ");
-          log_trace( "%s->%s tag=<%d,%d,%d>", jfrom, jto, tag.mux, tag.sec, tag.typ);
-          config_from_jsom(helmap_len, jfrom, jto, tag);
-        }
+    // C) Get Each helmap for this node's enclave
+    if ((strcmp(enclave_name, jstr)) == 0) {
+      log_trace("FOUND JSON INFO FOR SPECIFIED ENCLAVE", helmap_len);
+      j_envlave_halmaps = json_getProperty(j_child, "halmaps");
+      helmap_len = json_get_len(j_envlave_halmaps);
+      log_trace("helmap_len=%d", helmap_len);
+      for (j_halmap_element = json_getChild(j_envlave_halmaps); j_halmap_element != 0; j_halmap_element = json_getSibling(j_halmap_element)) {
+        json_get_str(j_halmap_element, "from", jfrom);
+        json_get_str(j_halmap_element, "to",   jto);
+        tag.mux = json_get_int(j_halmap_element, "mux");
+        tag.sec = json_get_int(j_halmap_element, "sec");
+        tag.typ = json_get_int(j_halmap_element, "typ");
+        log_trace( "%s->%s tag=<%d,%d,%d>", jfrom, jto, tag.mux, tag.sec, tag.typ);
+        config_from_jsom(helmap_len, jfrom, jto, tag);
       }
     }
   }
