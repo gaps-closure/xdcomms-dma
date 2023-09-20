@@ -771,7 +771,7 @@ void read_tiny_json_config_file(char *xcf) {
 //      log_trace("jstr=%p match=%d jstr[0:7] = 0x %x %x %x %x %x %x %x %x", jstr, strcmp(enclave_name, jstr), jstr[0], jstr[1], jstr[2], jstr[3], jstr[4], jstr[5], jstr[6], jstr[7]);
     // C) Get Each helmap for this node's enclave
     if ((strcmp(enclave_name, jstr)) == 0) {
-      log_trace("FOUND JSON INFO FOR THIS ENCLAVE", helmap_len);
+      log_trace("FOUND JSON INFO FOR THIS ENCLAVE");
       j_envlave_halmaps = json_getProperty(j_child, "halmaps");
       helmap_len = json_get_len(j_envlave_halmaps);
       log_trace("helmap_len=%d", helmap_len);
