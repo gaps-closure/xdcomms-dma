@@ -714,7 +714,7 @@ int json_get_len(json_t const *j_node) {
   return m;
 }
 
-json_t const *json_get_j_array(json_t const *j_node char *match_str) {
+json_t const *json_get_j_array(json_t const *j_node, char *match_str) {
   json_t const *j_child;
   
   if (JSON_OBJ != json_getType(j_node)) {
