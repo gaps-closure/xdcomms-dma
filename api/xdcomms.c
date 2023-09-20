@@ -706,7 +706,7 @@ int json_get_len(json_t const *j_node) {
   int           m=0;
   json_t const *j;
   
-  if (JSON_OBJ != json_getType(j_node)) {
+  if (JSON_ARRAY != json_getType(j_node)) {
     log_fatal("j_node is not a json object %d", json_getType(j_node));
     exit(-1);
   }
