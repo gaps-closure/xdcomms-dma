@@ -752,12 +752,13 @@ json_t const *json_open_file(char *xcf, json_t *mem, int len) {
 }
 
 // Open and parse JSON configuration file (using json-c library)
+//   enum: JSON_OBJ, JSON_ARRAY, JSON_TEXT, JSON_BOOLEAN, JSON_INTEGER, JSON_REAL, JSON_NULL
 void read_tiny_json_config_file(char *xcf) {
   json_t        mem[JSON_OBJECT_SIZE];
   int           helmap_len;
   gaps_tag      tag;
   json_t const *j_root, *j_child, *j_enclaves, *j_envlave_halmaps, *j_halmap_element;
-  char          jstr[128], jfrom[128], jto[128];
+  char          jstr[MAX_DEV_NAME_LEN], jfrom[MAX_DEV_NAME_LEN], jto[MAX_DEV_NAME_LEN];
   
   // A) Get List of Enclaves
   j_root = json_open_file(xcf, mem, sizeof mem / sizeof *mem);
