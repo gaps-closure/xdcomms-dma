@@ -673,7 +673,7 @@ void json_get_str(json_t const *j_node, char *match_str, char *value) {
   json_t const *j_prop;           // JSON property (e.g., "name")
 
   if (JSON_OBJ != json_getType(j_node)) {
-    log_fatal("j_node is not a json object");
+    log_fatal("j_node is not a json object (%d)", json_getType(j_node));
     exit(-1);
   }
   j_prop = json_getProperty(j_node, match_str);
@@ -707,7 +707,7 @@ int json_get_len(json_t const *j_node) {
   json_t const *j;
   
   if (JSON_ARRAY != json_getType(j_node)) {
-    log_fatal("j_node is not a json object %d", json_getType(j_node));
+    log_fatal("j_node is not a json array (%d)", json_getType(j_node));
     exit(-1);
   }
   for(j = json_getChild(j_node); j != 0; j = json_getSibling(j)) m++;
@@ -719,7 +719,7 @@ json_t const *json_get_j_array(json_t const *j_node, char *match_str) {
   json_t const *j_child;
   
   if (JSON_OBJ != json_getType(j_node)) {
-    log_fatal("j_parent is not a json object");
+    log_fatal("j_node is not a json object (%d)", json_getType(j_node));
     exit(-1);
   }
   j_child = json_getProperty(j_node, match_str);
