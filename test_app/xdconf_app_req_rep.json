@@ -1,7 +1,7 @@
 {
   "enclaves": [
     {
-      "enclave": "green",
+      "enclave": "orange",
       "inuri": "",
       "outuri": "",
       "halmaps": [
@@ -40,7 +40,7 @@
       ]
     },
     {
-      "enclave": "orange",
+      "enclave": "green",
       "inuri": "",
       "outuri": "",
       "halmaps": [
