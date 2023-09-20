@@ -706,6 +706,7 @@ int json_get_len(json_t const *j_node) {
   int           m=0;
   json_t const *j;
   
+  log_trace("In get_len function");
   if (JSON_ARRAY != json_getType(j_node)) {
     log_fatal("j_node is not a json array (%d)", json_getType(j_node));
     exit(-1);
