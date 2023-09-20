@@ -710,7 +710,9 @@ int json_get_len(json_t const *j_node) {
     log_fatal("j_node is not a json array (%d)", json_getType(j_node));
     exit(-1);
   }
+  log_trace("Counting number of children");
   for(j = json_getChild(j_node); j != 0; j = json_getSibling(j)) m++;
+  log_trace("Counted number of children = %d", m);
   return m;
 }
 
@@ -773,6 +775,7 @@ void read_tiny_json_config_file(char *xcf) {
     if ((strcmp(enclave_name, jstr)) == 0) {
       log_trace("FOUND JSON INFO FOR THIS ENCLAVE");
       j_envlave_halmaps = json_getProperty(j_child, "halmaps");
+      log_trace("got list of halmaps");
       helmap_len = json_get_len(j_envlave_halmaps);
       log_trace("helmap_len=%d", helmap_len);
       for (j_halmap_element = json_getChild(j_envlave_halmaps); j_halmap_element != 0; j_halmap_element = json_getSibling(j_halmap_element)) {
@@ -828,7 +831,7 @@ void *rcvr_thread_function(thread_args *vargs) {
   vchan       *cp = (vchan *) vargs->cp;
 
   while (1) {
-    log_trace("THREAD-1 %s: tag=0x%08x fd=%d (base_id=%d)", __func__, ntohl(cp->ctag), cp->fd, vargs->buffer_id_start);
+    log_trace("THREAD-1 %s: ctag=0x%08x fd=%d (base_id=%d)", __func__, ntohl(cp->ctag), cp->fd, vargs->buffer_id_start);
 #if 0 >= PRINT_STATE_LEVEL
     vchan_print(cp, enclave_name);
 #endif  // PRINT_STATE_LEVEL
