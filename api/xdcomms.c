@@ -776,7 +776,7 @@ void read_tiny_json_config_file(char *xcf) {
     if ((strcmp(enclave_name, jstr)) == 0) {
       log_trace("FOUND JSON INFO FOR THIS ENCLAVE");
       j_envlave_halmaps = json_getProperty(j_child, "halmaps");
-      log_trace("got list of halmaps");
+      log_trace("got JSON ARRAY (enum=%d) with list of halmaps", json_getType(j_envlave_halmaps));
       helmap_len = json_get_len(j_envlave_halmaps);
       log_trace("helmap_len=%d", helmap_len);
       for (j_halmap_element = json_getChild(j_envlave_halmaps); j_halmap_element != 0; j_halmap_element = json_getSibling(j_halmap_element)) {
