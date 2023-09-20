@@ -685,7 +685,7 @@ void json_get_str(json_t const *j_node, char *match_str, char *value) {
 //  log_trace("Value=%s", value);
 }
 
-// Get value of integer from json object that has matches match_str
+// Get value of integer from json object that matches match_str
 int json_get_int(json_t const *j_node, char *match_str) {
   json_t const *j_prop;           // JSON property (e.g., "name")
 
@@ -701,7 +701,7 @@ int json_get_int(json_t const *j_node, char *match_str) {
   return(atoi(json_getValue(j_prop)));
 }
 
-// Get length of json object
+// Get length of json array
 int json_get_len(json_t const *j_node) {
   int           m=0;
   json_t const *j;
@@ -714,6 +714,7 @@ int json_get_len(json_t const *j_node) {
   return m;
 }
 
+// Get child (that is a json array) of a json object that matches match_str
 json_t const *json_get_j_array(json_t const *j_node, char *match_str) {
   json_t const *j_child;
   
