@@ -1,5 +1,5 @@
 CC          ?= gcc
-CFLAGS      ?= -O2 -Wall -Wstrict-prototypes
+CFLAGS      ?= -O2 -Wall -Wstrict-prototypes #-g
 INCL         = -I ~/gaps/xdcomms-dma/api -I ~/gaps/xdcomms-dma/log -I ~/gaps/xdcomms-dma/crc -I ~/gaps/xdcomms-dma/tiny-json
 LDFLAGS     += -L ../api -lxdcomms #-Wl,-R$~/gaps/xdcomms-dma/api
 SRCS         = $(wildcard *.c) $(wildcard ./6month-demo/*.c)
