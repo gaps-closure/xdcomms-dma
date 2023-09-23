@@ -647,6 +647,13 @@ vchan *get_chan_info(gaps_tag *tag, char dir, int index) {
 //      ...
 //      orange j=9 t=5: tag=<2,2,10>   green j=9 r=5: tag=<2,2,10>
 
+//void json_print_node_info(json_t const *node, int name_flag, int value_flag) {
+//  json_t const *child=node->u.c.child, *sibling=node->sibling;
+//  fprintf(stderr, "JSON node=%p sibl=%p chil=%p\n", node, sibling, child );
+//  if (name_flag  == 1) fprintf(stderr, "JSON node name = %s\n", node->name);
+//  if (value_flag == 1) fprintf(stderr, "JSON node value = %s\n", node->u.value);
+//}
+
 void config_from_jsom(int m, char const *from_name, char const *to_name, gaps_tag tag) {
   static int  j=0, r=0, t=0;
   static char dir_0 = 't';
@@ -725,6 +732,9 @@ json_t const *json_get_j_array(json_t const *j_node, char *match_str) {
     log_fatal("j_node is not a json object (%d)", json_getType(j_node));
     exit(-1);
   }
+//  j_child = j_node->u.c.child;
+//  fprintf(stderr, "XX=%s\n", j_child->name);
+
   j_child = json_getProperty(j_node, match_str);
   if ( !j_child || JSON_ARRAY != json_getType(j_child) ) {
     log_fatal("JSON array not found");
@@ -733,38 +743,35 @@ json_t const *json_get_j_array(json_t const *j_node, char *match_str) {
   return (j_child);
 }
 
-
-// Get json_object_from_file
-json_t const *json_open_file(char *xcf, json_t *mem, int len) {
-  json_t const *j_root;                          // JSON Root node
-  FILE         *fp;                              // JSON File
-  char          file_as_str[JSON_OBJECT_SIZE];   // JSON file as a String
-  int           x;
+// Copy JSON file xcf into file_as_str
+ int json_open_file(char *xcf, char *file_as_str) {
+  FILE   *json_fp;
+  int     len;
+  
   // A) Copy JSON file into buffer
-  fp = fopen(xcf, "rb");
-  assert(fp != NULL);
-  x = fread(file_as_str, 1, JSON_OBJECT_SIZE, fp);
-  log_trace("JSON FILE len = %d", x);
-  fclose(fp);
-
-  // B) Copy buffer into tiny-json object (mem)
-  j_root = json_create(file_as_str, mem,  len);
-//  log_trace( "First line of json = %s", file_as_str);
-  assert(j_root);
-  return(j_root);
+  json_fp = fopen(xcf, "rb");
+  assert(json_fp != NULL);
+  len = fread(file_as_str, 1, JSON_OBJECT_SIZE, json_fp);
+  fclose(json_fp);
+  return (len);
 }
+
 
 // Open and parse JSON configuration file (using json-c library)
 //   enum: JSON_OBJ, JSON_ARRAY, JSON_TEXT, JSON_BOOLEAN, JSON_INTEGER, JSON_REAL, JSON_NULL
 void read_tiny_json_config_file(char *xcf) {
-  json_t        mem[JSON_OBJECT_SIZE];
-  int           helmap_len;
+  char          json_file_as_str[JSON_OBJECT_SIZE];
+  json_t        mem[JSON_OBJECT_SIZE];  // json node struct 'array' with ptrs to json_file_as_str
+  int           json_file_len, helmap_len;
   gaps_tag      tag;
   json_t const *j_root, *j_child, *j_enclaves, *j_envlave_halmaps, *j_halmap_element;
   char          jstr[MAX_DEV_NAME_LEN], jfrom[MAX_DEV_NAME_LEN], jto[MAX_DEV_NAME_LEN];
   
   // A) Get List of Enclaves
-  j_root = json_open_file(xcf, mem, sizeof mem / sizeof *mem);
+  json_file_len = json_open_file(xcf, json_file_as_str);
+  log_trace("JSON FILE len = %d", json_file_len);
+  j_root = json_create(json_file_as_str, mem, sizeof mem / sizeof *mem);
+  assert(j_root);
   j_enclaves = json_get_j_array(j_root, "enclaves");
   // B) Get Each Enclave
   for(j_child = json_getChild(j_enclaves); j_child != 0; j_child = json_getSibling(j_child)) {
