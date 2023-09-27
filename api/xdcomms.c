@@ -166,20 +166,14 @@ int dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *cbuf_
 //  log_trace("DMA Proxy Started (fd=%d, id=%d) len=0x%lx", fd, *buffer_id_ptr, cbuf_ptr->length);
   ioctl(fd, FINISH_XFER, buffer_id_ptr);
 //  time_trace("DMA Proxy transfer 3 (fd=%d, id=%d): status=%d", fd, *buffer_id_ptr, cbuf_ptr->status);
-  if (cbuf_ptr->status != PROXY_NO_ERROR) {
-    if (cbuf_ptr->status != PROXY_TIMEOUT) { // Timeouts occur too frequently to print
-      log_trace("******* DMA Proxy transfer error (fd=%d, id=%d len=0x%lx): status=%d (BUSY=1, TIMEOUT=2, ERROR=3)", fd, *buffer_id_ptr, cbuf_ptr->length, cbuf_ptr->status);
-    }
-    return -1;
-  }
-  return 0;
+  return (cbuf_ptr->status);
 }
 
 void dma_send(vchan *cp, void *adu, gaps_tag *tag) {
   struct channel_buffer  *dma_tx_chan = (struct channel_buffer *) cp->mm.virt_addr;
   bw        *p;               // Packet pointer
-  int       buffer_id=0;      // Use only a single buffer
-  size_t    adu_len;    // encoder calculates length */
+  int       rv, buffer_id=0;  // Use only a single buffer
+  size_t    adu_len;          // The CLOSURE generated encoder calculates length */
   size_t    packet_len;
   
   p = (bw *) &(dma_tx_chan->buffer);      // DMA packet buffer pointer, where we put the packet */
@@ -191,42 +185,46 @@ void dma_send(vchan *cp, void *adu, gaps_tag *tag) {
   dma_tx_chan->length = packet_len;                           // Tell DMA buffer packet length (data + header)
   log_trace("Send packet on ctag=%08x fd=%d buf_id=%d of len: adu=%d packet=%d Bytes", ntohl(cp->ctag), cp->fd, buffer_id, ntohs(p->data_len), packet_len);
   if (packet_len <= sizeof(bw)) log_buf_trace("TX_PKT", (uint8_t *) &(dma_tx_chan->buffer), packet_len);
-  dma_start_to_finish(cp->fd, &buffer_id, dma_tx_chan);
-  log_debug("XDCOMMS tx packet tag=<%d,%d,%d> len=%ld", tag->mux, tag->sec, tag->typ, packet_len);
+  rv = dma_start_to_finish(cp->fd, &buffer_id, dma_tx_chan);
+  log_debug("XDCOMMS tx packet tag=<%d,%d,%d> len=%ld rv=%d", tag->mux, tag->sec, tag->typ, packet_len, rv);
 }
 
-// Copy from DMA channel buffer (index = dma_cb_index) to virtual channel buffer (index = vb_index)
+// Copy packet from DMA channel buffer (idx=dma_cb_index) to virtual channel buffer (idx=vb_index)
+void dma_write_into_vpb(vchan *cp, bw *p) {
+  int vb_index = cp->rvpb_index_thrd;
+  pthread_mutex_lock(&(cp->lock));
+  bw_len_decode(&(cp->rvpb[vb_index].data_len), p->data_len);
+  cp->rvpb[vb_index].data = (uint8_t *) p->data;
+  cp->rvpb[vb_index].ctag = ntohl(p->message_tag_ID);
+  cp->rvpb[vb_index].newd = 1;
+  log_trace("Thread-4 Copy rx packet (len=%d) into rx Virtual Buffer (vb_index=%d)", cp->rvpb[vb_index].data_len, vb_index);
+  cp->rvpb_index_thrd = (vb_index + 1) % cp->rvpb_count;     // Increement vp-buffer index
+  pthread_mutex_unlock(&(cp->lock));
+}
+  
+// Check received packet in DMA channel buffer (index = dma_cb_index)
+void dma_check_rx_packet(vchan *cp, struct channel_buffer *dma_cb_ptr, int dma_cb_index) {
+  bw *p = (bw *) &(dma_cb_ptr[dma_cb_index].buffer);    // NB: DMA buffer must be larger than bW
+  log_debug("THREAD-3 rx packet ctag=0x%08x data-len=%d dma_index=%d status=%d rv=0", ntohl(p->message_tag_ID), ntohs(p->data_len), dma_cb_index, dma_cb_ptr[dma_cb_index].status);
+  cp = get_cp_from_ctag(p->message_tag_ID, 'r', -1);      // -1 = find context pointer only if flow is already setup
+  if ((cp == NULL) || ((p->data_len) < 1)) log_trace("Thread-4x Ignore bad rx packet: len=%d ctag=%08x cp=%p (dma_index=%d)", p->data_len, ntohl(p->message_tag_ID), cp, dma_cb_index);
+  else dma_write_into_vpb(cp, p);
+}
+
+// Wait for data from DMA channel (index = dma_cb_index)
+// Inc index for each data returned: good (PROXY_NO_ERROR) or bad (PROXY_ERROR or PROXY_BUSY)
 void dma_rcvr(vchan *cp) {
-  bw                    *p;
-  struct channel_buffer *dma_cb_ptr = (struct channel_buffer *) cp->mm.virt_addr;  /* start of channel buffer */
   static int             dma_cb_index=0;      // DMA channel buffer index
-  int                    vb_index;
+  int                    rv;
+  struct channel_buffer *dma_cb_ptr = (struct channel_buffer *) cp->mm.virt_addr;  /* start of channel buffer */
+  struct channel_buffer *cbuf_ptr   = &(dma_cb_ptr[dma_cb_index]);
 
   // A) Wait for Packet from DMA
   dma_cb_ptr[dma_cb_index].length = sizeof(bw);      /* Receive up to make length Max size */
   log_debug("THREAD-2 waiting for any tag on dev=%s (fd=%d max_len=%d cb_index=%d)", cp->dev_name, cp->fd, dma_cb_ptr[dma_cb_index].length, dma_cb_index);
-  while (dma_start_to_finish(cp->fd, &dma_cb_index, &(dma_cb_ptr[dma_cb_index])) != 0) { ; }
-  
-  // B) Get Channel Pointer (cp) for received packet (based on tag)
-  p = (bw *) &(dma_cb_ptr[dma_cb_index].buffer);    /* XXX: DMA buffer must be larger than size of BW */
-  log_debug("THREAD-3 rx packet tag=0x%08x data-len=%d dma_index=%d status=%d", ntohl(p->message_tag_ID), ntohs(p->data_len), dma_cb_index, dma_cb_ptr[dma_cb_index].status);
-  cp = get_cp_from_ctag(p->message_tag_ID, 'r', -1);      // -1 = find context pointer only if flow is already setup
-  if ((cp == NULL) || ((p->data_len) < 1)) {
-    log_trace("Thread-4x Invalid rx packet: len=%d ctag=%08x cp=%p (dma_index=%d)", p->data_len, ntohl(p->message_tag_ID), cp, dma_cb_index);
-  }
-  else {
-    // C) Put packet info into Receive Virtual Packet Buffer
-    vb_index = cp->rvpb_index_thrd;
-    pthread_mutex_lock(&(cp->lock));
-    bw_len_decode(&(cp->rvpb[vb_index].data_len), p->data_len);
-    cp->rvpb[vb_index].data = (uint8_t *) p->data;
-    cp->rvpb[vb_index].ctag = ntohl(p->message_tag_ID);
-    cp->rvpb[vb_index].newd = 1;
-    log_trace("Thread-4 Copy rx packet (len=%d) into rx Virtual Buffer (dma_index=%d vb_index=%d)", cp->rvpb[vb_index].data_len, dma_cb_index, vb_index);
-    // D) Increement buffer indexes
-    cp->rvpb_index_thrd = (vb_index + 1) % cp->rvpb_count;
-    pthread_mutex_unlock(&(cp->lock));
-  }
+  while ((rv = dma_start_to_finish(cp->fd, &dma_cb_index, cbuf_ptr)) == PROXY_TIMEOUT) { ; }
+  log_trace("******* DMA Proxy (fd=%d, id=%d len=0x%lx) returned status=%d (NO_ERROR=0, BUSY=1, TIMEOUT=2, ERROR=3)", cp->fd, dma_cb_index, cbuf_ptr->length, cbuf_ptr->status);
+  if (rv == PROXY_NO_ERROR) dma_check_rx_packet(cp, dma_cb_ptr, dma_cb_index);
   dma_cb_index = (dma_cb_index + 1) % DMA_PKT_COUNT_RX;
 }
 
@@ -425,8 +423,8 @@ void shm_rcvr(vchan *cp) {
   cp->rvpb[vb_index].data     = (uint8_t *) (cp->shm_addr->pdata[vb_index].data);
   cp->rvpb[vb_index].newd     = 1;
 //  fprintf(stderr, "PPP %p = %08x ", cp->shm_addr->pdata[vb_index].data, ntohl(cp->shm_addr->pdata[vb_index].data[4]));
+  cp->rvpb_index_thrd = (vb_index + 1) % cp->rvpb_count;     // Increement vp-buffer index
   pthread_mutex_unlock(&(cp->lock));
-  cp->rvpb_index_thrd = (vb_index + 1) % cp->rvpb_count;
 }
 
 
