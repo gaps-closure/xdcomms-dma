@@ -53,16 +53,21 @@
 #include <sys/param.h>
 #include <assert.h>
 
-#include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <assert.h>
+
+#include <sys/inotify.h>
+#include <sys/stat.h>   // mkdir
+#include <sys/types.h>
 
 #include "xdcomms.h"
 #include "vchan.h"
 #include "../tiny-json/tiny-json.h"
 
 
+#define EVENT_SIZE  ( sizeof (struct inotify_event) )
+#define EVENT_BUF_LEN     ( 1024 * ( EVENT_SIZE + 16 ) )
 #define DATA_TYP_MAX        50
 #define JSON_OBJECT_SIZE 10000
 //#define OPEN_WITH_NO_O_SYNC     // Replaces slow open-O_SYNC with msync ***DOES NOT WORK
@@ -341,23 +346,28 @@ void shm_sync(void *addr, unsigned long len, int flags) {
 //  dmac_map_area( cp->shm_addr->pdata[write_index].data, adu_len, DMA_TO_DEVICE);
 #endif
 
+// Modify last_ptr
+void delete_oldest_pkt(int *last_ptr, int write_index) {
+  struct timespec ts;                 // Guard time
+
+  ts.tv_sec  = 0;
+  ts.tv_nsec = DEFAULT_NS_GUARD_TIME_BW;
+  log_trace("%s: guard time = %d ns)", __func__, DEFAULT_NS_GUARD_TIME_BW);
+  if (*last_ptr == write_index) {
+    *last_ptr = ((*last_ptr) + 1) % FILE_COUNT;
+    nanosleep(&ts, NULL);       // Give time for other enclave to finish reading before writing into last
+  }
+  if (*last_ptr < 0) *last_ptr = 0;   // If the first written packet
+}
+
 void shm_send(vchan *cp, void *adu, gaps_tag *tag) {
   int            *last_ptr    = &(cp->shm_addr->pkt_index_last);
   int            *next_ptr    = &(cp->shm_addr->pkt_index_next);
   int             write_index = *next_ptr;
   size_t          adu_len     = 0;    // encoder calculates length */
-  struct timespec ts;                 // Guard time
   
-  ts.tv_sec  = 0;
-  ts.tv_nsec = DEFAULT_NS_GUARD_TIME_BW;
-  log_trace("%s TX index: next = %d last = %d (guard_bw=%d)", __func__, *next_ptr, *last_ptr, DEFAULT_NS_GUARD_TIME_BW);
-  // A) Delete oldest message?
-  if (*last_ptr == write_index) {
-    *last_ptr = ((*last_ptr) + 1) % SHM_PKT_COUNT;
-    nanosleep(&ts, NULL);       // Give time for other enclave to finish reading before writing into last
-  }
-  if (*last_ptr < 0) *last_ptr = 0;   // If the first written packet
-
+  log_trace("%s TX index: next=%d last=%d (guard_bw=%d)", __func__, *next_ptr, *last_ptr, DEFAULT_NS_GUARD_TIME_BW);
+  delete_oldest_pkt(last_ptr, write_index);
   // B) Encode Data into SHM
 #ifdef PRINT_US_TRACE
   time_trace("TX1 %08x (index=%d)", ntohl(cp->ctag), write_index);
@@ -427,6 +437,152 @@ void shm_rcvr(vchan *cp) {
   pthread_mutex_unlock(&(cp->lock));
 }
 
+/**********************************************************************/
+/* S1) Open/Configure FILE                                            */
+/**********************************************************************/
+// Create directory for XDC files
+void create_empty_file_dir(vchan *cp) {
+  char cmd[200] = "mkdir -p ";  // add directory with recursive flag (so cannot use mkdir)
+  strcat(cmd, cp->dev_name);    // Diractory path
+  strcat(cmd, " 0666");         // permissions
+  system(cmd);
+  if ((cp->dir) == 't') {       // Transmitter clears directory
+    strcpy(cmd, "rm -f ");
+    strcat(cmd, cp->dev_name);
+    strcat(cmd, "/*");
+    system(cmd);
+  }
+}
+
+// Open SHM channel given Physical address and length. Returns fd, mmap-va and mmap-len
+void file_open_channel(vchan *cp) {
+  int  rv;
+
+  cp->file_info = (file_channel *) malloc(sizeof(file_channel));
+  cp->file_info->pkt_index_next = 0;
+  cp->file_info->pkt_index_last = -1;
+//  log_trace("%s cp=%p n=%s", __func__, cp, cp->dev_name);
+//  vchan_print(cp, enclave_name);
+    
+  // Create INOTIFY instance and add directory into watch list
+  create_empty_file_dir(cp);
+  cp->fd = inotify_init();
+  if ( cp->fd < 0 ) perror( "inotify_init" );
+  rv = inotify_add_watch(cp->fd, cp->dev_name, IN_CLOSE_WRITE);
+  if ( rv < 0 ) perror( "inotify_add_watch" );
+  
+  // XXX: Should save rv in cp, so can close properly
+//  inotify_rm_watch( cp->fd, cp->rv );
+//  close( cp->fd );
+//  log_trace("Opened file-based channel %s: fd=%d", cp->dev_name, cp->fd);
+}
+
+// File exists and executable
+bool file_exists(const char *filename) {
+  struct stat buffer;
+  return (stat(filename, &buffer) == 0 && buffer.st_mode & S_IXUSR) ? true : false;
+}
+
+void file_run_send_script(const char *filename) {
+  char cmd[500] = XARBITOR_SEND_SCRIPT_FILENAME;
+  strcat(cmd, XARBITOR_SEND_SCRIPT_ARGS);
+  strcat(cmd, filename);
+  system(cmd);
+}
+
+// Write packet into file
+void file_write(vchan *cp, bw *p, size_t packet_len, int write_index) {
+  char       filename[128];
+  char       write_index_as_str[32];
+  size_t     written_len;
+  FILE      *fp;
+
+  strcpy(filename, cp->dev_name);
+  sprintf(write_index_as_str, "/%d", write_index);
+  strcat(filename, write_index_as_str);
+  log_trace("Writing packet (len=%d) into file: %s", packet_len, filename);
+  fp = fopen(filename, "wb");
+  if (fp == NULL) {
+    log_fatal("fopen() failed\n");
+    exit(-1);
+  }
+  written_len = fwrite (p, sizeof(char), packet_len, fp);
+  if (written_len != packet_len) {
+    log_fatal("fwrite() failed: wrote only %zu out of %zu packet bytes.\n",
+               written_len, packet_len);
+    exit(-1);
+  }
+  if (file_exists(XARBITOR_SEND_SCRIPT_FILENAME))  file_run_send_script(filename);
+  else log_warn("XARBITOR_SEND_SCRIPT %s does not exist", XARBITOR_SEND_SCRIPT_FILENAME);
+    
+
+  fclose(fp);
+}
+
+// Tx packet
+void file_send(vchan *cp, void *adu, gaps_tag *tag) {
+  int            *last_ptr    = &(cp->file_info->pkt_index_last);
+  int            *next_ptr    = &(cp->file_info->pkt_index_next);
+  int             write_index = *next_ptr;
+  size_t          adu_len     = 0;    // encoder calculates length */
+  bw             *p;                  // Packet pointer
+  size_t          packet_len;
+  
+  log_trace("%s TX index: next = %d last = %d", __func__, *next_ptr, *last_ptr);
+  delete_oldest_pkt(last_ptr, write_index);
+  p = (bw *) &(cp->file_info->pkt_buffer);    // FILE packet buffer pointer, where we put packet */
+  cmap_encode(p->data, adu, &adu_len, tag, xdc_cmap);         // Put packet data into DMA buffer
+  bw_gaps_header_encode(p, &packet_len, adu, &adu_len, tag);  // Put packet header into DMA buffer
+  log_trace("Send packet on ctag=%08x fd=%d len: adu=%d packet=%d Bytes", ntohl(cp->ctag), cp->fd, ntohs(p->data_len), packet_len);
+  if (packet_len <= sizeof(bw)) log_buf_trace("TX_PKT", (uint8_t *) &(cp->file_info->pkt_buffer), packet_len);
+  file_write(cp, p, packet_len, write_index);
+  log_debug("XDCOMMS tx packet tag=<%d,%d,%d> len=%ld", tag->mux, tag->sec, tag->typ, packet_len);
+  *next_ptr = (write_index + 1) % FILE_COUNT;
+}
+
+// Process list of changed files in event list one by one
+void process_file_event_list(vchan *cp, char *buffer, int length) {
+  int                   i = 0;
+  size_t                packet_len;
+  FILE                 *fp;
+  bw                   *p;                  // Packet pointer
+  struct inotify_event *event;
+  char                  filename[128];
+
+  p = (bw *) &(cp->file_info->pkt_buffer);    // FILE packet buffer pointer, where we put packet */
+  while ( i < length ) {
+    event = (struct inotify_event *) &buffer[i];
+    if (event->len) {
+      if ( event->mask & IN_CLOSE_WRITE ) {
+//        log_trace("New file detected: %s\n", event->name );
+        strcpy(filename, cp->dev_name);
+        strcat(filename, "/");
+        strcat(filename, event->name);
+        fp = fopen(filename, "rb");
+        if (fp == NULL) {
+          log_fatal("fopen() failed\n");
+          exit(-1);
+        }
+        packet_len = fread(p, sizeof(char), FILE_MAX_BYTES, fp);
+        log_trace("read file %s: len=%ld bytes ctag=0x%08x (excpected=0x%08x)", filename, packet_len, p->message_tag_ID, cp->ctag);
+        if (p->message_tag_ID == cp->ctag) dma_write_into_vpb(cp, p);
+      }
+    }
+    i += EVENT_SIZE + event->len;
+  }
+}
+
+void file_rcvr(vchan *cp) {
+  int length;
+  int vb_index = cp->rvpb_index_thrd;
+  char buffer[EVENT_BUF_LEN];
+  
+  log_trace("THREAD-2 waiting for %s in dir=%s (tag=0x%08x) with index=%d of %d", cp->dev_type, cp->dev_name, ntohl(cp->ctag), vb_index, cp->rvpb_count);
+  length = read( cp->fd, buffer, EVENT_BUF_LEN );   // Blocking inotify read
+  fprintf(stderr, "New file detected (inotify len=%d)\n", length);
+  if ( length < 0 ) perror( "read" );
+  process_file_event_list(cp, buffer, length);
+}
 
 /**********************************************************************/
 /* A) Virtual Device open                                               */
@@ -434,8 +590,9 @@ void shm_rcvr(vchan *cp) {
 // Open channel device (based on name and type) and return its channel structure
 void open_device(vchan *cp) {
   log_trace("%s of type=%s name=%s", __func__, cp->dev_type, cp->dev_name);
-  if      (strcmp(cp->dev_type, "dma") == 0) dma_open_channel(cp);
-  else if (strcmp(cp->dev_type, "shm") == 0) shm_open_channel(cp);
+  if      (strcmp(cp->dev_type, "dma") == 0)  dma_open_channel(cp);
+  else if (strcmp(cp->dev_type, "shm") == 0)  shm_open_channel(cp);
+  else if (strcmp(cp->dev_type, "file") == 0) file_open_channel(cp);
   else {log_warn("Unknown type=%s (name=%s)", cp->dev_type, cp->dev_name); FATAL;}
 }
 
@@ -475,6 +632,7 @@ void dev_open_if_new(vchan *cp) {
       return;
     }
   }
+  log_trace("%s: Too many devices (MAX=%d) to create device %s", __func__, MAX_DEV_COUNT, cp->dev_name);
   FATAL;    // Only here if list cannot store all devices (> MAX_DEV_COUNT)
 }
 
@@ -521,22 +679,35 @@ void get_dev_type(char *dev_type, char *env_type, char *def_type) {
 }
 
 // Get channel device name (*dev_name) from enivronment or default (for that type)
-void get_dev_name(char *dev_name, char *env_name, char *def_name_dma, char *def_name_shm, char *dev_type) {
-  strcpy(dev_name, "/dev/");        // prefix device name
+void get_dev_name(char *dev_name, char *env_name, char *def_name_dma, char *def_name_shm, char *def_name_file, char *dev_type, uint32_t ctag) {
+  char   str[1 + sizeof(uint32_t)];
+  
   if      ((strcmp(dev_type, "dma")) == 0) {
+    strcpy(dev_name, "/dev/");        // prefix device name
     (env_name == NULL) ? strcat(dev_name, def_name_dma) : strcat(dev_name, env_name);
   }
   else if ((strcmp(dev_type, "shm")) == 0) {
+    strcpy(dev_name, "/dev/");        // prefix device name
     (env_name == NULL) ? strcat(dev_name, def_name_shm) : strcat(dev_name, env_name);
   }
-  else FATAL;
+  else if ((strcmp(dev_type, "file")) == 0) {
+    (env_name == NULL) ? strcpy(dev_name, def_name_file) : strcpy(dev_name, env_name);
+    sprintf(str, "%x", htonl(ctag));
+    strcat(dev_name, str);
+  }
+  else {
+    log_fatal("Unknown device type: %s", dev_type);
+    FATAL;
+  }
+//  log_trace("dev=%s (len=%d)", dev_name, strlen(dev_name));
 }
 
 // Get channel device number (*val) from enivronment or default (for that type)
-void get_dev_val(unsigned long *val, char *env_val, unsigned long def_val_dma, unsigned long def_val_shm, char *dev_type) {
+void get_dev_val(unsigned long *val, char *env_val, unsigned long def_val_dma, unsigned long def_val_shm, unsigned long def_val_file, char *dev_type) {
   if (env_val == NULL) {
     if       (strcmp(dev_type, "dma") == 0) *val = def_val_dma;
     else if  (strcmp(dev_type, "shm") == 0) *val = def_val_shm;
+    else if  (strcmp(dev_type, "file") == 0) *val = def_val_file;
     else     FATAL;
   }
   else       *val = strtol(env_val, NULL, 16);
@@ -550,21 +721,20 @@ void init_new_chan_from_envi(vchan *cp, uint32_t ctag, char dir) {
   log_trace("%s: ctag=0x%08x dir=%c TX=%s RX=%s", __func__, ntohl(ctag), dir, getenv("DEV_NAME_TX"), getenv("DEV_NAME_RX"));
   if (dir == 't') { // TX
     get_dev_type(cp->dev_type,     getenv("DEV_TYPE_TX"), "dma");
-    get_dev_name(cp->dev_name,     getenv("DEV_NAME_TX"), "dma_proxy_tx", "mem", cp->dev_type);
-    get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * DMA_PKT_COUNT_TX), SHM_MMAP_LEN, cp->dev_type);
+    get_dev_name(cp->dev_name,     getenv("DEV_NAME_TX"), "dma_proxy_tx", "mem", "/tmp/xdc/", cp->dev_type, ctag);
+    get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * DMA_PKT_COUNT_TX), SHM_MMAP_LEN, 0, cp->dev_type);
   }
   else {            // RX
     get_dev_type(cp->dev_type,     getenv("DEV_TYPE_RX"), "dma");
-    get_dev_name(cp->dev_name,     getenv("DEV_NAME_RX"), "dma_proxy_rx", "mem", cp->dev_type);
-    get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * DMA_PKT_COUNT_RX), SHM_MMAP_LEN, cp->dev_type);   // XXX dma default is an over estimate
-    get_dev_val (&(cp->wait4new_client), getenv("SHM_WAIT4NEW"), 0x0, 0x0, cp->dev_type);
+    get_dev_name(cp->dev_name,     getenv("DEV_NAME_RX"), "dma_proxy_rx", "mem", "/tmp/xdc/", cp->dev_type, ctag);
+//    log_trace("XXX dev=%s (len=%d)", cp->dev_name, strlen(cp->dev_name));
+    get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * DMA_PKT_COUNT_RX), SHM_MMAP_LEN, 0, cp->dev_type);   // XXX dma default is an over estimate
+    get_dev_val (&(cp->wait4new_client), getenv("SHM_WAIT4NEW"), 0x0, 0x0, 0x0, cp->dev_type);
   }
-  get_dev_val(&(cp->mm.phys_addr), getenv("DEV_MMAP_AD"), DMA_ADDR_HOST, SHM_MMAP_ADDR, cp->dev_type);
-//  log_trace("%s Env Vars: type=%s name=%s mlen=%s (%", __func__, getenv("DEV_TYPE_TX"), getenv("DEV_NAME_TX"), getenv("DEV_MMAP_LE"));
-//  log_trace("%s Env Vars: type=%s name=%s mlen=%s", __func__, getenv("DEV_TYPE_RX"), getenv("DEV_NAME_RX"), , getenv("DEV_MMAP_LE"));
+  get_dev_val(&(cp->mm.phys_addr), getenv("DEV_MMAP_AD"), DMA_ADDR_HOST, SHM_MMAP_ADDR, 0, cp->dev_type);
 }
 
-// Configure new channel, using 'json_index' to locate SHM block (not needed for DMA)
+// Configure new channel, using 'json_index' to locate SHM block (not needed for DMA, file)
 void init_new_chan(vchan *cp, uint32_t ctag, char dir, int json_index) {
   static int once=1;
 
@@ -590,6 +760,12 @@ void init_new_chan(vchan *cp, uint32_t ctag, char dir, int json_index) {
     }
     else {
       cp->rvpb_count = DMA_PKT_COUNT_TX;
+    }
+  }
+  else if ((strcmp(cp->dev_type, "file")) == 0) {
+    if ((cp->dir) == 'r') {
+      cp->rvpb_count = DMA_PKT_COUNT_RX;
+      rcvr_thread_start(cp);        // 4) Start rx thread for each new receive tag
     }
   }
   else {log_warn("Unknown type=%s (name=%s)", cp->dev_type, cp->dev_name); FATAL;}
@@ -624,7 +800,7 @@ vchan *get_cp_from_ctag(uint32_t ctag, char dir, int json_index) {
   return (cp);
 }
   
-// Return pointer to Rx packet buffer for specified tag
+// Return channel pointer to Rx packet buffer for specified tag
 vchan *get_chan_info(gaps_tag *tag, char dir, int index) {
   uint32_t  ctag;
   
@@ -713,14 +889,14 @@ int json_get_len(json_t const *j_node) {
   int           m=0;
   json_t const *j;
   
-  log_trace("In get_len function");
+//  log_trace("In get_len function");
   if (JSON_ARRAY != json_getType(j_node)) {
     log_fatal("j_node is not a json array (%d)", json_getType(j_node));
     exit(-1);
   }
-  log_trace("Counting number of children");
+//  log_trace("Counting number of children");
   for(j = json_getChild(j_node); j != 0; j = json_getSibling(j)) m++;
-  log_trace("Counted number of children = %d", m);
+//  log_trace("Counted number of children = %d", m);
   return m;
 }
 
@@ -776,17 +952,15 @@ void read_tiny_json_config_file(char *xcf) {
   // B) Get Each Enclave
   for(j_child = json_getChild(j_enclaves); j_child != 0; j_child = json_getSibling(j_child)) {
     json_get_str(j_child, "enclave", jstr);
-    log_trace("JSON Enclave = %s (I am %s)", jstr, enclave_name);
-//      log_trace("jstr[0:7] = %c %c %c %c %c %c %c %c", jstr[0], jstr[1], jstr[2], jstr[3], jstr[4], jstr[5], jstr[6], jstr[7]);
-//      log_trace("jstr=%p match=%d jstr[0:7] = 0x %x %x %x %x %x %x %x %x", jstr, strcmp(enclave_name, jstr), jstr[0], jstr[1], jstr[2], jstr[3], jstr[4], jstr[5], jstr[6], jstr[7]);
+//    log_trace("JSON Enclave = %s (I am %s)", jstr, enclave_name);
     // C) Get Each helmap for this node's enclave
     if ((strcmp(enclave_name, jstr)) == 0) {
-      log_trace("FOUND JSON INFO FOR THIS ENCLAVE");
+//      log_trace("FOUND JSON INFO FOR THIS ENCLAVE");
       j_envlave_halmaps = json_getProperty(j_child, "halmaps");
-      log_trace("got list of halmaps");
-      log_trace("got JSON ARRAY (enum=%d) with list of halmaps", json_getType(j_envlave_halmaps));
+//      log_trace("got list of halmaps");
+//      log_trace("got JSON ARRAY (enum=%d) with list of halmaps", json_getType(j_envlave_halmaps));
       helmap_len = json_get_len(j_envlave_halmaps);
-      log_trace("helmap_len=%d", helmap_len);
+//      log_trace("helmap_len=%d", helmap_len);
       for (j_halmap_element = json_getChild(j_envlave_halmaps); j_halmap_element != 0; j_halmap_element = json_getSibling(j_halmap_element)) {
         // D) Get Each helmap element parameters
         json_get_str(j_halmap_element, "from", jfrom);
@@ -794,7 +968,7 @@ void read_tiny_json_config_file(char *xcf) {
         tag.mux = json_get_int(j_halmap_element, "mux");
         tag.sec = json_get_int(j_halmap_element, "sec");
         tag.typ = json_get_int(j_halmap_element, "typ");
-        log_trace( "%s->%s tag=<%d,%d,%d>", jfrom, jto, tag.mux, tag.sec, tag.typ);
+//        log_trace( "%s->%s tag=<%d,%d,%d>", jfrom, jto, tag.mux, tag.sec, tag.typ);
         config_from_jsom(helmap_len, jfrom, jto, tag);
       }
     }
@@ -806,7 +980,7 @@ void config_channels(void) {
   char  *e_env = getenv("ENCLAVE");
   char  *e_xcf = getenv("CONFIG_FILE");
 
-  if (strlen(enclave_name) >= 1) return;    // already configured channels
+  if (strlen(enclave_name) >= 1) return;    // Do only one (already configured channels)
   strcpy(enclave_name, e_env);
   log_debug("%s enclave initializing using config file %s", e_env, e_xcf);
   if ((e_env == NULL) || (e_xcf == NULL)) {
@@ -828,10 +1002,12 @@ void asyn_send(void *adu, gaps_tag *tag) {
   // a) Open channel once (and get device type, device name and channel struct
   log_trace("Start of %s for tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
   cp = get_chan_info(tag, 't', -1);
+  
   pthread_mutex_lock(&(cp->lock));
   // b) encode packet into TX buffer and send */
-  if (strcmp(cp->dev_type, "dma") == 0) dma_send(cp, adu, tag);
-  if (strcmp(cp->dev_type, "shm") == 0) shm_send(cp, adu, tag);
+  if (strcmp(cp->dev_type, "dma") == 0)  dma_send(cp, adu, tag);
+  if (strcmp(cp->dev_type, "shm") == 0)  shm_send(cp, adu, tag);
+  if (strcmp(cp->dev_type, "file") == 0) file_send(cp, adu, tag);
   pthread_mutex_unlock(&(cp->lock));
 }
 
@@ -844,8 +1020,9 @@ void *rcvr_thread_function(thread_args *vargs) {
 #if 0 >= PRINT_STATE_LEVEL
     vchan_print(cp, enclave_name);
 #endif  // PRINT_STATE_LEVEL
-    if      (strcmp(cp->dev_type, "dma") == 0) dma_rcvr(cp);
-    else if (strcmp(cp->dev_type, "shm") == 0) shm_rcvr(cp);
+    if      (strcmp(cp->dev_type, "dma")  == 0) dma_rcvr(cp);
+    else if (strcmp(cp->dev_type, "shm")  == 0) shm_rcvr(cp);
+    else if (strcmp(cp->dev_type, "file") == 0) file_rcvr(cp);
     else {
       log_fatal("Unsupported device type %s\n", cp->dev_type);
       FATAL;
@@ -1016,7 +1193,6 @@ int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   int              ntries;
   int              x = 0;
 
-//  log_debug("Start of %s: tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
   cp              = get_chan_info(tag, 'r', -1);     // get buffer for tag (to communicate with thread)
   request.tv_sec  = RX_POLL_INTERVAL_NSEC/NSEC_IN_SEC;
   request.tv_nsec = RX_POLL_INTERVAL_NSEC % NSEC_IN_SEC;

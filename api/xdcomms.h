@@ -2,15 +2,13 @@
 #define XDC_HEADER_FILE
 
 #include <stddef.h>
-//#include <stdio.h>
-//#include <json-c/json.h>
 #include "cmap.h"
 
 #define GAPS_TAG_MAX                      32   // MAX mnumber of Tags for this node
 #define CTAG_MOD                         256
 #define ADU_SIZE_MAX_C               1000000   // 1 MB - Increased for ILIP payload mode*/
-#define MAX_DEV_NAME_LEN                  64
-#define MAX_DEV_COUNT                      4
+#define MAX_DEV_NAME_LEN                 128   // Name of XD device or file path
+#define MAX_DEV_COUNT                     32  // FILE-based comms uses a different path for each flow
 
 // How often (interval) and how long (timout) to check for rx  (check 'newd'  in pkt_info buffer).
 //   Lower interval means lower delay, higher means less overhead

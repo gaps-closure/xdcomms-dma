@@ -1,0 +1,3 @@
+#!/bin/bash
+echo "Dummy XARBITOR script called"
+echo "$0 $@"
