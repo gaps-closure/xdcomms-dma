@@ -1,42 +1,29 @@
 /*
- * xdcomms (Cross Domain Communication) API Library directly between
- * partitioned applications and a GAP's Cross Domain Guard (CDG).
+ * xdcomms (Cross Domain Communication) Library among CLOSURE
+ * partitioned applications using GAP's Cross Domain Guards, It
+ * maintains the same API as the Hardware Abstraction Layer (HAL).
  *
  *
- * v0.4 August 2023: Hardware abstraction layer defines abstract one-way
- * channels (as a vchan) insread of just DMA channels (so renamed
- * 'xdcomms-dma.c' to 'xdcomms.c'). It now supports:
- *   - MIND-DMA XDG:   Direct Memory Access device (see v0.3)
- *   - ESCAPE-SHM XDG: Reading and writing to a specified region of
- *     shared host mmap'ed memory under the control of the ESCAPE
- *     FPGA board.  For testing, xdcomms can also communicate without
- *     a XDG using any mmap'ed memory area.
- * Xdcomms configuration is done through:
- *   a) Environment variables that specify device and other parameters
- *   b) A channel configuration file that specifies flows among enclaves
- *   c) Header files 'dma-proxy.h' and 'shm-h'
+ * v0.5 October 2023 Added support for file-based communication,
+ * including interfacing with an X-ARBITOR gateway.
  *
- * v0.3 OCTOBER 2022: Supprted direct transfers between Applications
+ * v0.4 August 2023: Virtual Hardware device layer defines abstract
+ * channels added to support multiple communication technologies,
+ * insread of only DMA channels (see v0.3), so renamed from
+ * 'xdcomms-dma.c' to 'xdcomms.c'. In addition to DMA, it now supports
+ * Shared Memoru (SHM) channels, by copying data to specified regions
+ * of mmap'ed host memory. The mmap'ed addresses can be in the host's
+ * own memory or regions mapp'ed from the Intel ESCAPE FPGA board.
+ * One-way channel definitions (including Tags) are now directly read
+ * from the CLOSURE generated JSON configuration file (xdcomms.ini).
+ * Selection of device configuration is done through new Environment
+ * variables specified when running the partitioned application.
+ *
+ * v0.3 October 2022: Supprted direct transfers between Applications
  * and the MIND-DMA CDG via the MIND proxy DMA driver using IOCTL
  * commands. The driver uses kernel space DMA control to the XILINX AXI
  * DMA/MCDMA driver on the GE MIND ZCU102 FPGA board. For testing, it
- * can also communicate without a XDG using a Pseudo driver emulation.
- *
- * Example commands using test request-reply application (found in ../test/)
- *   p) Enclave 2 responds to a request from enclave 1 over pseudo DMA channels:
- *     ENCLAVE=orange CONFIG_FILE=xdconf_app_req_rep.json DEV_NAME_RX=sue_donimous_rx1 DEV_NAME_TX=sue_donimous_tx1 ./app_req_rep -v -l 1 -e 2 > ~/log_p.txt 2>&1
- *     ENCLAVE=green CONFIG_FILE=xdconf_app_req_rep.json DEV_NAME_RX=sue_donimous_rx0 DEV_NAME_TX=sue_donimous_tx0 ./app_req_rep -v -l 1 > ~/log_q.txt 2>&1
- *
- *   q) Enclave 2 responds to a request from enclave 1 over host DRAM SHM channels:
- *     sudo ENCLAVE=orange CONFIG_FILE=xdconf_app_req_rep.json DEV_TYPE_RX=shm DEV_TYPE_TX=shm SHM_WAIT4NEW=1 ./app_req_rep -v -l 1 -e 2 > ~/log_p.txt 2>&1
- *     sudo ENCLAVE=green CONFIG_FILE=xdconf_app_req_rep.json DEV_TYPE_RX=shm DEV_TYPE_TX=shm ./app_req_rep -v -l 1 > ~/log_q.txt 2>&1
- *
- * Example commands using websrv app. Found in ditectories:
- *   v) ENCLAVE=orange CONFIG_FILE=../xdconf.ini DEV_NAME_RX=sue_donimous_rx0 DEV_NAME_TX=sue_donimous_tx0 SHM_WAIT4NEW=1 XDCLOGLEVEL=0 LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api MYADDR=10.109.23.126 CAMADDR=10.109.23.151 ./websrv > ~/log_v.txt 2>&1
- *   web) ENCLAVE=green CONFIG_FILE=../xdconf.ini DEV_NAME_RX=sue_donimous_rx1 DEV_NAME_TX=sue_donimous_tx1 LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api XDCLOGLEVEL=0 ./websrv  > ~/log_w.txt 2>&1
- *
- *   w) sudo ENCLAVE=orange CONFIG_FILE=../xdconf.ini DEV_TYPE_RX=shm DEV_TYPE_TX=shm SHM_WAIT4NEW=1 XDCLOGLEVEL=0 LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api MYADDR=10.109.23.126 CAMADDR=10.109.23.151 ./websrv > ~/log_v.txt 2>&1
- *   web) sudo ENCLAVE=green CONFIG_FILE=../xdconf.ini DEV_TYPE_RX=shm DEV_TYPE_TX=shm LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api XDCLOGLEVEL=0 ./websrv  > ~/log_w.txt 2>&1
+ * can also communicate without a XDG using a Pseudo driver emulation
  */
 
 #include <stdlib.h>
@@ -58,7 +45,7 @@
 #include <assert.h>
 
 #include <sys/inotify.h>
-#include <sys/stat.h>   // mkdir
+#include <sys/stat.h>
 #include <sys/types.h>
 
 #include "xdcomms.h"
@@ -83,29 +70,8 @@ vchan           vchan_info[GAPS_TAG_MAX];     // buffer array to store local vir
 pthread_mutex_t vchan_create;
 
 
-// XXX DMA and SHM functions can be put into separate functions, with
-// xdcomms including DMA + SHM, and DMA + SHM functions including Codec
-
 /**********************************************************************/
-/* D1) Open/Configure DMA device                                      */
-/**********************************************************************/
-/* Open DMA channel. USes and fills-in cp (with fd, mmap-va, mmap-len) */
-void dma_open_channel(vchan *cp) {
-  // a) Get buffer count
-  int buffer_count = DMA_PKT_COUNT_TX;
-  if ((cp->dir) == 'r') buffer_count = DMA_PKT_COUNT_RX;
-  // b) Open device
-  if ((cp->fd = open(cp->dev_name, O_RDWR)) < 1) FATAL;
-  // c) mmpp device
-  cp->mm.len = sizeof(struct channel_buffer) * buffer_count;
-  cp->mm.virt_addr = mmap(NULL, cp->mm.len, cp->mm.prot, cp->mm.flags, cp->fd, cp->mm.phys_addr);
-  if (cp->mm.virt_addr == MAP_FAILED) FATAL;
-  log_debug("Opened and mmap'ed DMA channel %s: addr=(v=0x%lx p=0x%lx) len=0x%x fd=%d", cp->dev_name, cp->mm.virt_addr, cp->mm.phys_addr, cp->mm.len, cp->fd);
-  log_debug("Chan_Buff=0x%lx Bytes Channels/dev={Tx=%d Rx=%d} Max Bytes/PKT=0x%lx (Packets/channel=%d)", BUFFER_SIZE, DMA_PKT_COUNT_TX, DMA_PKT_COUNT_RX, sizeof(bw), BUFFER_SIZE / sizeof(bw));
-}
-
-/**********************************************************************/
-/* D2) Tag Compression / Decompression                                    */
+/* A) Tag Compression / Decompression                                    */
 /**********************************************************************/
 /* Compress teg (tag -> ctag) from a 3 member stuct to a uint32_t*/
 void ctag_encode(uint32_t *ctag, gaps_tag *tag) {
@@ -126,7 +92,7 @@ void ctag_decode(gaps_tag *tag, uint32_t *ctag) {
 }
 
 /**********************************************************************/
-/* D4) Read/write DMA device                                           */
+/* B) Read/write BW Packet                                            */
 /**********************************************************************/
 void bw_print(bw *p) {
   fprintf(stderr, "%s: ", __func__);
@@ -163,6 +129,27 @@ void bw_gaps_header_encode(bw *p, size_t *p_len, uint8_t *buff_in, size_t *buff_
   *p_len = bw_get_packet_length(p, *buff_len);
 }
 
+/**********************************************************************/
+/* D1) DMA device: Open/Configure                                     */
+/**********************************************************************/
+/* Open DMA channel. USes and fills-in cp (with fd, mmap-va, mmap-len) */
+void dma_open_channel(vchan *cp) {
+  // a) Get buffer count
+  int buffer_count = DMA_PKT_COUNT_TX;
+  if ((cp->dir) == 'r') buffer_count = DMA_PKT_COUNT_RX;
+  // b) Open device
+  if ((cp->fd = open(cp->dev_name, O_RDWR)) < 1) FATAL;
+  // c) mmpp device
+  cp->mm.len = sizeof(struct channel_buffer) * buffer_count;
+  cp->mm.virt_addr = mmap(NULL, cp->mm.len, cp->mm.prot, cp->mm.flags, cp->fd, cp->mm.phys_addr);
+  if (cp->mm.virt_addr == MAP_FAILED) FATAL;
+  log_debug("Opened and mmap'ed DMA channel %s: addr=(v=0x%lx p=0x%lx) len=0x%x fd=%d", cp->dev_name, cp->mm.virt_addr, cp->mm.phys_addr, cp->mm.len, cp->fd);
+  log_debug("Chan_Buff=0x%lx Bytes Channels/dev={Tx=%d Rx=%d} Max Bytes/PKT=0x%lx (Packets/channel=%d)", BUFFER_SIZE, DMA_PKT_COUNT_TX, DMA_PKT_COUNT_RX, sizeof(bw), BUFFER_SIZE / sizeof(bw));
+}
+
+/**********************************************************************/
+/* S2) DMA device: Read/write                                         */
+/**********************************************************************/
 /* Use DMA ioctl operations to tx or rx data */
 int dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *cbuf_ptr) {
 //  log_trace("START_XFER (fd=%d, id=%d buf_ptr=%p unset-status=%d)", fd, *buffer_id_ptr, cbuf_ptr, cbuf_ptr->status);
@@ -234,7 +221,7 @@ void dma_rcvr(vchan *cp) {
 }
 
 /**********************************************************************/
-/* S1) Open/Configure SHM device                                      */
+/* E1) SHM device: Open/Configure                                     */
 /**********************************************************************/
 // Open SHM channel given Physical address and length. Returns fd, mmap-va and mmap-len
 void shm_open_channel(vchan *cp) {
@@ -308,7 +295,7 @@ void shm_init_config_one(vchan *cp) {
 }
 
 /**********************************************************************/
-/* S2) SHM read/write functions                                  */
+/* E2) SHM device; Copy into/from                                     */
 /**********************************************************************/
 // Dumb memory copy using 8-byte words
 //void naive_memcpy(unsigned long *d, const unsigned long *s, unsigned long len_in_words) {
@@ -438,7 +425,7 @@ void shm_rcvr(vchan *cp) {
 }
 
 /**********************************************************************/
-/* S1) Open/Configure FILE                                            */
+/* F1) FILE XDC: Open/Create                                          */
 /**********************************************************************/
 // Create directory for XDC files
 void create_empty_file_dir(vchan *cp) {
@@ -477,6 +464,9 @@ void file_open_channel(vchan *cp) {
 //  log_trace("Opened file-based channel %s: fd=%d", cp->dev_name, cp->fd);
 }
 
+/**********************************************************************/
+/* F2) FILE XDC: Read/Write                                           */
+/**********************************************************************/
 // File exists and executable
 bool file_exists(const char *filename) {
   struct stat buffer;
@@ -514,8 +504,6 @@ void file_write(vchan *cp, bw *p, size_t packet_len, int write_index) {
   }
   if (file_exists(XARBITOR_SEND_SCRIPT_FILENAME))  file_run_send_script(filename);
   else log_warn("XARBITOR_SEND_SCRIPT %s does not exist", XARBITOR_SEND_SCRIPT_FILENAME);
-    
-
   fclose(fp);
 }
 
@@ -585,7 +573,7 @@ void file_rcvr(vchan *cp) {
 }
 
 /**********************************************************************/
-/* A) Virtual Device open                                               */
+/* O) Virtual Device: Open                                            */
 /**********************************************************************/
 // Open channel device (based on name and type) and return its channel structure
 void open_device(vchan *cp) {
@@ -636,10 +624,6 @@ void dev_open_if_new(vchan *cp) {
   FATAL;    // Only here if list cannot store all devices (> MAX_DEV_COUNT)
 }
 
-
-/**********************************************************************/
-/* B) Virtual Channel Configuration  (for all devices and TX/RX)      */
-/**********************************************************************/
 // Initialize channel information for all (GAPS_TAG_MAX) possible tags
 //   Set retries from one of three possible timeout values (in msecs).
 //   In order of precedence (highest first) they are the:
@@ -810,7 +794,7 @@ vchan *get_chan_info(gaps_tag *tag, char dir, int index) {
 
 
 /**********************************************************************/
-/* C) Extract JSON Configuration Info (for all devices and TX/RX)     */
+/* P) Extract JSON Configuration Info (for all devices and TX/RX)     */
 /**********************************************************************/
 // Configure channel information
 //   Ensure a) Both sides use the same index for the same tag
@@ -932,7 +916,6 @@ json_t const *json_get_j_array(json_t const *j_node, char *match_str) {
   return (len);
 }
 
-
 // Open and parse JSON configuration file (using json-c library)
 //   enum: JSON_OBJ, JSON_ARRAY, JSON_TEXT, JSON_BOOLEAN, JSON_INTEGER, JSON_REAL, JSON_NULL
 void read_tiny_json_config_file(char *xcf) {
@@ -957,8 +940,6 @@ void read_tiny_json_config_file(char *xcf) {
     if ((strcmp(enclave_name, jstr)) == 0) {
 //      log_trace("FOUND JSON INFO FOR THIS ENCLAVE");
       j_envlave_halmaps = json_getProperty(j_child, "halmaps");
-//      log_trace("got list of halmaps");
-//      log_trace("got JSON ARRAY (enum=%d) with list of halmaps", json_getType(j_envlave_halmaps));
       helmap_len = json_get_len(j_envlave_halmaps);
 //      log_trace("helmap_len=%d", helmap_len);
       for (j_halmap_element = json_getChild(j_envlave_halmaps); j_halmap_element != 0; j_halmap_element = json_getSibling(j_halmap_element)) {
@@ -993,7 +974,7 @@ void config_channels(void) {
 
 
 /**********************************************************************/
-/* D) Virtual Device read/write functions                                  */
+/* Q) Virtual Device: Read/write                                      */
 /**********************************************************************/
 /* Asynchronously send ADU to DMA driver in 'bw' packet */
 void asyn_send(void *adu, gaps_tag *tag) {
@@ -1066,7 +1047,7 @@ int nonblock_recv(void *adu, gaps_tag *tag, vchan *cp) {
 }
 
 /**********************************************************************/
-/* E) XDCOMMS Utility functions (not sure if all are still needed)  */
+/* T) XDCOMMS Utility functions (not sure if all are still needed)    */
 /**********************************************************************/
 void tag_print (gaps_tag *tag, FILE * fd) {
   fprintf(fd, "[mux=%02u sec=%02u typ=%02u] ", tag->mux, tag->sec, tag->typ);
@@ -1116,7 +1097,7 @@ void len_decode (size_t *out, uint32_t in) {
 }
 
 /**********************************************************************/
-/* F) XDCOMMS API                                                     */
+/* U) XDCOMMS API                                                     */
 /**********************************************************************/
 // These HAL-API functions are gutted - as irrelevant to xdcomms-lib
 void set_address(char *xdc_addr, char *addr_in, const char *addr_default, int *do_once) { }
