@@ -1,5 +1,5 @@
 /*
- * xdcomms (Cross Domain Communication) Library among CLOSURE
+ * Cross Domain Communication (xdcomms) Library among CLOSURE
  * partitioned applications using GAP's Cross Domain Guards, It
  * maintains the same API as the Hardware Abstraction Layer (HAL).
  *
@@ -129,6 +129,19 @@ void bw_gaps_header_encode(bw *p, size_t *p_len, uint8_t *buff_in, size_t *buff_
   *p_len = bw_get_packet_length(p, *buff_len);
 }
 
+// Copy packet from device buffer to virtual channel buffer (idx=vb_index)
+void bw_write_into_vpb(vchan *cp, bw *p) {
+  int vb_index = cp->rvpb_index_thrd;
+  pthread_mutex_lock(&(cp->lock));
+  bw_len_decode(&(cp->rvpb[vb_index].data_len), p->data_len);
+  cp->rvpb[vb_index].data = (uint8_t *) p->data;
+  cp->rvpb[vb_index].ctag = ntohl(p->message_tag_ID);
+  cp->rvpb[vb_index].newd = 1;
+  log_trace("Thread-4 Copy rx packet (len=%d) into rx Virtual Buffer (vb_index=%d)", cp->rvpb[vb_index].data_len, vb_index);
+  cp->rvpb_index_thrd = (vb_index + 1) % cp->rvpb_count;     // Increement vp-buffer index
+  pthread_mutex_unlock(&(cp->lock));
+}
+
 /**********************************************************************/
 /* D1) DMA device: Open/Configure                                     */
 /**********************************************************************/
@@ -180,19 +193,6 @@ void dma_send(vchan *cp, void *adu, gaps_tag *tag) {
   rv = dma_start_to_finish(cp->fd, &buffer_id, dma_tx_chan);
   log_debug("XDCOMMS tx packet tag=<%d,%d,%d> len=%ld rv=%d", tag->mux, tag->sec, tag->typ, packet_len, rv);
 }
-
-// Copy packet from DMA channel buffer (idx=dma_cb_index) to virtual channel buffer (idx=vb_index)
-void dma_write_into_vpb(vchan *cp, bw *p) {
-  int vb_index = cp->rvpb_index_thrd;
-  pthread_mutex_lock(&(cp->lock));
-  bw_len_decode(&(cp->rvpb[vb_index].data_len), p->data_len);
-  cp->rvpb[vb_index].data = (uint8_t *) p->data;
-  cp->rvpb[vb_index].ctag = ntohl(p->message_tag_ID);
-  cp->rvpb[vb_index].newd = 1;
-  log_trace("Thread-4 Copy rx packet (len=%d) into rx Virtual Buffer (vb_index=%d)", cp->rvpb[vb_index].data_len, vb_index);
-  cp->rvpb_index_thrd = (vb_index + 1) % cp->rvpb_count;     // Increement vp-buffer index
-  pthread_mutex_unlock(&(cp->lock));
-}
   
 // Check received packet in DMA channel buffer (index = dma_cb_index)
 void dma_check_rx_packet(vchan *cp, struct channel_buffer *dma_cb_ptr, int dma_cb_index) {
@@ -200,7 +200,7 @@ void dma_check_rx_packet(vchan *cp, struct channel_buffer *dma_cb_ptr, int dma_c
   log_debug("THREAD-3 rx packet ctag=0x%08x data-len=%d dma_index=%d status=%d rv=0", ntohl(p->message_tag_ID), ntohs(p->data_len), dma_cb_index, dma_cb_ptr[dma_cb_index].status);
   cp = get_cp_from_ctag(p->message_tag_ID, 'r', -1);      // -1 = find context pointer only if flow is already setup
   if ((cp == NULL) || ((p->data_len) < 1)) log_trace("Thread-4x Ignore bad rx packet: len=%d ctag=%08x cp=%p (dma_index=%d)", p->data_len, ntohl(p->message_tag_ID), cp, dma_cb_index);
-  else dma_write_into_vpb(cp, p);
+  else bw_write_into_vpb(cp, p);
 }
 
 // Wait for data from DMA channel (index = dma_cb_index)
@@ -553,7 +553,7 @@ void process_file_event_list(vchan *cp, char *buffer, int length) {
         }
         packet_len = fread(p, sizeof(char), FILE_MAX_BYTES, fp);
         log_trace("read file %s: len=%ld bytes ctag=0x%08x (excpected=0x%08x)", filename, packet_len, p->message_tag_ID, cp->ctag);
-        if (p->message_tag_ID == cp->ctag) dma_write_into_vpb(cp, p);
+        if (p->message_tag_ID == cp->ctag) bw_write_into_vpb(cp, p);
       }
     }
     i += EVENT_SIZE + event->len;
