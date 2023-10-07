@@ -141,7 +141,7 @@ void bw_write_into_vpb(vchan *cp, bw *p) {
   pthread_mutex_unlock(&(cp->lock));
 }
 
-void bw_packet_write_if_good(bw *p) {
+void bw_process_rx_packet_if_good(bw *p) {
   vchan *cp = get_cp_from_ctag(p->message_tag_ID, 'r', -1);      // -1 = find context only if flow is already setup
   if ((cp == NULL) || ((p->data_len) < 1)) log_trace("Thread-4x Ignore bad rx packet: len=%d ctag=%08x cp=%p", p->data_len, ntohl(p->message_tag_ID), cp);
   else bw_write_into_vpb(cp, p);
@@ -203,7 +203,7 @@ void dma_send(vchan *cp, void *adu, gaps_tag *tag) {
 void dma_check_rx_packet(vchan *cp, struct channel_buffer *dma_cb_ptr, int dma_cb_index) {
   bw *p = (bw *) &(dma_cb_ptr[dma_cb_index].buffer);    // NB: DMA buffer must be larger than bW
   log_debug("THREAD-3 rx packet ctag=0x%08x data-len=%d dma_index=%d status=%d rv=0", ntohl(p->message_tag_ID), ntohs(p->data_len), dma_cb_index, dma_cb_ptr[dma_cb_index].status);
-  bw_packet_write_if_good(p);
+  bw_process_rx_packet_if_good(p);
 }
 
 // Wait for data from DMA channel (index = dma_cb_index)
@@ -514,8 +514,6 @@ void file_write(vchan *cp, bw *p, size_t packet_len, int write_index) {
 
 // Tx packet
 void file_send(vchan *cp, void *adu, gaps_tag *tag) {
-  log_trace("YYYYY: t=%s n=%s ctag=%08x f=%p", cp->dev_type, cp->dev_name, ntohl(cp->ctag), cp->file_info);
-
   int            *last_ptr    = &(cp->file_info->pkt_index_last);
   int            *next_ptr    = &(cp->file_info->pkt_index_next);
   int             write_index = *next_ptr;
@@ -523,7 +521,6 @@ void file_send(vchan *cp, void *adu, gaps_tag *tag) {
   bw             *p;                  // Packet pointer
   size_t          packet_len;
   
-
   log_trace("%s TX index: next = %d last = %d", __func__, *next_ptr, *last_ptr);
   delete_oldest_pkt(last_ptr, write_index);
   p = (bw *) &(cp->file_info->pkt_buffer);    // FILE packet buffer pointer, where we put packet */
@@ -560,8 +557,8 @@ void process_file_event_list(vchan *cp, char *buffer, int length) {
           exit(-1);
         }
         packet_len = fread(p, sizeof(char), FILE_MAX_BYTES, fp);
-        log_trace("read file %s: len=%ld bytes ctag=0x%08x (excpected=0x%08x)", filename, packet_len, p->message_tag_ID, cp->ctag);
-        bw_packet_write_if_good(p);
+        log_trace(THREAD-3: file=%s len=%ld bytes ctag=0x%08x", filename, packet_len, p->message_tag_ID);
+        bw_process_rx_packet_if_good(p);
       }
     }
     i += EVENT_SIZE + event->len;
@@ -570,13 +567,12 @@ void process_file_event_list(vchan *cp, char *buffer, int length) {
 
 void file_rcvr(vchan *cp) {
   int length;
-  int vb_index = cp->rvpb_index_thrd;
   char buffer[EVENT_BUF_LEN];
   
-  log_trace("THREAD-2 waiting for %s in dir=%s (tag=0x%08x) with index=%d of %d", cp->dev_type, cp->dev_name, ntohl(cp->ctag), vb_index, cp->rvpb_count);
-  length = read( cp->fd, buffer, EVENT_BUF_LEN );   // Blocking inotify read
+  log_trace("THREAD-2 waiting for any %s in directory=%s (detect using inotify)", cp->dev_type, cp->dev_name);
+  length = read(cp->fd, buffer, EVENT_BUF_LEN);   // Blocking inotify read
   log_trace("New file detected (inotify len=%d)\n", length);
-  if ( length < 0 ) perror( "read" );
+  if (length < 0) perror( "read" );
   process_file_event_list(cp, buffer, length);
 }
 
@@ -586,8 +582,8 @@ void file_rcvr(vchan *cp) {
 // Open channel device (based on name and type) and return its channel structure
 void open_device(vchan *cp) {
   log_trace("%s of type=%s name=%s", __func__, cp->dev_type, cp->dev_name);
-  if      (strcmp(cp->dev_type, "dma") == 0)  dma_open_channel(cp);
-  else if (strcmp(cp->dev_type, "shm") == 0)  shm_open_channel(cp);
+  if      (strcmp(cp->dev_type, "dma")  == 0) dma_open_channel(cp);
+  else if (strcmp(cp->dev_type, "shm")  == 0) shm_open_channel(cp);
   else if (strcmp(cp->dev_type, "file") == 0) file_open_channel(cp);
   else {log_warn("Unknown type=%s (name=%s)", cp->dev_type, cp->dev_name); FATAL;}
 }
