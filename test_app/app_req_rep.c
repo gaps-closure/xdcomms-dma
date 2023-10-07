@@ -368,6 +368,8 @@ void recv_one_burst(uint8_t *adu, size_t *adu_len, gaps_tag *tag_pub, gaps_tag *
   if (verbose) {
     fprintf(stderr, "app rx wait on ");
     tag_print(tag_sub, stderr);
+    fprintf(stderr, "\n");
+
   }
   //  for (i=0; i<burst_size; i++) { rv = xdc_recv(socket_sub, adu, tag_sub); rx_count++; }
   for (i=0; i<burst_size; i++) { xdc_blocking_recv(socket_sub, adu, tag_sub); rx_count++; }

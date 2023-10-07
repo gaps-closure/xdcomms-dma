@@ -142,6 +142,12 @@ void bw_write_into_vpb(vchan *cp, bw *p) {
   pthread_mutex_unlock(&(cp->lock));
 }
 
+void bw_packet_write_if_good(bw *p) {
+  vchan *cp = get_cp_from_ctag(p->message_tag_ID, 'r', -1);      // -1 = find context only if flow is already setup
+  if ((cp == NULL) || ((p->data_len) < 1)) log_trace("Thread-4x Ignore bad rx packet: len=%d ctag=%08x cp=%p", p->data_len, ntohl(p->message_tag_ID), cp);
+  else bw_write_into_vpb(cp, p);
+}
+
 /**********************************************************************/
 /* D1) DMA device: Open/Configure                                     */
 /**********************************************************************/
@@ -198,9 +204,7 @@ void dma_send(vchan *cp, void *adu, gaps_tag *tag) {
 void dma_check_rx_packet(vchan *cp, struct channel_buffer *dma_cb_ptr, int dma_cb_index) {
   bw *p = (bw *) &(dma_cb_ptr[dma_cb_index].buffer);    // NB: DMA buffer must be larger than bW
   log_debug("THREAD-3 rx packet ctag=0x%08x data-len=%d dma_index=%d status=%d rv=0", ntohl(p->message_tag_ID), ntohs(p->data_len), dma_cb_index, dma_cb_ptr[dma_cb_index].status);
-  cp = get_cp_from_ctag(p->message_tag_ID, 'r', -1);      // -1 = find context pointer only if flow is already setup
-  if ((cp == NULL) || ((p->data_len) < 1)) log_trace("Thread-4x Ignore bad rx packet: len=%d ctag=%08x cp=%p (dma_index=%d)", p->data_len, ntohl(p->message_tag_ID), cp, dma_cb_index);
-  else bw_write_into_vpb(cp, p);
+  bw_packet_write_if_good(p);
 }
 
 // Wait for data from DMA channel (index = dma_cb_index)
@@ -434,7 +438,7 @@ void create_empty_file_dir(vchan *cp) {
   strcat(cmd, " 0666");         // permissions
   system(cmd);
   if ((cp->dir) == 't') {       // Transmitter clears directory
-    strcpy(cmd, "rm -f ");
+    strcpy(cmd, "rm -rf ");
     strcat(cmd, cp->dev_name);
     strcat(cmd, "/*");
     system(cmd);
@@ -483,13 +487,15 @@ void file_run_send_script(const char *filename) {
 // Write packet into file
 void file_write(vchan *cp, bw *p, size_t packet_len, int write_index) {
   char       filename[128];
-  char       write_index_as_str[32];
+  char       str[32];
   size_t     written_len;
   FILE      *fp;
 
   strcpy(filename, cp->dev_name);
-  sprintf(write_index_as_str, "/%d", write_index);
-  strcat(filename, write_index_as_str);
+  sprintf(str, "/%x_", htonl(cp->ctag));
+  strcat(filename, str);
+  sprintf(str, "%d", write_index);
+  strcat(filename, str);
   log_trace("Writing packet (len=%d) into file: %s", packet_len, filename);
   fp = fopen(filename, "wb");
   if (fp == NULL) {
@@ -509,6 +515,8 @@ void file_write(vchan *cp, bw *p, size_t packet_len, int write_index) {
 
 // Tx packet
 void file_send(vchan *cp, void *adu, gaps_tag *tag) {
+  log_trace("YYYYY: t=%s n=%s ctag=%08x f=%p", cp->dev_type, cp->dev_name, ntohl(cp->ctag), cp->file_info);
+
   int            *last_ptr    = &(cp->file_info->pkt_index_last);
   int            *next_ptr    = &(cp->file_info->pkt_index_next);
   int             write_index = *next_ptr;
@@ -516,6 +524,7 @@ void file_send(vchan *cp, void *adu, gaps_tag *tag) {
   bw             *p;                  // Packet pointer
   size_t          packet_len;
   
+
   log_trace("%s TX index: next = %d last = %d", __func__, *next_ptr, *last_ptr);
   delete_oldest_pkt(last_ptr, write_index);
   p = (bw *) &(cp->file_info->pkt_buffer);    // FILE packet buffer pointer, where we put packet */
@@ -553,7 +562,7 @@ void process_file_event_list(vchan *cp, char *buffer, int length) {
         }
         packet_len = fread(p, sizeof(char), FILE_MAX_BYTES, fp);
         log_trace("read file %s: len=%ld bytes ctag=0x%08x (excpected=0x%08x)", filename, packet_len, p->message_tag_ID, cp->ctag);
-        if (p->message_tag_ID == cp->ctag) bw_write_into_vpb(cp, p);
+        bw_packet_write_if_good(p);
       }
     }
     i += EVENT_SIZE + event->len;
@@ -567,7 +576,7 @@ void file_rcvr(vchan *cp) {
   
   log_trace("THREAD-2 waiting for %s in dir=%s (tag=0x%08x) with index=%d of %d", cp->dev_type, cp->dev_name, ntohl(cp->ctag), vb_index, cp->rvpb_count);
   length = read( cp->fd, buffer, EVENT_BUF_LEN );   // Blocking inotify read
-  fprintf(stderr, "New file detected (inotify len=%d)\n", length);
+  log_trace("New file detected (inotify len=%d)\n", length);
   if ( length < 0 ) perror( "read" );
   process_file_event_list(cp, buffer, length);
 }
@@ -613,7 +622,8 @@ void dev_open_if_new(vchan *cp) {
     }
     // b2) See if device is already open
     if (strcmp(cp->dev_name, clist[i].cp->dev_name) == 0) {    // Already set, so open info
-      cp->fd = clist[i].cp->fd;
+      cp->fd           = clist[i].cp->fd;
+      cp->file_info    = clist[i].cp->file_info;
       cp->mm.virt_addr = clist[i].cp->mm.virt_addr;
       (clist[i].count)++;
       log_trace("%s: %s device shared %d times for i=%d", __func__, cp->dev_name, clist[i].count, i);
@@ -663,9 +673,9 @@ void get_dev_type(char *dev_type, char *env_type, char *def_type) {
 }
 
 // Get channel device name (*dev_name) from enivronment or default (for that type)
-void get_dev_name(char *dev_name, char *env_name, char *def_name_dma, char *def_name_shm, char *def_name_file, char *dev_type, uint32_t ctag) {
-  char   str[1 + sizeof(uint32_t)];
-  
+void get_dev_name(char *dev_name, char *env_name, char *def_name_dma, char *def_name_shm, char *def_name_file, char *dev_type, vchan *cp) {
+  char   str[2 + sizeof(uint32_t)];
+
   if      ((strcmp(dev_type, "dma")) == 0) {
     strcpy(dev_name, "/dev/");        // prefix device name
     (env_name == NULL) ? strcat(dev_name, def_name_dma) : strcat(dev_name, env_name);
@@ -676,8 +686,10 @@ void get_dev_name(char *dev_name, char *env_name, char *def_name_dma, char *def_
   }
   else if ((strcmp(dev_type, "file")) == 0) {
     (env_name == NULL) ? strcpy(dev_name, def_name_file) : strcpy(dev_name, env_name);
-    sprintf(str, "%x", htonl(ctag));
-    strcat(dev_name, str);
+    if (FILE_DIR_SHARE == 0) {
+      sprintf(str, "/%x", htonl(cp->ctag));
+      strcat(dev_name, str);
+    }
   }
   else {
     log_fatal("Unknown device type: %s", dev_type);
@@ -705,12 +717,12 @@ void init_new_chan_from_envi(vchan *cp, uint32_t ctag, char dir) {
   log_trace("%s: ctag=0x%08x dir=%c TX=%s RX=%s", __func__, ntohl(ctag), dir, getenv("DEV_NAME_TX"), getenv("DEV_NAME_RX"));
   if (dir == 't') { // TX
     get_dev_type(cp->dev_type,     getenv("DEV_TYPE_TX"), "dma");
-    get_dev_name(cp->dev_name,     getenv("DEV_NAME_TX"), "dma_proxy_tx", "mem", "/tmp/xdc/", cp->dev_type, ctag);
+    get_dev_name(cp->dev_name,     getenv("DEV_NAME_TX"), "dma_proxy_tx", "mem", FILE_DIR_PATH_DEFAULT, cp->dev_type, cp);
     get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * DMA_PKT_COUNT_TX), SHM_MMAP_LEN, 0, cp->dev_type);
   }
   else {            // RX
     get_dev_type(cp->dev_type,     getenv("DEV_TYPE_RX"), "dma");
-    get_dev_name(cp->dev_name,     getenv("DEV_NAME_RX"), "dma_proxy_rx", "mem", "/tmp/xdc/", cp->dev_type, ctag);
+    get_dev_name(cp->dev_name,     getenv("DEV_NAME_RX"), "dma_proxy_rx", "mem", FILE_DIR_PATH_DEFAULT, cp->dev_type, cp);
 //    log_trace("XXX dev=%s (len=%d)", cp->dev_name, strlen(cp->dev_name));
     get_dev_val (&(cp->mm.len),    getenv("DEV_MMAP_LE"), (sizeof(struct channel_buffer) * DMA_PKT_COUNT_RX), SHM_MMAP_LEN, 0, cp->dev_type);   // XXX dma default is an over estimate
     get_dev_val (&(cp->wait4new_client), getenv("SHM_WAIT4NEW"), 0x0, 0x0, 0x0, cp->dev_type);
@@ -727,6 +739,7 @@ void init_new_chan(vchan *cp, uint32_t ctag, char dir, int json_index) {
 //      log_trace("%s: Using %s device %s for ctag=0x%08x dir=%c", __func__, cp->dev_type, cp->dev_name, ntohl(cp->ctag), cp->dir);
   cp->rvpb_index_recv = 0;
   cp->rvpb_index_thrd = 0;
+  
   if ((strcmp(cp->dev_type, "shm")) == 0) {
     cp->shm_addr   = cp->mm.virt_addr + (json_index * sizeof(shm_channel));
     cp->rvpb_count = SHM_PKT_COUNT;
@@ -734,6 +747,7 @@ void init_new_chan(vchan *cp, uint32_t ctag, char dir, int json_index) {
     if ((cp->dir) == 'r') rcvr_thread_start(cp);    // 4) Start rx thread for new receive tag
     log_trace("ctag=0x%08x: VA=%p PA=%p", ctag, cp->shm_addr, (cp->mm.phys_addr & ~MMAP_PAGE_MASK) + (json_index * sizeof(shm_channel)));
   }
+  
   else if ((strcmp(cp->dev_type, "dma")) == 0) {
     if ((cp->dir) == 'r') {
       cp->rvpb_count = DMA_PKT_COUNT_RX;
@@ -746,10 +760,17 @@ void init_new_chan(vchan *cp, uint32_t ctag, char dir, int json_index) {
       cp->rvpb_count = DMA_PKT_COUNT_TX;
     }
   }
+  
   else if ((strcmp(cp->dev_type, "file")) == 0) {
     if ((cp->dir) == 'r') {
       cp->rvpb_count = DMA_PKT_COUNT_RX;
-      rcvr_thread_start(cp);        // 4) Start rx thread for each new receive tag
+      if (FILE_DIR_SHARE == 0) rcvr_thread_start(cp);        // 4) Start rx thread for each new receive tag
+      else {
+        if (once==1) {
+          rcvr_thread_start(cp);      // 4) Start rx thread only once
+          once = 0;
+        }
+      }
     }
   }
   else {log_warn("Unknown type=%s (name=%s)", cp->dev_type, cp->dev_name); FATAL;}
