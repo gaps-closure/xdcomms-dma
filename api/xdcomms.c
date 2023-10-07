@@ -53,22 +53,21 @@
 #include "../tiny-json/tiny-json.h"
 
 
-#define EVENT_SIZE  ( sizeof (struct inotify_event) )
-#define EVENT_BUF_LEN     ( 1024 * ( EVENT_SIZE + 16 ) )
+#define EVENT_SIZE          ( sizeof (struct inotify_event) )
+#define EVENT_BUF_LEN       ( 1024 * (EVENT_SIZE + 16) )
 #define DATA_TYP_MAX        50
-#define JSON_OBJECT_SIZE 10000
-//#define OPEN_WITH_NO_O_SYNC     // Replaces slow open-O_SYNC with msync ***DOES NOT WORK
-#define PRINT_STATE_LEVEL    2    // Reduce level to help debug (min=0)
-//#define PRINT_US_TRACE            // print Performance traces when defined
+#define JSON_OBJECT_SIZE    10000
+#define PRINT_STATE_LEVEL   2                // Reduce level to help debug (min=0)
+//#define OPEN_WITH_NO_O_SYNC                   // Replaces slow open-O_SYNC with msync DOES NOT WORK
+//#define PRINT_US_TRACE                        // print Performance traces when defined
 
-codec_map     xdc_cmap[DATA_TYP_MAX];    // maps data type to its data encode + decode functions
-void rcvr_thread_start(vchan *cp);
-vchan *get_cp_from_ctag(uint32_t ctag, char dir, int json_index);
-
+codec_map       xdc_cmap[DATA_TYP_MAX];         // maps data type to its data encode + decode functions
 char            enclave_name[STR_SIZE] = "";  // enclave name (e.g., green)
 vchan           vchan_info[GAPS_TAG_MAX];     // buffer array to store local virtual channel info per tag
 pthread_mutex_t vchan_create;
 
+void rcvr_thread_start(vchan *cp);
+vchan *get_cp_from_ctag(uint32_t ctag, char dir, int json_index);
 
 /**********************************************************************/
 /* A) Tag Compression / Decompression                                    */
