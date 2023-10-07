@@ -557,7 +557,7 @@ void process_file_event_list(vchan *cp, char *buffer, int length) {
           exit(-1);
         }
         packet_len = fread(p, sizeof(char), FILE_MAX_BYTES, fp);
-        log_trace(THREAD-3: file=%s len=%ld bytes ctag=0x%08x", filename, packet_len, p->message_tag_ID);
+        log_trace("THREAD-3: file=%s len=%ld bytes ctag=0x%08x", filename, packet_len, p->message_tag_ID);
         bw_process_rx_packet_if_good(p);
       }
     }
