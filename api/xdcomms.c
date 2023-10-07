@@ -136,7 +136,7 @@ void bw_write_into_vpb(vchan *cp, bw *p) {
   cp->rvpb[vb_index].data = (uint8_t *) p->data;
   cp->rvpb[vb_index].ctag = ntohl(p->message_tag_ID);
   cp->rvpb[vb_index].newd = 1;
-  log_trace("Thread-4 Copy rx packet (len=%d) into rx Virtual Buffer (vb_index=%d)", cp->rvpb[vb_index].data_len, vb_index);
+  log_trace("THREAD-4 Copy rx packet (len=%d) into rx Virtual Buffer (vb_index=%d)", cp->rvpb[vb_index].data_len, vb_index);
   cp->rvpb_index_thrd = (vb_index + 1) % cp->rvpb_count;     // Increement vp-buffer index
   pthread_mutex_unlock(&(cp->lock));
 }
@@ -571,7 +571,7 @@ void file_rcvr(vchan *cp) {
   
   log_trace("THREAD-2 waiting for any %s in directory=%s (detect using inotify)", cp->dev_type, cp->dev_name);
   length = read(cp->fd, buffer, EVENT_BUF_LEN);   // Blocking inotify read
-  log_trace("New file detected (inotify len=%d)\n", length);
+  log_trace("New file detected (inotify len=%d)", length);
   if (length < 0) perror( "read" );
   process_file_event_list(cp, buffer, length);
 }
@@ -709,7 +709,7 @@ void init_new_chan_from_envi(vchan *cp, uint32_t ctag, char dir) {
   cp->ctag = ctag;
   cp->dir  = dir;
 
-  log_trace("%s: ctag=0x%08x dir=%c TX=%s RX=%s", __func__, ntohl(ctag), dir, getenv("DEV_NAME_TX"), getenv("DEV_NAME_RX"));
+//  log_trace("%s: ctag=0x%08x dir=%c TX=%s RX=%s", __func__, ntohl(ctag), dir, getenv("DEV_NAME_TX"), getenv("DEV_NAME_RX"));
   if (dir == 't') { // TX
     get_dev_type(cp->dev_type,     getenv("DEV_TYPE_TX"), "dma");
     get_dev_name(cp->dev_name,     getenv("DEV_NAME_TX"), "dma_proxy_tx", "mem", FILE_DIR_PATH_DEFAULT, cp->dev_type, cp);
@@ -1029,7 +1029,7 @@ void *rcvr_thread_function(thread_args *vargs) {
 
 /* Start a receiver thread */
 void rcvr_thread_start(vchan *cp) {
-  log_trace("%s: ctag=0x%08x dev=%s dir=%c", __func__, ntohl(cp->ctag), cp->dev_name, cp->dir);
+  log_trace("%s: dev=%s dir=%c [ctag=0x%08x]", __func__, cp->dev_name, cp->dir, ntohl(cp->ctag));
   cp->thd_args.cp = cp;
   cp->thd_args.buffer_id_start = 0;
   if (pthread_create(&(cp->thread_id), NULL, (void *) rcvr_thread_function, (void *)&(cp->thd_args)) != 0) FATAL;
