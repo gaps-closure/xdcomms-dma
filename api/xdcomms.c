@@ -136,7 +136,7 @@ void bw_write_into_vpb(vchan *cp, bw *p) {
   cp->rvpb[vb_index].data = (uint8_t *) p->data;
   cp->rvpb[vb_index].ctag = ntohl(p->message_tag_ID);
   cp->rvpb[vb_index].newd = 1;
-  log_trace("THREAD-4 Copy rx packet (len=%d) into rx Virtual Buffer (vb_index=%d)", cp->rvpb[vb_index].data_len, vb_index);
+  log_trace("THREAD-4 Copy rx packet (ctag=%08x len=%d) into rx Virtual Buffer (vb_index=%d)", cp->rvpb[vb_index].ctag, cp->rvpb[vb_index].data_len, vb_index);
   cp->rvpb_index_thrd = (vb_index + 1) % cp->rvpb_count;     // Increement vp-buffer index
   pthread_mutex_unlock(&(cp->lock));
 }
@@ -202,7 +202,7 @@ void dma_send(vchan *cp, void *adu, gaps_tag *tag) {
 // Check received packet in DMA channel buffer (index = dma_cb_index)
 void dma_check_rx_packet(vchan *cp, struct channel_buffer *dma_cb_ptr, int dma_cb_index) {
   bw *p = (bw *) &(dma_cb_ptr[dma_cb_index].buffer);    // NB: DMA buffer must be larger than bW
-  log_debug("THREAD-3 rx packet ctag=0x%08x data-len=%d dma_index=%d status=%d rv=0", ntohl(p->message_tag_ID), ntohs(p->data_len), dma_cb_index, dma_cb_ptr[dma_cb_index].status);
+  log_debug("THREAD-3 rx DMA packet: ctag=0x%08x data-len=%d index=%d status=%d rv=0", ntohl(p->message_tag_ID), ntohs(p->data_len), dma_cb_index, dma_cb_ptr[dma_cb_index].status);
   bw_process_rx_packet_if_good(p);
 }
 
@@ -216,7 +216,7 @@ void dma_rcvr(vchan *cp) {
 
   // A) Wait for Packet from DMA
   dma_cb_ptr[dma_cb_index].length = sizeof(bw);      /* Receive up to make length Max size */
-  log_debug("THREAD-2 waiting for any tag on dev=%s (fd=%d max_len=%d cb_index=%d)", cp->dev_name, cp->fd, dma_cb_ptr[dma_cb_index].length, dma_cb_index);
+  log_debug("THREAD-2 waiting for any tag on %s device %s: fd=%d max_len=%d cb_index=%d", cp->dev_type, cp->dev_name, cp->fd, dma_cb_ptr[dma_cb_index].length, dma_cb_index);
   while ((rv = dma_start_to_finish(cp->fd, &dma_cb_index, cbuf_ptr)) == PROXY_TIMEOUT) { ; }
   log_trace("******* DMA Proxy (fd=%d, id=%d len=0x%lx) returned status=%d (NO_ERROR=0, BUSY=1, TIMEOUT=2, ERROR=3)", cp->fd, dma_cb_index, cbuf_ptr->length, cbuf_ptr->status);
   if (rv == PROXY_NO_ERROR) dma_check_rx_packet(cp, dma_cb_ptr, dma_cb_index);
@@ -345,7 +345,7 @@ void delete_oldest_pkt(int *last_ptr, int write_index) {
   log_trace("%s: guard time = %d ns)", __func__, DEFAULT_NS_GUARD_TIME_BW);
   if (*last_ptr == write_index) {
     *last_ptr = ((*last_ptr) + 1) % FILE_COUNT;
-    nanosleep(&ts, NULL);       // Give time for other enclave to finish reading before writing into last
+    nanosleep(&ts, NULL);       // Give time so other enclave can finish reading before writing into last
   }
   if (*last_ptr < 0) *last_ptr = 0;   // If the first written packet
 }
@@ -411,11 +411,10 @@ void shm_rcvr(vchan *cp) {
     while (wait_if_old(cp)) { ; }
     once = 0;
   }
-  log_trace("THREAD-2 waiting for %s tag=0x%08x on dev=%s with index=%d of %d (last=%d)", cp->dev_type, ntohl(cp->ctag), cp->dev_name, vb_index, cp->rvpb_count, cp->shm_addr->pkt_index_next);
+  log_trace("THREAD-2 waiting for tag=0x%08x on %s device %s: index=%d of %d (last=%d)", ntohl(cp->ctag), cp->dev_type, cp->dev_name, vb_index, cp->rvpb_count, cp->shm_addr->pkt_index_next);
   while (vb_index == (cp->shm_addr->pkt_index_next)) { ; }
-//  log_trace("THREAD-3a got packet index=%d (next=%d last=%d) len=%d [tr=0x%lx - tt=0x%lx = 0x%lx]", vb_index, cp->shm_addr->pkt_index_next, cp->shm_addr->pkt_index_last, cp->shm_addr->pinfo[vb_index].data_length, cp->unix_seconds, (cp->unix_seconds) - (cp->shm_addr->cinfo.unix_seconds), cp->shm_addr->cinfo.unix_seconds);
   pthread_mutex_lock(&(cp->lock));
-  log_trace("THREAD-3 rx packet ctag=0x%08x len=%d id=%d", ntohl(cp->ctag), cp->shm_addr->pinfo[vb_index].data_length, vb_index);
+  log_trace("THREAD-3 rx SHM packet: ctag=0x%08x len=%d id=%d", ntohl(cp->ctag), cp->shm_addr->pinfo[vb_index].data_length, vb_index);
 #if 1 >= PRINT_STATE_LEVEL
   shm_info_print(cp->shm_addr);
 #endif  // PRINT_STATE
@@ -424,6 +423,7 @@ void shm_rcvr(vchan *cp) {
   cp->rvpb[vb_index].newd     = 1;
 //  fprintf(stderr, "PPP %p = %08x ", cp->shm_addr->pdata[vb_index].data, ntohl(cp->shm_addr->pdata[vb_index].data[4]));
   cp->rvpb_index_thrd = (vb_index + 1) % cp->rvpb_count;     // Increement vp-buffer index
+  log_trace("THREAD-4 Copy rx packet (ctag=%08x len=%d) into rx Virtual Buffer (vb_index=%d)", ntohl(cp->ctag), cp->rvpb[vb_index].data_len, vb_index);
   pthread_mutex_unlock(&(cp->lock));
 }
 
@@ -557,7 +557,7 @@ void process_file_event_list(vchan *cp, char *buffer, int length) {
           exit(-1);
         }
         packet_len = fread(p, sizeof(char), FILE_MAX_BYTES, fp);
-        log_trace("THREAD-3: file=%s len=%ld bytes ctag=0x%08x", filename, packet_len, p->message_tag_ID);
+        log_trace("THREAD-3b rx file packet: file=%s len=%ld bytes ctag=0x%08x", filename, packet_len, p->message_tag_ID);
         bw_process_rx_packet_if_good(p);
       }
     }
@@ -569,9 +569,9 @@ void file_rcvr(vchan *cp) {
   int length;
   char buffer[EVENT_BUF_LEN];
   
-  log_trace("THREAD-2 waiting for any %s in directory=%s (detect using inotify)", cp->dev_type, cp->dev_name);
+  log_debug("THREAD-2 waiting for any %s in directory %s (using inotify)", cp->dev_type, cp->dev_name);
   length = read(cp->fd, buffer, EVENT_BUF_LEN);   // Blocking inotify read
-  log_trace("New file detected (inotify len=%d)", length);
+  log_trace("THREAD-3a: New file detected (inotify len=%d)", length);
   if (length < 0) perror( "read" );
   process_file_event_list(cp, buffer, length);
 }
@@ -979,13 +979,14 @@ void config_channels(void) {
 
   if (strlen(enclave_name) >= 1) return;    // Do only one (already configured channels)
   strcpy(enclave_name, e_env);
-  log_debug("%s enclave initializing using config file %s", e_env, e_xcf);
+  log_debug("Start %s enclave configuration using config file %s", e_env, e_xcf);
   if ((e_env == NULL) || (e_xcf == NULL)) {
     log_fatal("Must specify environment variables 'ENCLAVE' and 'CONFIG_FILE'");
     exit (-1);
   }
   read_tiny_json_config_file(e_xcf);
-  sleep(2);       // ?? ensure receive thread(s) completed before
+  log_trace("Finished %s enclave configuration and created receive thread(s) - ?Wait for threads?", e_env);
+//  sleep(2);       // ?? ensure receive thread(s) completed before any messages sent ??
 }
 
 
