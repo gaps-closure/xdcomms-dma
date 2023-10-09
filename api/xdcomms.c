@@ -53,8 +53,6 @@
 #include "../tiny-json/tiny-json.h"
 
 
-#define EVENT_SIZE          ( sizeof (struct inotify_event) )
-#define EVENT_BUF_LEN       ( 1024 * (EVENT_SIZE + 16) )
 #define DATA_TYP_MAX        50
 #define JSON_OBJECT_SIZE    10000
 #define PRINT_STATE_LEVEL   2                // Reduce level to help debug (min=0)
@@ -340,10 +338,10 @@ void shm_sync(void *addr, unsigned long len, int flags) {
 void delete_oldest_pkt(int *last_ptr, int write_index) {
   struct timespec ts;                 // Guard time
 
-  ts.tv_sec  = 0;
-  ts.tv_nsec = DEFAULT_NS_GUARD_TIME_BW;
-  log_trace("%s: guard time = %d ns)", __func__, DEFAULT_NS_GUARD_TIME_BW);
   if (*last_ptr == write_index) {
+    ts.tv_sec  = 0;
+    ts.tv_nsec = DEFAULT_NS_GUARD_TIME_BW;
+    log_trace("%s: guard time = %d ns)", __func__, DEFAULT_NS_GUARD_TIME_BW);
     *last_ptr = ((*last_ptr) + 1) % FILE_COUNT;
     nanosleep(&ts, NULL);       // Give time so other enclave can finish reading before writing into last
   }
@@ -493,8 +491,10 @@ void file_write(vchan *cp, bw *p, size_t packet_len, int write_index) {
   strcpy(filename, cp->dev_name);
   sprintf(str, "/%x_", htonl(cp->ctag));
   strcat(filename, str);
-  sprintf(str, "%d.bin", write_index);
+  sprintf(str, "%d", write_index);
   strcat(filename, str);
+  strcat(filename, FILENAME_EXTENSION);
+  
   log_trace("Writing packet (len=%d) into file: %s", packet_len, filename);
   fp = fopen(filename, "wb");
   if (fp == NULL) {
@@ -523,6 +523,8 @@ void file_send(vchan *cp, void *adu, gaps_tag *tag) {
   size_t          packet_len;
   
   log_trace("%s TX index: next = %d last = %d", __func__, *next_ptr, *last_ptr);
+  log_trace("ctag=%08x fd=%d packet=%d Bytes", ntohl(cp->ctag), cp->fd, packet_len);
+
   delete_oldest_pkt(last_ptr, write_index);
   p = (bw *) &(cp->file_info->pkt_buffer);    // FILE packet buffer pointer, where we put packet */
   cmap_encode(p->data, adu, &adu_len, tag, xdc_cmap);         // Put packet data into DMA buffer
@@ -534,31 +536,46 @@ void file_send(vchan *cp, void *adu, gaps_tag *tag) {
   *next_ptr = (write_index + 1) % FILE_COUNT;
 }
 
+// Get event file name (if matches)
+FILE *file_event_get_matching_filename(char *filename, vchan *cp, struct inotify_event *event) {
+  char *filename_extension_ptr;
+  
+  log_trace("New file detected: %s", event->name);
+  filename_extension_ptr = strstr(event->name, FILENAME_EXTENSION);
+  log_trace("filename %s starts at %p extension at %p len=%ld diff= %ld - %ld\n", event->name, event->name, filename_extension_ptr, strlen(event->name), (filename_extension_ptr - event->name), (strlen(event->name) - strlen(filename_extension_ptr)));
+  if (filename_extension_ptr != NULL) {
+    if ( (filename_extension_ptr - event->name) == (strlen(event->name) - strlen(filename_extension_ptr)) ) {
+      strcpy(filename, cp->dev_name);
+      strcat(filename, "/");
+      strcat(filename, event->name);
+      log_trace("Matching New file has Full filename=%s", filename);
+      return (fopen(filename, "rb"));
+    }
+  }
+  return (NULL);
+}
+
 // Process list of changed files in event list one by one
 void process_file_event_list(vchan *cp, char *buffer, int length) {
   int                   i = 0;
   size_t                packet_len;
-  FILE                 *fp;
+  FILE                 *efp;                 // event file pointer
   bw                   *p;                  // Packet pointer
   struct inotify_event *event;
-  char                  filename[128];
-
+  char                  filename[FILENAME_MAX_BYTES];
+  
   p = (bw *) &(cp->file_info->pkt_buffer);    // FILE packet buffer pointer, where we put packet */
   while ( i < length ) {
     event = (struct inotify_event *) &buffer[i];
     if (event->len) {
       if ( event->mask & IN_CLOSE_WRITE ) {
-        strcpy(filename, cp->dev_name);
-        strcat(filename, "/");
-        strcat(filename, event->name);
-        log_trace("New file detected: %s Full filename=%s\n", event->name, filename);
-        fp = fopen(filename, "rb");
-        if (fp == NULL) log_warn("fopen() failed on file %s - skipping this file\n", filename);
+        efp = file_event_get_matching_filename(filename, cp, event);
+        if (efp == NULL) log_warn("New detected file %s is NOT expected", event->name);
         else {
-          packet_len = fread(p, sizeof(char), FILE_MAX_BYTES, fp);
+          packet_len = fread(p, sizeof(char), FILE_MAX_BYTES, efp);
+          fclose(efp);
           log_trace("THREAD-3b rx file packet: file=%s len=%ld bytes ctag=0x%08x", filename, packet_len, p->message_tag_ID);
-          if (packet_len > 0) bw_process_rx_packet_if_good(p);
-          else log_warn("fread() return len=%ld - skipping this rx file\n", packet_len);
+          bw_process_rx_packet_if_good(p);
         }
       }
     }

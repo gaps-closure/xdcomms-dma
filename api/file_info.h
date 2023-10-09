@@ -1,8 +1,12 @@
 #ifndef _FILE_INFO_H_
 #define _FILE_INFO_H_
 
+#define EVENT_SIZE                    (sizeof (struct inotify_event))
+#define EVENT_BUF_LEN                 (1024 * (EVENT_SIZE + 16))
+#define FILENAME_MAX_BYTES            256
 #define FILE_MAX_BYTES                (0x10000 / sizeof(uint8_t))  // 64KB
 #define FILE_COUNT                    32
+#define FILENAME_EXTENSION            ".bin"
 #define FILE_DIR_PATH_DEFAULT         "/tmp/xdc"
 #define FILE_DIR_SHARE                1   // Flows share directory? 0=no, 1=yes
 #define XARBITOR_SEND_SCRIPT_FILENAME "./send-main"
