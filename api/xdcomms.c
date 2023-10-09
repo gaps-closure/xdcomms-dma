@@ -432,7 +432,7 @@ void shm_rcvr(vchan *cp) {
 /**********************************************************************/
 // Create directory for XDC files
 void create_empty_file_dir(vchan *cp) {
-  char cmd[200] = "mkdir -p -m 0666";  // add directory with recursive flag (so cannot use mkdir)
+  char cmd[200] = "mkdir -p -m 0666 ";  // add directory with recursive flag (so cannot use mkdir)
   strcat(cmd, cp->dev_name);    // Diractory path
 //  strcat(cmd, " 0666");         // permissions
   system(cmd);
