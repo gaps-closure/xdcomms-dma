@@ -548,10 +548,10 @@ void process_file_event_list(vchan *cp, char *buffer, int length) {
     event = (struct inotify_event *) &buffer[i];
     if (event->len) {
       if ( event->mask & IN_CLOSE_WRITE ) {
-//        log_trace("New file detected: %s\n", event->name );
         strcpy(filename, cp->dev_name);
         strcat(filename, "/");
         strcat(filename, event->name);
+        log_trace("New file detected: %s Full filename=%s\n", event->name, filename);
         fp = fopen(filename, "rb");
         if (fp == NULL) {
           log_fatal("fopen() failed\n");
