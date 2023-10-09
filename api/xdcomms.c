@@ -553,13 +553,12 @@ void process_file_event_list(vchan *cp, char *buffer, int length) {
         strcat(filename, event->name);
         log_trace("New file detected: %s Full filename=%s\n", event->name, filename);
         fp = fopen(filename, "rb");
-        if (fp == NULL) {
-          log_fatal("fopen() failed\n");
-          exit(-1);
-        }
-        packet_len = fread(p, sizeof(char), FILE_MAX_BYTES, fp);
-        log_trace("THREAD-3b rx file packet: file=%s len=%ld bytes ctag=0x%08x", filename, packet_len, p->message_tag_ID);
-        bw_process_rx_packet_if_good(p);
+        if (fp == NULL) log_warn("fopen() failed on file %s - skipping this file\n", filename);
+        else {
+          packet_len = fread(p, sizeof(char), FILE_MAX_BYTES, fp);
+          log_trace("THREAD-3b rx file packet: file=%s len=%ld bytes ctag=0x%08x", filename, packet_len, p->message_tag_ID);
+          if (packet_len > 0) bw_process_rx_packet_if_good(p);
+          else log_warn("fread() return len=%ld - skipping this rx file\n", packet_len);
       }
     }
     i += EVENT_SIZE + event->len;
