@@ -507,9 +507,10 @@ void file_write(vchan *cp, bw *p, size_t packet_len, int write_index) {
                written_len, packet_len);
     exit(-1);
   }
+  fclose(fp);
+
   if (file_exists(XARBITOR_SEND_SCRIPT_FILENAME))  file_run_send_script(filename);
   else log_warn("XARBITOR_SEND_SCRIPT %s does not exist", XARBITOR_SEND_SCRIPT_FILENAME);
-  fclose(fp);
 }
 
 // Tx packet
