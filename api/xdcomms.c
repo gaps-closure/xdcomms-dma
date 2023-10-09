@@ -559,6 +559,7 @@ void process_file_event_list(vchan *cp, char *buffer, int length) {
           log_trace("THREAD-3b rx file packet: file=%s len=%ld bytes ctag=0x%08x", filename, packet_len, p->message_tag_ID);
           if (packet_len > 0) bw_process_rx_packet_if_good(p);
           else log_warn("fread() return len=%ld - skipping this rx file\n", packet_len);
+        }
       }
     }
     i += EVENT_SIZE + event->len;
