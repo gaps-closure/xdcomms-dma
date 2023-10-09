@@ -493,7 +493,7 @@ void file_write(vchan *cp, bw *p, size_t packet_len, int write_index) {
   strcpy(filename, cp->dev_name);
   sprintf(str, "/%x_", htonl(cp->ctag));
   strcat(filename, str);
-  sprintf(str, "%d", write_index);
+  sprintf(str, "%d.bin", write_index);
   strcat(filename, str);
   log_trace("Writing packet (len=%d) into file: %s", packet_len, filename);
   fp = fopen(filename, "wb");
