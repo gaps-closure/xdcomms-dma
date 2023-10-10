@@ -478,6 +478,8 @@ void file_run_send_script(vchan *cp, const char *filename) {
   char cmd[500] = XARBITOR_SEND_SCRIPT_FILENAME;
   strcat(cmd, " -h ");
   strcat(cmd, cp->file_info->xarb_IP);
+  strcat(cmd, " -g ");
+  strcat(cmd, cp->file_info->xarb_port);
   strcat(cmd, XARBITOR_SEND_SCRIPT_FIXED_ARGS);
   strcat(cmd, " -d ");
   strcat(cmd, filename);
@@ -781,9 +783,12 @@ void init_new_chan(vchan *cp, uint32_t ctag, char dir, int json_index) {
   }
   
   else if ((strcmp(cp->dev_type, "file")) == 0) {
-    char *xarb_IP_env = getenv("XARB_IP");
-    char *xIP         = cp->file_info->xarb_IP;
-    (xarb_IP_env == NULL) ? strcpy(xIP, XARBITOR_IP_DEFAULT) : strcpy(xIP, xarb_IP_env);
+    char *xarb_IP_env   = getenv("XARB_IP");
+    char *xarb_port_env = getenv("XARB_PORT");
+    char *xIP           = cp->file_info->xarb_IP;
+    char *xPORT         = cp->file_info->xarb_port;
+    (xarb_IP_env   == NULL) ? strcpy(xIP, XARBITOR_IP_DEFAULT)   : strcpy(xIP, xarb_IP_env);
+    (xarb_port_env == NULL) ? strcpy(xIP, XARBITOR_PORT_DEFAULT) : strcpy(xIP, xarb_port_env);
     if ((cp->dir) == 'r') {
       cp->rvpb_count = DMA_PKT_COUNT_RX;
       if (FILE_DIR_SHARE == 0) rcvr_thread_start(cp);        // 4) Start rx thread for each new receive tag
