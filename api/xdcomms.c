@@ -430,7 +430,7 @@ void shm_rcvr(vchan *cp) {
 /**********************************************************************/
 // Create directory for XDC files
 void create_empty_file_dir(vchan *cp) {
-  char cmd[200] = "mkdir -p -m 0666 ";  // add directory with recursive flag (so cannot use mkdir)
+  char cmd[200] = "mkdir -p -m 0777 ";  // add directory with recursive flag (so cannot use mkdir)
   strcat(cmd, cp->dev_name);    // Diractory path
 //  strcat(cmd, " 0666");         // permissions
   system(cmd);
@@ -474,10 +474,14 @@ bool file_exists(const char *filename) {
   return (stat(filename, &buffer) == 0 && buffer.st_mode & S_IXUSR) ? true : false;
 }
 
-void file_run_send_script(const char *filename) {
+void file_run_send_script(vchan *cp, const char *filename) {
   char cmd[500] = XARBITOR_SEND_SCRIPT_FILENAME;
-  strcat(cmd, XARBITOR_SEND_SCRIPT_ARGS);
+  strcat(cmd, " -h ");
+  strcat(cmd, cp->file_info->xarb_IP);
+  strcat(cmd, XARBITOR_SEND_SCRIPT_FIXED_ARGS);
+  strcat(cmd, " -d ");
   strcat(cmd, filename);
+//  log_trace("Send Script = %s", cmd);
   system(cmd);
 }
 
@@ -509,7 +513,7 @@ void file_write(vchan *cp, bw *p, size_t packet_len, int write_index) {
   }
   fclose(fp);
 
-  if (file_exists(XARBITOR_SEND_SCRIPT_FILENAME))  file_run_send_script(filename);
+  if (file_exists(XARBITOR_SEND_SCRIPT_FILENAME))  file_run_send_script(cp, filename);
   else log_warn("XARBITOR_SEND_SCRIPT %s does not exist", XARBITOR_SEND_SCRIPT_FILENAME);
 }
 
@@ -568,7 +572,7 @@ void process_file_event_list(vchan *cp, char *buffer, int length) {
   while ( i < length ) {
     event = (struct inotify_event *) &buffer[i];
     if (event->len) {
-      if ( event->mask & IN_CLOSE_WRITE ) {
+      if ( (event->mask & IN_CLOSE_WRITE) || (event->mask & IN_MOVED_TO) ) {
         efp = file_event_get_matching_filename(filename, cp, event);
         if (efp == NULL) log_warn("New detected file %s is NOT expected", event->name);
         else {
@@ -775,6 +779,9 @@ void init_new_chan(vchan *cp, uint32_t ctag, char dir, int json_index) {
   }
   
   else if ((strcmp(cp->dev_type, "file")) == 0) {
+    char *xarb_IP_env = getenv("XARB_IP");
+    char *xIP         = cp->file_info->xarb_IP;
+    (xarb_IP_env == NULL) ? strcpy(xIP, XARBITOR_IP_DEFAULT) : strcpy(xIP, xarb_IP_env);
     if ((cp->dir) == 'r') {
       cp->rvpb_count = DMA_PKT_COUNT_RX;
       if (FILE_DIR_SHARE == 0) rcvr_thread_start(cp);        // 4) Start rx thread for each new receive tag
