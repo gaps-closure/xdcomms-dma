@@ -546,7 +546,8 @@ FILE *file_event_get_matching_filename(char *filename, vchan *cp, struct inotify
   
   log_trace("New file detected: %s", event->name);
   filename_extension_ptr = strstr(event->name, FILENAME_EXTENSION);
-  log_trace("filename %s starts at %p extension at %p len=%ld diff= %ld - %ld\n", event->name, event->name, filename_extension_ptr, strlen(event->name), (filename_extension_ptr - event->name), (strlen(event->name) - strlen(filename_extension_ptr)));
+  log_trace("XXX=%p", filename_extension_ptr);
+  log_trace("filename %s starts at %p extension at %p len=%ld diff= %ld - %ld", event->name, event->name, filename_extension_ptr, strlen(event->name), (filename_extension_ptr - event->name), (strlen(event->name) - strlen(filename_extension_ptr)));
   if (filename_extension_ptr != NULL) {
     if ( (filename_extension_ptr - event->name) == (strlen(event->name) - strlen(filename_extension_ptr)) ) {
       strcpy(filename, cp->dev_name);
@@ -573,7 +574,7 @@ void process_file_event_list(vchan *cp, char *buffer, int length) {
     event = (struct inotify_event *) &buffer[i];
     if (event->len) {
       if (event->mask & IN_CLOSE_WRITE) {
-        //|| (event->mask & IN_MOVED_TO)
+//      if ( (event->mask & IN_CLOSE_WRITE) || (event->mask & IN_MOVED_TO) ) {
         efp = file_event_get_matching_filename(filename, cp, event);
         if (efp == NULL) log_warn("New detected file %s is NOT expected", event->name);
         else {
