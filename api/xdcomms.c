@@ -528,9 +528,7 @@ void file_send(vchan *cp, void *adu, gaps_tag *tag) {
   bw             *p;                  // Packet pointer
   size_t          packet_len;
   
-  log_trace("%s TX index: next = %d last = %d", __func__, *next_ptr, *last_ptr);
-  log_trace("ctag=%08x fd=%d packet=%d Bytes", ntohl(cp->ctag), cp->fd, packet_len);
-
+  log_trace("%s: ctag=%08x fd=%d (TX index next=%d last=%d)", __func__, ntohl(cp->ctag), cp->fd, *next_ptr, *last_ptr);
   delete_oldest_pkt(last_ptr, write_index);
   p = (bw *) &(cp->file_info->pkt_buffer);    // FILE packet buffer pointer, where we put packet */
   cmap_encode(p->data, adu, &adu_len, tag, xdc_cmap);         // Put packet data into DMA buffer
