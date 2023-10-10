@@ -549,9 +549,8 @@ FILE *file_event_get_matching_filename(char *filename, vchan *cp, struct inotify
   log_trace("New file detected: %s", event->name);
   filename_extension_ptr = strstr(event->name, FILENAME_EXTENSION);
   if (filename_extension_ptr != NULL) {
-    log_trace("XXX=%p", filename_extension_ptr);
-    log_trace("filename %s starts at %p extension at %p len=%ld diff= %ld - %ld", event->name, event->name, filename_extension_ptr, strlen(event->name), (filename_extension_ptr - event->name), (strlen(event->name) - strlen(filename_extension_ptr)));
-    if ( (filename_extension_ptr - event->name) == (strlen(event->name) - strlen(filename_extension_ptr)) ) {
+    log_trace("filename %s starts at %p extension at %p len=%ld ext-diff= %ld - %ld", event->name, event->name, filename_extension_ptr, strlen(event->name), strlen(filename_extension_ptr), strlen(FILENAME_EXTENSION));
+    if ( strlen(filename_extension_ptr) == strlen(FILENAME_EXTENSION) ) {
       strcpy(filename, cp->dev_name);
       strcat(filename, "/");
       strcat(filename, event->name);
