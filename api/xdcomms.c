@@ -572,7 +572,8 @@ void process_file_event_list(vchan *cp, char *buffer, int length) {
   while ( i < length ) {
     event = (struct inotify_event *) &buffer[i];
     if (event->len) {
-      if ( (event->mask & IN_CLOSE_WRITE) || (event->mask & IN_MOVED_TO) ) {
+      if (event->mask & IN_CLOSE_WRITE) {
+        //|| (event->mask & IN_MOVED_TO)
         efp = file_event_get_matching_filename(filename, cp, event);
         if (efp == NULL) log_warn("New detected file %s is NOT expected", event->name);
         else {
