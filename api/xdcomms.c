@@ -533,7 +533,7 @@ void file_send(vchan *cp, void *adu, gaps_tag *tag) {
   p = (bw *) &(cp->file_info->pkt_buffer);    // FILE packet buffer pointer, where we put packet */
   cmap_encode(p->data, adu, &adu_len, tag, xdc_cmap);         // Put packet data into DMA buffer
   bw_gaps_header_encode(p, &packet_len, adu, &adu_len, tag);  // Put packet header into DMA buffer
-  log_trace("Send packet on ctag=%08x fd=%d len: adu=%d packet=%d Bytes", ntohl(cp->ctag), cp->fd, ntohs(p->data_len), packet_len);
+  log_trace("Send packet ctag=%08x len: adu=%d packet=%d Bytes", ntohl(cp->ctag), ntohs(p->data_len), packet_len);
   if (packet_len <= sizeof(bw)) log_buf_trace("TX_PKT", (uint8_t *) &(cp->file_info->pkt_buffer), packet_len);
   file_write(cp, p, packet_len, write_index);
   log_debug("XDCOMMS tx packet tag=<%d,%d,%d> len=%ld", tag->mux, tag->sec, tag->typ, packet_len);
@@ -547,7 +547,7 @@ FILE *file_event_get_matching_filename(char *filename, vchan *cp, struct inotify
   log_trace("New file detected: %s", event->name);
   filename_extension_ptr = strstr(event->name, FILENAME_EXTENSION);
   if (filename_extension_ptr != NULL) {
-    log_trace("filename %s starts at %p extension at %p len=%ld ext-diff= %ld - %ld", event->name, event->name, filename_extension_ptr, strlen(event->name), strlen(filename_extension_ptr), strlen(FILENAME_EXTENSION));
+//    log_trace("filename %s starts at %p extension at %p len=%ld ext-diff= %ld - %ld", event->name, event->name, filename_extension_ptr, strlen(event->name), strlen(filename_extension_ptr), strlen(FILENAME_EXTENSION));
     if ( strlen(filename_extension_ptr) == strlen(FILENAME_EXTENSION) ) {
       strcpy(filename, cp->dev_name);
       strcat(filename, "/");
