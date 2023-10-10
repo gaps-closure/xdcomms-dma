@@ -552,7 +552,7 @@ FILE *file_event_get_matching_filename(char *filename, vchan *cp, struct inotify
       strcpy(filename, cp->dev_name);
       strcat(filename, "/");
       strcat(filename, event->name);
-      log_trace("Matching New file has Full filename=%s", filename);
+//      log_trace("Matching New file has Full filename=%s", filename);
       return (fopen(filename, "rb"));
     }
   }
@@ -575,11 +575,11 @@ void process_file_event_list(vchan *cp, char *buffer, int length) {
       if (event->mask & IN_CLOSE_WRITE) {
 //      if ( (event->mask & IN_CLOSE_WRITE) || (event->mask & IN_MOVED_TO) ) {
         efp = file_event_get_matching_filename(filename, cp, event);
-        if (efp == NULL) log_warn("New detected file %s is NOT expected", event->name);
+        if (efp == NULL) log_trace("Ignoring new file %s", event->name);
         else {
           packet_len = fread(p, sizeof(char), FILE_MAX_BYTES, efp);
           fclose(efp);
-          log_trace("THREAD-3b rx file packet: file=%s len=%ld bytes ctag=0x%08x", filename, packet_len, p->message_tag_ID);
+          log_trace("THREAD-3b rx file=%s (packet has len=%ld bytes ctag=0x%08x)", filename, packet_len, p->message_tag_ID);
           bw_process_rx_packet_if_good(p);
         }
       }
