@@ -787,8 +787,8 @@ void init_new_chan(vchan *cp, uint32_t ctag, char dir, int json_index) {
     char *xarb_port_env = getenv("XARB_PORT");
     char *xIP           = cp->file_info->xarb_IP;
     char *xPORT         = cp->file_info->xarb_port;
-    (xarb_IP_env   == NULL) ? strcpy(xIP,   XARBITOR_IP_DEFAULT)   : strcpy(xIP, xarb_IP_env);
-    (xarb_port_env == NULL) ? strcpy(xPORT, XARBITOR_PORT_DEFAULT) : strcpy(xIP, xarb_port_env);
+    (xarb_IP_env   == NULL) ? strcpy(xIP,   XARBITOR_IP_DEFAULT)   : strcpy(xIP,   xarb_IP_env);
+    (xarb_port_env == NULL) ? strcpy(xPORT, XARBITOR_PORT_DEFAULT) : strcpy(xPORT, xarb_port_env);
     if ((cp->dir) == 'r') {
       cp->rvpb_count = DMA_PKT_COUNT_RX;
       if (FILE_DIR_SHARE == 0) rcvr_thread_start(cp);        // 4) Start rx thread for each new receive tag
