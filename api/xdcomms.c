@@ -580,7 +580,7 @@ void process_file_event_list(vchan *cp, char *buffer, int length) {
         else {
           packet_len = fread(p, sizeof(char), FILE_MAX_BYTES, efp);
           fclose(efp);
-          log_trace("THREAD-3b rx file=%s (packet has len=%ld bytes ctag=0x%08x)", filename, packet_len, p->message_tag_ID);
+          log_trace("THREAD-3b rx file=%s (packet has len=%ld bytes ctag=0x%08x)", filename, packet_len, ntohl(p->message_tag_ID));
           bw_process_rx_packet_if_good(p);
         }
       }
@@ -1044,7 +1044,7 @@ void *rcvr_thread_function(thread_args *vargs) {
   vchan       *cp = (vchan *) vargs->cp;
 
   while (1) {
-    log_trace("THREAD-1 %s: ctag=0x%08x fd=%d (base_id=%d)", __func__, ntohl(cp->ctag), cp->fd, vargs->buffer_id_start);
+    log_trace("THREAD-1 %s: fd=%d base_id=%d (ctag=0x%08x)", __func__, cp->fd, vargs->buffer_id_start, ntohl(cp->ctag));
 #if 0 >= PRINT_STATE_LEVEL
     vchan_print(cp, enclave_name);
 #endif  // PRINT_STATE_LEVEL
