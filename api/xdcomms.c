@@ -547,7 +547,7 @@ FILE *file_event_get_matching_filename(char *filename, vchan *cp, struct inotify
   log_trace("New file detected: %s", event->name);
   filename_extension_ptr = strstr(event->name, FILENAME_EXTENSION);
   if (filename_extension_ptr != NULL) {
-//    log_trace("filename %s starts at %p extension at %p len=%ld ext-diff= %ld - %ld", event->name, event->name, filename_extension_ptr, strlen(event->name), strlen(filename_extension_ptr), strlen(FILENAME_EXTENSION));
+    log_trace("filename %s starts at %p extension at %p len=%ld ext-diff= %ld - %ld", event->name, event->name, filename_extension_ptr, strlen(event->name), strlen(filename_extension_ptr), strlen(FILENAME_EXTENSION));
     if ( strlen(filename_extension_ptr) == strlen(FILENAME_EXTENSION) ) {
       strcpy(filename, cp->dev_name);
       strcat(filename, "/");
@@ -571,6 +571,7 @@ void process_file_event_list(vchan *cp, char *buffer, int length) {
   p = (bw *) &(cp->file_info->pkt_buffer);    // FILE packet buffer pointer, where we put packet */
   while ( i < length ) {
     event = (struct inotify_event *) &buffer[i];
+    log_trace("Event: current_event_i=%d current_event_len=%d Fixed_event_size=%d event_list_len=%d", i, event->len, EVENT_SIZE, length);
     if (event->len) {
       if (event->mask & IN_CLOSE_WRITE) {
 //      if ( (event->mask & IN_CLOSE_WRITE) || (event->mask & IN_MOVED_TO) ) {
