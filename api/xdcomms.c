@@ -571,7 +571,7 @@ void process_file_event_list(vchan *cp, char *buffer, int length) {
   p = (bw *) &(cp->file_info->pkt_buffer);    // FILE packet buffer pointer, where we put packet */
   while ( i < length ) {
     event = (struct inotify_event *) &buffer[i];
-    log_trace("Event: current_ptr=%d name_len=%d + fixed_len=%d = %d (list_len=%d)", i, event->len, EVENT_SIZE, length);
+    log_trace("Event: current_ptr=%d name_len=%d + fixed_len=%d = %d (list_len=%d)", i, event->len, EVENT_SIZE, (event->len) + EVENT_SIZE, length);
     if (event->len) {
       if (event->mask & IN_CLOSE_WRITE) {
 //      if ( (event->mask & IN_CLOSE_WRITE) || (event->mask & IN_MOVED_TO) ) {
