@@ -540,11 +540,11 @@ void file_send(vchan *cp, void *adu, gaps_tag *tag) {
   *next_ptr = (write_index + 1) % FILE_COUNT;
 }
 
-// Get event file name (if matches)
+// Open file (if event file name is correct), else return NULL
 FILE *file_event_get_matching_filename(char *filename, vchan *cp, struct inotify_event *event) {
   char *filename_extension_ptr;
   
-  log_trace("New file detected: %s", event->name);
+  log_trace("New file = %s", event->name);
   filename_extension_ptr = strstr(event->name, FILENAME_EXTENSION);
   if (filename_extension_ptr != NULL) {
     log_trace("filename %s starts at %p extension at %p len=%ld ext-diff= %ld - %ld", event->name, event->name, filename_extension_ptr, strlen(event->name), strlen(filename_extension_ptr), strlen(FILENAME_EXTENSION));
@@ -568,19 +568,18 @@ void process_file_event_list(vchan *cp, char *buffer, int length) {
   struct inotify_event *event;
   char                  filename[FILENAME_MAX_BYTES];
   
-  p = (bw *) &(cp->file_info->pkt_buffer);    // FILE packet buffer pointer, where we put packet */
   while ( i < length ) {
     event = (struct inotify_event *) &buffer[i];
-    log_trace("Event: current_ptr=%d name_len=%d + fixed_len=%d = %d (list_len=%d)", i, event->len, EVENT_SIZE, (event->len), (event->len) + EVENT_SIZE, length);
     if (event->len) {
-      if (event->mask & IN_CLOSE_WRITE) {
-//      if ( (event->mask & IN_CLOSE_WRITE) || (event->mask & IN_MOVED_TO) ) {
+      log_trace("Event: current_ptr=%d name_len=%d + fixed_len=%d = %d (list_len=%d)", i, event->len, EVENT_SIZE, (event->len), (event->len) + EVENT_SIZE, length);
+      if (event->mask & IN_CLOSE_WRITE) {      //  Move between dir:  || (event->mask & IN_MOVED_TO) ) {
         efp = file_event_get_matching_filename(filename, cp, event);
-        if (efp == NULL) log_trace("Ignoring new file %s", event->name);
-        else {
+        if (efp == NULL) log_debug("THREAD-3x rx file=%s: ignoring due to bad filename", event->name);
+        else {                    // write FILE into packet buffer */
+          p = (bw *) &(cp->file_info->pkt_buffer);
           packet_len = fread(p, sizeof(char), FILE_MAX_BYTES, efp);
           fclose(efp);
-          log_trace("THREAD-3b rx file=%s (packet has len=%ld bytes ctag=0x%08x)", filename, packet_len, ntohl(p->message_tag_ID));
+          log_debug("THREAD-3b rx file=%s: Processing packet len=%ld bytes ctag=0x%08x)", filename, packet_len, ntohl(p->message_tag_ID));
           bw_process_rx_packet_if_good(p);
         }
       }
@@ -595,7 +594,7 @@ void file_rcvr(vchan *cp) {
   
   log_debug("THREAD-2 waiting for any %s in directory %s (using inotify)", cp->dev_type, cp->dev_name);
   length = read(cp->fd, buffer, EVENT_BUF_LEN);   // Blocking inotify read
-  log_trace("THREAD-3a: New file detected (inotify len=%d)", length);
+  log_trace("THREAD-3a: New file(s) detected by inotify (len=%d)", length);
   if (length < 0) perror( "read" );
   process_file_event_list(cp, buffer, length);
 }
