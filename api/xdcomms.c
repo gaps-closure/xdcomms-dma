@@ -57,7 +57,7 @@
 #define JSON_OBJECT_SIZE    10000
 #define PRINT_STATE_LEVEL   2                // Reduce level to help debug (min=0)
 //#define OPEN_WITH_NO_O_SYNC                   // Replaces slow open-O_SYNC with msync DOES NOT WORK
-//#define PRINT_US_TRACE                        // print Performance traces when defined
+#define PRINT_US_TRACE                        // print Performance traces when defined
 
 codec_map       xdc_cmap[DATA_TYP_MAX];         // maps data type to its data encode + decode functions
 char            enclave_name[STR_SIZE] = "";  // enclave name (e.g., green)
@@ -194,6 +194,9 @@ void dma_send(vchan *cp, void *adu, gaps_tag *tag) {
   log_trace("Send packet on ctag=%08x fd=%d buf_id=%d of len: adu=%d packet=%d Bytes", ntohl(cp->ctag), cp->fd, buffer_id, ntohs(p->data_len), packet_len);
   if (packet_len <= sizeof(bw)) log_buf_trace("TX_PKT", (uint8_t *) &(dma_tx_chan->buffer), packet_len);
   rv = dma_start_to_finish(cp->fd, &buffer_id, dma_tx_chan);
+#ifdef PRINT_US_TRACE
+  time_trace("XDC_Tx2 DMA Sent ctag=%08x len=%ld rv=%d", ntohl(cp->ctag), packet_len, rv);
+#endif
   log_debug("XDCOMMS tx packet tag=<%d,%d,%d> len=%ld rv=%d", tag->mux, tag->sec, tag->typ, packet_len, rv);
 }
   
@@ -215,9 +218,15 @@ void dma_rcvr(vchan *cp) {
   // A) Wait for Packet from DMA
   dma_cb_ptr[dma_cb_index].length = sizeof(bw);      /* Receive up to make length Max size */
   log_debug("THREAD-2 waiting for any tag on %s device %s: fd=%d max_len=%d cb_index=%d", cp->dev_type, cp->dev_name, cp->fd, dma_cb_ptr[dma_cb_index].length, dma_cb_index);
+#ifdef PRINT_US_TRACE
+  time_trace("XDC_Rx1 DMA Waiting on %d cb_index=%d", cp->dev_name, dma_cb_index);
+#endif
   while ((rv = dma_start_to_finish(cp->fd, &dma_cb_index, cbuf_ptr)) == PROXY_TIMEOUT) { ; }
   log_trace("******* DMA Proxy (fd=%d, id=%d len=0x%lx) returned status=%d (NO_ERROR=0, BUSY=1, TIMEOUT=2, ERROR=3)", cp->fd, dma_cb_index, cbuf_ptr->length, cbuf_ptr->status);
   if (rv == PROXY_NO_ERROR) dma_check_rx_packet(cp, dma_cb_ptr, dma_cb_index);
+#ifdef PRINT_US_TRACE
+  time_trace("XDC_Rx2 DMA Received ctag=%08x rv=%d", ntohl(cp->ctag), rv);
+#endif
   dma_cb_index = (dma_cb_index + 1) % DMA_PKT_COUNT_RX;
 }
 
@@ -1078,9 +1087,9 @@ int nonblock_recv(void *adu, gaps_tag *tag, vchan *cp) {
     fprintf(stderr, "%s on buff index=%d", __func__, index_buf);
     vchan_print(cp, enclave_name);
 #endif
-#ifdef PRINT_US_TRACE
-    time_trace("RX2 %08x (index=%d)", ntohl(cp->ctag), cp->rvpb_index_recv);
-#endif
+//#ifdef PRINT_US_TRACE
+//    time_trace("RX3 %08x (index=%d)", ntohl(cp->ctag), cp->rvpb_index_recv);
+//#endif
     cmap_decode(cp->rvpb[index_buf].data, cp->rvpb[index_buf].data_len, adu, tag, xdc_cmap);   /* Put packet into ADU */
 //    log_trace("XDCOMMS reads from buff=%p (index=%d): len=%d", cp->rvpb[index_buf].data, index_buf, cp->rvpb[index_buf].data_len);
     cp->rvpb[index_buf].newd = 0;                      // unmark newdata
@@ -1228,9 +1237,9 @@ int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   while ((ntries--) > 0)  {
 //    if (nonblock_recv(adu, tag, cp) > 0)  return 0;
     if ((x=nonblock_recv(adu, tag, cp)) > 0) {
-#ifdef PRINT_US_TRACE
-      time_trace("RX3 %08x (len=%d)", ntohl(cp->ctag), x);
-#endif
+//#ifdef PRINT_US_TRACE
+//      time_trace("RX4 %08x (len=%d)", ntohl(cp->ctag), x);
+//#endif
       return x;
     }
 //    log_trace("LOOP timeout %s: tag=<%d,%d,%d>: remaining tries = %d ", __func__, tag->mux, tag->sec, tag->typ, ntries);
