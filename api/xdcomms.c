@@ -219,7 +219,7 @@ void dma_rcvr(vchan *cp) {
   cbuf_ptr->length = sizeof(bw);            /* Receive up to make length Max size */
   log_debug("THREAD-2 waiting for any tag on %s device %s: fd=%d max_len=%d cb_index=%d", cp->dev_type, cp->dev_name, cp->fd, cbuf_ptr->length, dma_cb_index);
 #ifdef PRINT_US_TRACE
-  time_trace("XDC_Rx1 DMA Waiting on %d cb_index=%d", cp->dev_name, dma_cb_index);
+  time_trace("XDC_Rx1 DMA Waiting on %s cb_index=%d", cp->dev_name, dma_cb_index);
 #endif
   while ((rv = dma_start_to_finish(cp->fd, &dma_cb_index, cbuf_ptr)) == PROXY_TIMEOUT) { ; }
 #ifdef PRINT_US_TRACE
