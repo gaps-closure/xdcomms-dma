@@ -55,11 +55,11 @@
 
 #define DATA_TYP_MAX        50
 #define JSON_OBJECT_SIZE    10000
-#define PRINT_STATE_LEVEL   2                // Reduce level to help debug (min=0)
+#define PRINT_STATE_LEVEL   2                 // Reduce level to help debug (min=0)
 //#define OPEN_WITH_NO_O_SYNC                   // Replaces slow open-O_SYNC with msync DOES NOT WORK
 #define PRINT_US_TRACE                        // print Performance traces when defined
 
-codec_map       xdc_cmap[DATA_TYP_MAX];         // maps data type to its data encode + decode functions
+codec_map       xdc_cmap[DATA_TYP_MAX];       // maps data type to its data encode + decode functions
 char            enclave_name[STR_SIZE] = "";  // enclave name (e.g., green)
 vchan           vchan_info[GAPS_TAG_MAX];     // buffer array to store local virtual channel info per tag
 pthread_mutex_t vchan_create;
@@ -216,17 +216,17 @@ void dma_rcvr(vchan *cp) {
   struct channel_buffer *cbuf_ptr   = &(dma_cb_ptr[dma_cb_index]);
 
   // A) Wait for Packet from DMA
-  dma_cb_ptr[dma_cb_index].length = sizeof(bw);      /* Receive up to make length Max size */
-  log_debug("THREAD-2 waiting for any tag on %s device %s: fd=%d max_len=%d cb_index=%d", cp->dev_type, cp->dev_name, cp->fd, dma_cb_ptr[dma_cb_index].length, dma_cb_index);
+  cbuf_ptr->length = sizeof(bw);            /* Receive up to make length Max size */
+  log_debug("THREAD-2 waiting for any tag on %s device %s: fd=%d max_len=%d cb_index=%d", cp->dev_type, cp->dev_name, cp->fd, cbuf_ptr->length, dma_cb_index);
 #ifdef PRINT_US_TRACE
   time_trace("XDC_Rx1 DMA Waiting on %d cb_index=%d", cp->dev_name, dma_cb_index);
 #endif
   while ((rv = dma_start_to_finish(cp->fd, &dma_cb_index, cbuf_ptr)) == PROXY_TIMEOUT) { ; }
-  log_trace("******* DMA Proxy (fd=%d, id=%d len=0x%lx) returned status=%d (NO_ERROR=0, BUSY=1, TIMEOUT=2, ERROR=3)", cp->fd, dma_cb_index, cbuf_ptr->length, cbuf_ptr->status);
-  if (rv == PROXY_NO_ERROR) dma_check_rx_packet(cp, dma_cb_ptr, dma_cb_index);
 #ifdef PRINT_US_TRACE
-  time_trace("XDC_Rx2 DMA Received ctag=%08x rv=%d", ntohl(cp->ctag), rv);
+  time_trace("XDC_Rx2 DMA returned rv=%d, status=%d len=0x%lx", rv, cbuf_ptr->status, cbuf_ptr->length);
 #endif
+  log_trace("DMA rx returned rv=%d, status=%d (NO_ERR=0, BUSY=1, TIMEOUT=2, ERR=3) id=%d len=0x%lx) ", rv, cbuf_ptr->status, dma_cb_index, cbuf_ptr->length);
+  if (rv == PROXY_NO_ERROR) dma_check_rx_packet(cp, dma_cb_ptr, dma_cb_index);
   dma_cb_index = (dma_cb_index + 1) % DMA_PKT_COUNT_RX;
 }
 
