@@ -221,7 +221,8 @@ void dma_rcvr(vchan *cp) {
 #ifdef PRINT_US_TRACE
   time_trace("XDC_Rx1 DMA Waiting on %s cb_index=%d", cp->dev_name, dma_cb_index);
 #endif
-  while ((rv = dma_start_to_finish(cp->fd, &dma_cb_index, cbuf_ptr)) == PROXY_TIMEOUT) { ; }
+//  while ((rv = dma_start_to_finish(cp->fd, &dma_cb_index, cbuf_ptr)) == PROXY_TIMEOUT) { ; }
+  rv = dma_start_to_finish(cp->fd, &dma_cb_index, cbuf_ptr);
 #ifdef PRINT_US_TRACE
   time_trace("XDC_Rx2 DMA returned rv=%d, status=%d len=0x%lx", rv, cbuf_ptr->status, cbuf_ptr->length);
 #endif
