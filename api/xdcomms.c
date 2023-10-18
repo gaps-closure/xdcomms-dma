@@ -57,7 +57,7 @@
 #define JSON_OBJECT_SIZE    10000
 #define PRINT_STATE_LEVEL   2                 // Reduce level to help debug (min=0)
 //#define OPEN_WITH_NO_O_SYNC                   // Replaces slow open-O_SYNC with msync DOES NOT WORK
-#define PRINT_US_TRACE                        // print Performance traces when defined
+//#define PRINT_US_TRACE                        // print Performance traces when defined
 
 codec_map       xdc_cmap[DATA_TYP_MAX];       // maps data type to its data encode + decode functions
 char            enclave_name[STR_SIZE] = "";  // enclave name (e.g., green)
@@ -168,10 +168,9 @@ void dma_open_channel(vchan *cp) {
 /**********************************************************************/
 /* Use DMA ioctl operations to tx or rx data */
 int dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *cbuf_ptr) {
-//  log_trace("START_XFER (fd=%d, id=%d buf_ptr=%p unset-status=%d)", fd, *buffer_id_ptr, cbuf_ptr, cbuf_ptr->status);
 //  time_trace("DMA Proxy transfer 1 (fd=%d, id=%d)", fd, *buffer_id_ptr);
   ioctl(fd, START_XFER,  buffer_id_ptr);
-//  log_trace("DMA Proxy Started (fd=%d, id=%d) len=0x%lx", fd, *buffer_id_ptr, cbuf_ptr->length);
+//  log_trace("DMA Proxy transfer 2 (fd=%d, id=%d) len=0x%lx", fd, *buffer_id_ptr, cbuf_ptr->length);
   ioctl(fd, FINISH_XFER, buffer_id_ptr);
 //  time_trace("DMA Proxy transfer 3 (fd=%d, id=%d): status=%d", fd, *buffer_id_ptr, cbuf_ptr->status);
   return (cbuf_ptr->status);
