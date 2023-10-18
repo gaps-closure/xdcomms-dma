@@ -202,7 +202,7 @@ void dma_send(vchan *cp, void *adu, gaps_tag *tag) {
 // Check received packet in DMA channel buffer (index = dma_cb_index)
 void dma_check_rx_packet(vchan *cp, struct channel_buffer *dma_cb_ptr, int dma_cb_index) {
   bw *p = (bw *) &(dma_cb_ptr[dma_cb_index].buffer);    // NB: DMA buffer must be larger than bW
-  log_debug("THREAD-3 rx DMA packet: ctag=0x%08x data-len=%d index=%d status=%d rv=0", ntohl(p->message_tag_ID), ntohs(p->data_len), dma_cb_index, dma_cb_ptr[dma_cb_index].status);
+  log_trace("THREAD-3 rx DMA packet: ctag=0x%08x data-len=%d index=%d status=%d rv=0", ntohl(p->message_tag_ID), ntohs(p->data_len), dma_cb_index, dma_cb_ptr[dma_cb_index].status);
   bw_process_rx_packet_if_good(p);
 }
 
@@ -225,7 +225,7 @@ void dma_rcvr(vchan *cp) {
 #ifdef PRINT_US_TRACE
   time_trace("XDC_Rx2 DMA returned rv=%d, status=%d len=0x%lx", rv, cbuf_ptr->status, cbuf_ptr->length);
 #endif
-  log_trace("DMA rx returned rv=%d, status=%d (NO_ERR=0, BUSY=1, TIMEOUT=2, ERR=3) id=%d len=0x%lx) ", rv, cbuf_ptr->status, dma_cb_index, cbuf_ptr->length);
+//  log_trace("DMA rx returned rv=%d, status=%d (NO_ERR=0, BUSY=1, TIMEOUT=2, ERR=3) id=%d len=0x%lx) ", rv, cbuf_ptr->status, dma_cb_index, cbuf_ptr->length);
   if (rv == PROXY_NO_ERROR) dma_check_rx_packet(cp, dma_cb_ptr, dma_cb_index);
   dma_cb_index = (dma_cb_index + 1) % DMA_PKT_COUNT_RX;
 }
