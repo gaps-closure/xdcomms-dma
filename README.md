@@ -10,7 +10,7 @@ XDCOMMS-lib maintains the same API as the Hardware Abstraction Layer (HAL), usin
 - **sec** identifies a CDG security policy used to processing an ADU. 
 - **typ** identifies the type of ADU (based on DFDL xsd definition). 
 
-XDCOMMS-lib HAL API function calls: 
+XDCOMMS-lib HAL API function calls (desription can be found in the hal/api directory): 
 - void  xdc_log_level(int new_level);
 - void  xdc_register(codec_func_ptr encode, codec_func_ptr decode, int typ);
 - void *xdc_sub_socket_non_blocking(gaps_tag tag, int timeout);
@@ -21,15 +21,15 @@ XDCOMMS-lib HAL API function calls:
 
 ## XDCOMMS SUPPORTED Cross-Domain Guards
 
-XDCOMMS-lib current version (version 0.5) supports three main types of CDG:
+XDCOMMS-lib current version (version 0.5, October 2023) supports three main types of CDG:
 - GE-MIND: Communicating with the proxy DMA driver using IOCTL commands, which in turn communicates with the XILINX AXI DMA/MCDMA driver on the GE MIND ZCU102 FPGA board.
 - INTEL-ESCAPE: Copying data to and from shared memory mapped regions on the ESCAPE FPGA board. 
 - X-ARBITOR: Reading a writing files with the X-ARBITOR send and receive proxies.
 
 In addition XDCOMMS-lib can be tested on a single host computer using: 
-- Pseudo driver emulation (as stand-in for the proxy DMA driver)
-- Shared memory mapped regions of the host computer (instead of the ESCAPE FPGA memory). 
-- Files in directories on the host computer 
+- Pseudo driver emulation (as stand-in for the proxy DMA driver).
+- Shared memory mapped regions of the host computer (as stand-in for the ESCAPE FPGA board). 
+- Files in directories on the host computer (as stand-in for the X-ARBITOR).
 
 
 ## XDCOMMS Configuration
