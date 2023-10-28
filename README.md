@@ -46,9 +46,9 @@ void  xdc_register(codec_func_ptr encode, codec_func_ptr decode, int typ);
 ## XDCOMMS SUPPORTED Cross-Domain Guards
 
 XDCOMMS-lib current version (version 0.5, October 2023) supports three main types of CDG:
-- GE-MIND: Communicating with a proxy DMA driver using IOCTL commands, which in turn communicates with the XILINX AXI DMA/MCDMA driver on the GE MIND ZCU102 FPGA board.
-- INTEL-ESCAPE: Copying data to and from shared memory mapped regions on the ESCAPE FPGA board. 
-- X-ARBITOR: Reading a writing files with the help of the X-ARBITOR send and receive proxies.
+- **GE-MIND**: Communicating with a proxy DMA driver using IOCTL commands, which in turn communicates with the XILINX AXI DMA/MCDMA driver on the GE MIND ZCU102 FPGA board.
+- **INTEL-ESCAPE**: Copying data to and from shared memory mapped regions on the ESCAPE FPGA board. 
+- **X-ARBITOR**: Reading a writing files with the help of the X-ARBITOR send and receive proxies.
 
 In addition XDCOMMS-lib can be tested on a single host computer using: 
 - Pseudo driver: which emulates the proxy DMA driver.
