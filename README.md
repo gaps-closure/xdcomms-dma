@@ -61,8 +61,8 @@ In addition XDCOMMS-lib can be tested on a single host computer using:
 xdcomms-lib defines the one-way channel definitions 
 (including definition of channel tags) are read from 
 the CLOSURE generated JSON configuration file (xdcomms.ini). 
-An simple example used in test application is 
-[xdconf_app_req_rep.json](./test_app/xdconf_app_req_rep.json)
+An simple example that supports two types of client requests/responses (with position or raw information) between two enclave (orange and green) is the test application file 
+[xdconf_app_req_rep.json](./test_app/xdconf_app_req_rep.json).
 
 An example of Selection of device configuration is done through environment variables specified when running the partitioned application.
 
