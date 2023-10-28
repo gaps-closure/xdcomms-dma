@@ -14,9 +14,9 @@ with three orthogonal 32-bit unsigned identifiers:
 
 ```
 typedef struct _tag {
-  uint32_t    mux;      // session multiplexing handle identifying a unidirectional APP flow
-  uint32_t    sec;      // identifies a CDG security policy used to processing APP data
-  uint32_t    typ;      // identifies the data type (based on DFDL xsd definition)
+  uint32_t  mux;  // session multiplexing handle identifying a unidirectional APP flow
+  uint32_t  sec;  // identifies a CDG security policy used to processing APP data
+  uint32_t  typ;  // identifies the data type (based on DFDL xsd definition)
 } gaps_tag;
 ```
 
