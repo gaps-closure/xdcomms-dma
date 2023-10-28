@@ -64,7 +64,10 @@ the CLOSURE generated JSON configuration file (xdcomms.ini).
 An simple example that supports two types of client requests/responses (with position or raw information) between two enclave (orange and green) is the test application file 
 [xdconf_app_req_rep.json](./test_app/xdconf_app_req_rep.json).
 
-An example of Selection of device configuration is done through environment variables specified when running the partitioned application.
+Selection of device configuration is done through environment variables specified when running the partitioned application. Example of these variables are:
+
+- [Test Application](#running-the-test-application)
+- [WEBSRV Application](#running-the-websrv-application)
 
 
 ## XDCOMMS Installation
