@@ -23,7 +23,7 @@ typedef struct _tag {
 As the CLOSURE codecs handle serialization and de-serialization, applications can 
 send and receive data by simply passing pointers to a) in-memory data structures 
 and b) the tag (see above) for data item to be sent or received. 
-In particular xdcomms provides: 
+In particular, XDCOMMS-lib provides: 
 a) an asynchronous send, 
 b) a blocking receive (until a message matching the specified tag is received), and 
 c) a receive which supports a timeout (specified in the xdc_sub_socket_non_blocking() call). 
@@ -49,9 +49,9 @@ void  xdc_register(codec_func_ptr encode, codec_func_ptr decode, int typ);
 XDCOMMS-lib current version (version 0.5, October 2023) supports three main types of CDG:
 - **GE-MIND**: Communicating with a proxy DMA driver using IOCTL commands, which in turn communicates with the XILINX AXI DMA/MCDMA driver on the GE MIND ZCU102 FPGA board.
 - **INTEL-ESCAPE**: Copying data to and from shared memory mapped regions on the ESCAPE FPGA board. 
-- **X-ARBITOR**: Reading a writing files with the help of the X-ARBITOR send and receive proxies.
+- **X-ARBITOR**: Reading and writing files with the help of the X-ARBITOR send and receive proxies.
 
-In addition XDCOMMS-lib can be tested on a single host computer using: 
+In addition, XDCOMMS-lib can be tested on a single host computer using: 
 - Pseudo driver: which emulates the proxy DMA driver.
 - Shared memory mapped regions of the host computer: as a stand-in for the ESCAPE FPGA board. 
 - Files in directories on the host computer: as stand-in for the X-ARBITOR.
@@ -62,7 +62,7 @@ In addition XDCOMMS-lib can be tested on a single host computer using:
 XDCOMMS-lib defines the one-way channel definitions 
 (including definition of channel tags) are read from 
 the CLOSURE generated JSON configuration file (xdcomms.ini). 
-An simple example that supports two types of client requests/responses (with position or raw information) between two enclave (orange and green) is the test application file 
+A simple example that supports two types of client requests/responses (with position or raw information) between two enclave (orange and green) is the test application file 
 [xdconf_app_req_rep.json](./test_app/xdconf_app_req_rep.json).
 
 Selection of device configuration is done through environment variables specified when running the partitioned application.
@@ -82,7 +82,7 @@ XARB_IP          IP address of X-ARBOITOR
 XDCLOGLEVEL      Debug logs level (0=TRACE, 1=DEBUG, 2=INFO)
 ```
 
-Example of these environmental variables are given below for the:
+Examples of the use of these environmental variables are given below for the:
 
 - [Test Application](#running-the-test-application)
 - [WEBSRV Application](#running-the-websrv-application)
