@@ -78,9 +78,9 @@ c) UNIX environment variables.
 For each types of supported CDG, XDCOMMS-lib has a header file 
 that defines the communication device configuration:
 
-- **DMA**: [dma-proxy.h](./dma-proxy.h). 
-- **SHM**: [shm.h](./shm.h). 
-- **FILE**: [file_info.h](./file_info.h). 
+- **DMA**: [dma-proxy.h](./api/dma-proxy.h). 
+- **SHM**: [shm.h](./api/shm.h). 
+- **FILE**: [file_info.h](./api/file_info.h). 
 
 
 ### JSON Configuration File
