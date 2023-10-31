@@ -196,7 +196,7 @@ void dma_send(vchan *cp, void *adu, gaps_tag *tag) {
 #ifdef PRINT_US_TRACE
   time_trace("XDC_Tx2 DMA Sent ctag=%08x len=%ld rv=%d", ntohl(cp->ctag), packet_len, rv);
 #endif
-  log_debug("XDCOMMS tx packet tag=<%d,%d,%d> len=%ld rv=%d", tag->mux, tag->sec, tag->typ, packet_len, rv);
+  log_debug("XDCOMMS tx packet tag=<%d,%d,%d> data_len=%ld rv=%d", tag->mux, tag->sec, tag->typ, adu_len, rv);
 }
   
 // Check received packet in DMA channel buffer (index = dma_cb_index)
@@ -545,7 +545,7 @@ void file_send(vchan *cp, void *adu, gaps_tag *tag) {
   log_trace("Send packet ctag=%08x len: adu=%d packet=%d Bytes", ntohl(cp->ctag), ntohs(p->data_len), packet_len);
   if (packet_len <= sizeof(bw)) log_buf_trace("TX_PKT", (uint8_t *) &(cp->file_info->pkt_buffer), packet_len);
   file_write(cp, p, packet_len, write_index);
-  log_debug("XDCOMMS tx packet tag=<%d,%d,%d> len=%ld", tag->mux, tag->sec, tag->typ, packet_len);
+  log_debug("XDCOMMS tx packet tag=<%d,%d,%d> data_len=%ld", tag->mux, tag->sec, tag->typ, adu_len);
   *next_ptr = (write_index + 1) % FILE_COUNT;
 }
 
@@ -1093,7 +1093,7 @@ int nonblock_recv(void *adu, gaps_tag *tag, vchan *cp) {
     cmap_decode(cp->rvpb[index_buf].data, cp->rvpb[index_buf].data_len, adu, tag, xdc_cmap);   /* Put packet into ADU */
 //    log_trace("XDCOMMS reads from buff=%p (index=%d): len=%d", cp->rvpb[index_buf].data, index_buf, cp->rvpb[index_buf].data_len);
     cp->rvpb[index_buf].newd = 0;                      // unmark newdata
-    log_debug("XDCOMMS rx packet tag=<%d,%d,%d> len=%d", tag->mux, tag->sec, tag->typ, cp->rvpb[index_buf].data_len);
+    log_debug("XDCOMMS rx packet tag=<%d,%d,%d> data_len=%d", tag->mux, tag->sec, tag->typ, cp->rvpb[index_buf].data_len);
     if (cp->rvpb[index_buf].data_len > 0) rv = cp->rvpb[index_buf].data_len;
     cp->rvpb_index_recv = (cp->rvpb_index_recv + 1) % cp->rvpb_count;
   }
