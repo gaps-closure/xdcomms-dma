@@ -161,7 +161,7 @@ ENCLAVE=green CONFIG_FILE=xdconf_app_req_rep.json DEV_NAME_RX=sue_donimous_rx0 D
 
 
 ### MIND DMA (on the XILINX board)
-Note that the SERVER (orange on a53) must be started within 3 seconds after starting the CLIENT (green on the microblaze)
+Note that the SERVER (orange on a53) must be started within 3 seconds after starting the CLIENT (green on the MicroBlaze)
 ```
 ENCLAVE=orange CONFIG_FILE=xdconf_app_req_rep.json XDCLOGLEVEL=0 ./app_req_rep -v -l 1 -e 2
 
