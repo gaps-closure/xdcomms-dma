@@ -161,8 +161,7 @@ Second, recompile XDCOMMS-lib to use the pseudo-driver:
     make -f Makefile.pseudo 
 ```
 
-Then we can run the test applications in two windows:
-
+Then we can run the test applications in two windows.
 In one window we start the test_app for the orange enclave:
 
 ```
@@ -175,6 +174,28 @@ In a second window we start the test_app for the orange enclave:
 ```
     cd ~/gaps/xdcomms-dma/test_app
     ENCLAVE=green CONFIG_FILE=xdconf_app_req_rep.json DEV_NAME_RX=sue_donimous_rx0 DEV_NAME_TX=sue_donimous_tx0 LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api XDCLOGLEVEL=1 ./app_req_rep
+```
+
+
+### X-ARBITOR FILE (on a single host)
+
+Compile XDCOMMS-lib:
+
+```
+    cd ~/gaps/xdcomms-dma/
+    make clean
+    make
+```
+
+Then we can run the test applications in two windows:
+```
+    cd ~/gaps/xdcomms-dma/test_app
+    ENCLAVE=orange CONFIG_FILE=xdconf_app_req_rep.json DEV_TYPE_RX=file DEV_TYPE_TX=file LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api DEV_NAME_RX=/tmp/xdc/2 DEV_NAME_TX=/tmp/xdc/1 XARB_IP=1.2.3.4 ./app_req_rep -v -l 1 -e 2
+```
+
+```
+    cd ~/gaps/xdcomms-dma/test_app
+    ENCLAVE=green CONFIG_FILE=xdconf_app_req_rep.json DEV_TYPE_RX=file DEV_TYPE_TX=file LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api DEV_NAME_TX=/tmp/xdc/2 DEV_NAME_RX=/tmp/xdc/1 XARB_IP=1.2.3.5 ./app_req_rep -v -l 1
 ```
 
 
@@ -195,17 +216,47 @@ sudo ENCLAVE=green CONFIG_FILE=xdconf_app_req_rep.json DEV_TYPE_RX=shm DEV_TYPE_
 ```
 
 
-### X-ARBITOR FILE (on a single host)
-```
-ENCLAVE=orange CONFIG_FILE=xdconf_app_req_rep.json DEV_TYPE_RX=file DEV_TYPE_TX=file LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api DEV_NAME_RX=/tmp/xdc/2 DEV_NAME_TX=/tmp/xdc/1 XARB_IP=1.2.3.4 ./app_req_rep -v -l 1 -e 2
-
-ENCLAVE=green CONFIG_FILE=xdconf_app_req_rep.json DEV_TYPE_RX=file DEV_TYPE_TX=file LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api DEV_NAME_TX=/tmp/xdc/2 DEV_NAME_RX=/tmp/xdc/1 XARB_IP=1.2.3.5 ./app_req_rep -v -l 1
-```
-
 
 ## Running the Websrv Application
 The websrv application has been tested on all supported xdcomms environments.
 Replace the IP addresses for MYADDR and CAMADDR with the correct ones for the experiment setup.
+
+### PSEUDO DMA (on a single host)
+
+First, ensure that the psuedo driver is compiled and loaded:
+
+```
+    cd ~/gaps/xdcomms-dma/pseudo
+    ./reset_sue_dominous.sh
+    lsmod | grep sue
+    ls -l /dev/sue*
+          /dev/sue_donimous_rx0  /dev/sue_donimous_rx1  /dev/sue_donimous_tx0  /dev/sue_donimous_tx1
+```
+
+Second, recompile XDCOMMS-lib to use the pseudo-driver:
+
+```
+    cd ~/gaps/xdcomms-dma/api
+    make clean
+    make -f Makefile.pseudo 
+```
+
+Then we can run the test applications in two windows:
+
+```
+    cd ~/gaps/eop2-closure-mind-demo/websrv/.solution/partitioned/multithreaded/orange
+    make -f ../../../makefiles/Makefile.pseudo
+    CONFIG_FILE=../xdconf.ini LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api \
+ENCLAVE=orange MYADDR=10.109.23.128 CAMADDR=10.109.23.151 \
+DEV_NAME_RX=sue_donimous_rx1 DEV_NAME_TX=sue_donimous_tx1 XDCLOGLEVEL=1 ./websrv
+```
+
+```
+    cd ~/gaps/eop2-closure-mind-demo/websrv/.solution/partitioned/multithreaded/green
+    make -f ../../../makefiles/Makefile.pseudo
+    CONFIG_FILE=../xdconf.ini LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api \
+ENCLAVE=green DEV_NAME_RX=sue_donimous_rx0 DEV_NAME_TX=sue_donimous_tx0 XDCLOGLEVEL=1 ./websrv
+```
 
 ### INTEL ESCAPE SHM 
 ```
@@ -219,19 +270,7 @@ DEV_TYPE_RX=shm DEV_TYPE_TX=shm XDCLOGLEVEL=0 ./websrv
 ```
 
 
-### PSEUDO DMA (on a single host)
-```
-CONFIG_FILE=../xdconf.ini LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api \
-ENCLAVE=orange MYADDR=10.109.23.128 CAMADDR=10.109.23.151 \
-DEV_NAME_RX=sue_donimous_rx1 DEV_NAME_TX=sue_donimous_tx1 XDCLOGLEVEL=0 ./websrv
-
-CONFIG_FILE=../xdconf.ini LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api \
-ENCLAVE=green \
-DEV_NAME_RX=sue_donimous_rx0 DEV_NAME_TX=sue_donimous_tx0 XDCLOGLEVEL=0 ./websrv
-```
-
-
-### GD MIND DMA 
+### GD MIND DMA s
 ``` 
 XDCLOGLEVEL=0 MYADDR=10.109.23.247 CAMADDR=10.109.23.151 ENCLAVE=orange CONFIG_FILE=xdconf.ini ./websrv-vid
 
