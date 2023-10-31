@@ -1093,7 +1093,7 @@ int nonblock_recv(void *adu, gaps_tag *tag, vchan *cp) {
     cmap_decode(cp->rvpb[index_buf].data, cp->rvpb[index_buf].data_len, adu, tag, xdc_cmap);   /* Put packet into ADU */
 //    log_trace("XDCOMMS reads from buff=%p (index=%d): len=%d", cp->rvpb[index_buf].data, index_buf, cp->rvpb[index_buf].data_len);
     cp->rvpb[index_buf].newd = 0;                      // unmark newdata
-    log_trace("XDCOMMS rx packet tag=<%d,%d,%d> len=%d", tag->mux, tag->sec, tag->typ, cp->rvpb[index_buf].data_len);
+    log_debug("XDCOMMS rx packet tag=<%d,%d,%d> len=%d", tag->mux, tag->sec, tag->typ, cp->rvpb[index_buf].data_len);
     if (cp->rvpb[index_buf].data_len > 0) rv = cp->rvpb[index_buf].data_len;
     cp->rvpb_index_recv = (cp->rvpb_index_recv + 1) % cp->rvpb_count;
   }

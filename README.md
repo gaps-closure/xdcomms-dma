@@ -62,6 +62,9 @@ To install the xdcomms library, together with the test application and pseudo dr
 ```
   git clone git@github.com:gaps-closure/xdcomms-dma
   cd xdcomms-dma/
+  git checkout -b develop
+  git branch --set-upstream-to=origin/develop
+  git pull
   make clean
   make 
 ```
@@ -137,26 +140,41 @@ Examples of the use of these environmental variables are given below for the:
 ## Running the Test Application
 
 A test application is included with the xdcomms  
-```
-  cd ~/gaps/xdcomms-dma/test_app
-```
 
 ### PSEUDO DMA (on a single host)
+
 First, ensure that the psuedo driver is compiled and loaded:
+
 ```
     cd ~/gaps/xdcomms-dma/pseudo
-    make
-    sudo ./sue_donimous_unload
-    sudo ./sue_donimous_load
+    ./reset_sue_dominous.sh
     lsmod | grep sue
+    ls -l /dev/sue*
+          /dev/sue_donimous_rx0  /dev/sue_donimous_rx1  /dev/sue_donimous_tx0  /dev/sue_donimous_tx1
+```
+
+Second, recompile XDCOMMS-lib to use the pseudo-driver:
+
+```
+    cd ~/gaps/xdcomms-dma/api
+    make clean
+    make -f Makefile.pseudo 
+```
+
+Then we can run the test applications in two windows:
+
+In one window we start the test_app for the orange enclave:
+
+```
     cd ~/gaps/xdcomms-dma/test_app
+    ENCLAVE=orange CONFIG_FILE=xdconf_app_req_rep.json DEV_NAME_RX=sue_donimous_rx1 DEV_NAME_TX=sue_donimous_tx1 LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api XDCLOGLEVEL=1 ./app_req_rep -e 2
 ```
 
-Then we can run the test application 
-```
-ENCLAVE=orange CONFIG_FILE=xdconf_app_req_rep.json DEV_NAME_RX=sue_donimous_rx1 DEV_NAME_TX=sue_donimous_tx1 LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api ./app_req_rep -v -e 2 -l 1
+In a second window we start the test_app for the orange enclave:
 
-ENCLAVE=green CONFIG_FILE=xdconf_app_req_rep.json DEV_NAME_RX=sue_donimous_rx0 DEV_NAME_TX=sue_donimous_tx0 LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api ./app_req_rep -v -l 1
+```
+    cd ~/gaps/xdcomms-dma/test_app
+    ENCLAVE=green CONFIG_FILE=xdconf_app_req_rep.json DEV_NAME_RX=sue_donimous_rx0 DEV_NAME_TX=sue_donimous_tx0 LD_LIBRARY_PATH=~/gaps/xdcomms-dma/api XDCLOGLEVEL=1 ./app_req_rep
 ```
 
 
