@@ -53,39 +53,8 @@ XDCOMMS-lib current version (version 0.5, October 2023) supports three main type
 
 In addition, XDCOMMS-lib can be tested on a single host computer using: 
 - Pseudo driver: which emulates the proxy DMA driver.
-- Shared memory mapped regions of the host computer: as a stand-in for the ESCAPE FPGA board. 
+- Shared Memory (SHM) mapped regions of the host computer: as a stand-in for the ESCAPE FPGA board. 
 - Files in directories on the host computer: as stand-in for the X-ARBITOR.
-
-
-## XDCOMMS Configuration
-
-XDCOMMS-lib defines the one-way channel definitions 
-(including definition of channel tags) are read from 
-the CLOSURE generated JSON configuration file (xdcomms.ini). 
-A simple example that supports two types of client requests/responses (with position or raw information) between two enclave (orange and green) is the test application file 
-[xdconf_app_req_rep.json](./test_app/xdconf_app_req_rep.json).
-
-Selection of device configuration is done through environment variables specified when running the partitioned application.
-
-```
-CAMADDR          IP address of Video Camera
-CONFIG_FILE      JSON conifuration file 
-DEV_NAME_RX      Name of receive device
-DEV_NAME_TX      Name of transmit device
-DEV_TYPE_RX      Device type of receiver (see example below)
-DEV_TYPE_TX      Device type of transmitter (see example below)
-ENCLAVE          Name of enclave (contained in CONFIG_FILE)
-LD_LIBRARY_PATH  Directory path to xdcomms library
-MYADDR           IP address of this application
-SHM_WAIT4NEW     Wait for a new client
-XARB_IP          IP address of X-ARBOITOR
-XDCLOGLEVEL      Debug logs level (0=TRACE, 1=DEBUG, 2=INFO)
-```
-
-Examples of the use of these environmental variables are given below for the:
-
-- [Test Application](#running-the-test-application)
-- [WEBSRV Application](#running-the-websrv-application)
 
 
 ## XDCOMMS Installation
@@ -96,6 +65,73 @@ To install the xdcomms library, together with the test application and pseudo dr
   make clean
   make 
 ```
+
+
+## XDCOMMS Configuration
+
+XDCOMMS-lib uses three types of configuration infomration, from:
+a) device header files, 
+b) a JSON configuration file, and
+c) UNIX environment variables.
+
+### Device Header Files
+For each types of supported CDG, XDCOMMS-lib has a header file 
+that defines the communication device configuration:
+
+- **DMA**: [dma-proxy.h](./dma-proxy.h). 
+- **SHM**: [shm.h](./shm.h). 
+- **FILE**: [file_info.h](./file_info.h). 
+
+
+### JSON Configuration File
+
+XDCOMMS-lib reads the one-way channel definitions 
+(including definition of channel tags from a JSON configuration file.
+This JSON file is normally autognerated by the CLOSURE tools as 'xdcomms.ini'.
+A simple example that supports two types of client requests/responses 
+(with position or raw information) between two enclave (orange and green) 
+is the test application file 
+[xdconf_app_req_rep.json](./test_app/xdconf_app_req_rep.json).
+
+ 
+### Environment Variables
+
+Selection of device configuration is done through UNIX environment variables specified when running the partitioned application.
+
+```
+                                                       DEFAULTS
+ENVIR. VARIABLE  Description                           dma,                file,      shm       
+---------------  ------------------------------------  -------------------------------------
+CONFIG_FILE      JSON conifuration file                REQUIRED
+DEV_NAME_RX      Name of receive device^               /dev/dma_proxy_rx, /tmp/xdc, /dev/mem  
+DEV_NAME_TX      Name of transmit device^              /dev/dma_proxy_tx, /tmp/xdc, /dev/mem
+DEV_TYPE_RX      Receiver Device type                  dma
+DEV_TYPE_TX      Transmitter Device type               dma
+ENCLAVE          Name of enclave (in CONFIG_FILE)      REQUIRED
+LD_LIBRARY_PATH  Directory path to xdcomms library     LINUX OS PATH
+SHM_WAIT4NEW     Wait for new client if non-zero       -,                  -,           0                   
+XARB_IP          X-ARBITOR Proxy IP address            -,            192.168.100.101,   -        
+XARB_PORT        X-ARBITOR Proxy TCP PORT              -,                  1124,        -
+XDCLOGLEVEL      Log level: 0=TRACE, 1=DEBUG, 2=INFO   XDCOMMS API call: xdc_log_level()
+---------------  ------------------------------------  -------------------------------------
+
+^ Environmental varibale default depend on DEV_TYPE
+- Environmental varibale is not used with given DEV_TYPE
+```
+
+The partioned application may have its own environmental varibales. For example, WEBSRV has:
+
+```
+ENVIR. VARIABLE  Description                           DEFAULTS      
+---------------  ------------------------------------  ----------
+CAMADDR          IP address of Video Camera            REQUIRED
+MYADDR           IP address of this application        REQUIRED
+```
+
+Examples of the use of these environmental variables are given below for the:
+
+- [Test Application](#running-the-test-application)
+- [WEBSRV Application](#running-the-websrv-application)
 
 
 ## Running the Test Application
