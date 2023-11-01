@@ -54,10 +54,12 @@
 
 
 #define DATA_TYP_MAX        50
-#define JSON_OBJECT_SIZE    10000
+#define JSON_OBJECT_SIZE    1000
+
+#define PRINT_US_TRACE                        // print Performance traces when defined
 #define PRINT_STATE_LEVEL   2                 // Reduce level to help debug (min=0)
+#define PRINT_RX_THREAD                       // Log RX Thread (may be too much info if use pseudo-driver)
 //#define OPEN_WITH_NO_O_SYNC                   // Replaces slow open-O_SYNC with msync DOES NOT WORK
-//#define PRINT_US_TRACE                        // print Performance traces when defined
 
 codec_map       xdc_cmap[DATA_TYP_MAX];       // maps data type to its data encode + decode functions
 char            enclave_name[STR_SIZE] = "";  // enclave name (e.g., green)
@@ -134,15 +136,19 @@ void bw_write_into_vpb(vchan *cp, bw *p) {
   cp->rvpb[vb_index].data = (uint8_t *) p->data;
   cp->rvpb[vb_index].ctag = ntohl(p->message_tag_ID);
   cp->rvpb[vb_index].newd = 1;
+#ifdef PRINT_RX_THREAD
   log_trace("THREAD-4 Copy rx packet (ctag=%08x len=%d) into rx Virtual Buffer (vb_index=%d)", cp->rvpb[vb_index].ctag, cp->rvpb[vb_index].data_len, vb_index);
+#endif
   cp->rvpb_index_thrd = (vb_index + 1) % cp->rvpb_count;     // Increement vp-buffer index
   pthread_mutex_unlock(&(cp->lock));
 }
 
 void bw_process_rx_packet_if_good(bw *p) {
   vchan *cp = get_cp_from_ctag(p->message_tag_ID, 'r', -1);      // -1 = find context only if flow is already setup
-  if ((cp == NULL) || ((p->data_len) < 1)) log_trace("Thread-4x Ignore bad rx packet: len=%d ctag=%08x cp=%p", p->data_len, ntohl(p->message_tag_ID), cp);
-  else bw_write_into_vpb(cp, p);
+  if ((cp != NULL) && ((p->data_len) > 0))  bw_write_into_vpb(cp, p);
+#ifdef PRINT_RX_THREAD
+  else log_trace("Thread-4x Ignore bad rx packet: len=%d ctag=%08x cp=%p", p->data_len, ntohl(p->message_tag_ID), cp);
+#endif
 }
 
 /**********************************************************************/
@@ -176,7 +182,7 @@ int dma_start_to_finish(int fd, int *buffer_id_ptr, struct channel_buffer *cbuf_
   return (cbuf_ptr->status);
 }
 
-void dma_send(vchan *cp, void *adu, gaps_tag *tag) {
+size_t dma_send(vchan *cp, void *adu, gaps_tag *tag) {
   struct channel_buffer  *dma_tx_chan = (struct channel_buffer *) cp->mm.virt_addr;
   bw        *p;               // Packet pointer
   int       rv, buffer_id=0;  // Use only a single buffer
@@ -184,25 +190,22 @@ void dma_send(vchan *cp, void *adu, gaps_tag *tag) {
   size_t    packet_len;
   
   p = (bw *) &(dma_tx_chan->buffer);      // DMA packet buffer pointer, where we put the packet */
-#ifdef PRINT_US_TRACE
-  time_trace("XDC_Tx1 ready to encode for ctag=%08x into %p", ntohl(cp->ctag), p);
-#endif
   cmap_encode(p->data, adu, &adu_len, tag, xdc_cmap);         // Put packet data into DMA buffer
   bw_gaps_header_encode(p, &packet_len, adu, &adu_len, tag);  // Put packet header into DMA buffer
   dma_tx_chan->length = packet_len;                           // Tell DMA buffer packet length (data + header)
   log_trace("Send packet on ctag=%08x fd=%d buf_id=%d of len: adu=%d packet=%d Bytes", ntohl(cp->ctag), cp->fd, buffer_id, ntohs(p->data_len), packet_len);
   if (packet_len <= sizeof(bw)) log_buf_trace("TX_PKT", (uint8_t *) &(dma_tx_chan->buffer), packet_len);
   rv = dma_start_to_finish(cp->fd, &buffer_id, dma_tx_chan);
-#ifdef PRINT_US_TRACE
-  time_trace("XDC_Tx2 DMA Sent ctag=%08x len=%ld rv=%d", ntohl(cp->ctag), packet_len, rv);
-#endif
   log_debug("XDCOMMS tx packet tag=<%d,%d,%d> data_len=%ld rv=%d", tag->mux, tag->sec, tag->typ, adu_len, rv);
+  return(adu_len);
 }
   
 // Check received packet in DMA channel buffer (index = dma_cb_index)
 void dma_check_rx_packet(vchan *cp, struct channel_buffer *dma_cb_ptr, int dma_cb_index) {
   bw *p = (bw *) &(dma_cb_ptr[dma_cb_index].buffer);    // NB: DMA buffer must be larger than bW
-  log_trace("THREAD-3 rx DMA packet: ctag=0x%08x data-len=%d index=%d status=%d rv=0", ntohl(p->message_tag_ID), ntohs(p->data_len), dma_cb_index, dma_cb_ptr[dma_cb_index].status);
+#ifdef PRINT_RX_THREAD
+  log_trace("THREAD-3b rx DMA packet: ctag=0x%08x data-len=%d index=%d status=%d rv=0", ntohl(p->message_tag_ID), ntohs(p->data_len), dma_cb_index, dma_cb_ptr[dma_cb_index].status);
+#endif
   bw_process_rx_packet_if_good(p);
 }
 
@@ -216,16 +219,14 @@ void dma_rcvr(vchan *cp) {
 
   // A) Wait for Packet from DMA
   cbuf_ptr->length = sizeof(bw);            /* Receive up to make length Max size */
+#ifdef PRINT_RX_THREAD
   log_trace("THREAD-2 waiting for any tag on %s device %s: fd=%d max_len=%d cb_index=%d", cp->dev_type, cp->dev_name, cp->fd, cbuf_ptr->length, dma_cb_index);
-#ifdef PRINT_US_TRACE
-  time_trace("XDC_Rx1 DMA Waiting on %s cb_index=%d", cp->dev_name, dma_cb_index);
 #endif
 //  while ((rv = dma_start_to_finish(cp->fd, &dma_cb_index, cbuf_ptr)) == PROXY_TIMEOUT) { ; }
   rv = dma_start_to_finish(cp->fd, &dma_cb_index, cbuf_ptr);
-#ifdef PRINT_US_TRACE
-  time_trace("XDC_Rx2 DMA returned rv=%d, status=%d len=0x%lx", rv, cbuf_ptr->status, cbuf_ptr->length);
+#ifdef PRINT_RX_THREAD
+  log_trace("THREAD-3a DMA returned rv=%d (NO_ERR=0, BUSY=1, TIMEOUT=2, ERR=3), status=%d len=0x%lx id=%d", rv, cbuf_ptr->status, cbuf_ptr->length, dma_cb_index);
 #endif
-//  log_trace("DMA rx returned rv=%d, status=%d (NO_ERR=0, BUSY=1, TIMEOUT=2, ERR=3) id=%d len=0x%lx) ", rv, cbuf_ptr->status, dma_cb_index, cbuf_ptr->length);
   if (rv == PROXY_NO_ERROR) dma_check_rx_packet(cp, dma_cb_ptr, dma_cb_index);
   dma_cb_index = (dma_cb_index + 1) % DMA_PKT_COUNT_RX;
 }
@@ -357,18 +358,15 @@ void delete_oldest_pkt(int *last_ptr, int write_index) {
   if (*last_ptr < 0) *last_ptr = 0;   // If the first written packet
 }
 
-void shm_send(vchan *cp, void *adu, gaps_tag *tag) {
+size_t shm_send(vchan *cp, void *adu, gaps_tag *tag) {
   int            *last_ptr    = &(cp->shm_addr->pkt_index_last);
   int            *next_ptr    = &(cp->shm_addr->pkt_index_next);
   int             write_index = *next_ptr;
   size_t          adu_len     = 0;    // encoder calculates length */
   
-  log_trace("%s TX index: next=%d last=%d (guard_bw=%d)", __func__, *next_ptr, *last_ptr, DEFAULT_NS_GUARD_TIME_BW);
+  log_trace("%s %08x index=%d: next=%d last=%d (guard_bw=%d)", __func__, ntohl(cp->ctag), write_index, *next_ptr, *last_ptr, DEFAULT_NS_GUARD_TIME_BW);
   delete_oldest_pkt(last_ptr, write_index);
   // B) Encode Data into SHM
-#ifdef PRINT_US_TRACE
-  time_trace("TX1 %08x (index=%d)", ntohl(cp->ctag), write_index);
-#endif
   cmap_encode(cp->shm_addr->pdata[write_index].data, adu, &adu_len, tag, xdc_cmap);
 //  XXX TODO: incoprate naive_memcpy into cmap_encode/decode
 //  naive_memcpy(cp->shm_addr->pdata[pkt_index_nxt].data, adu, adu_len);  // TX adds new data
@@ -383,9 +381,8 @@ void shm_send(vchan *cp, void *adu, gaps_tag *tag) {
 //  shm_sync((void *) (cp->shm_addr), sizeof(shm_channel), MS_ASYNC);
   shm_sync(cp->mm.virt_addr, cp->mm.len, MS_ASYNC);
 #endif
-#ifdef PRINT_US_TRACE
-  time_trace("TX2 %08x (len=%d)", ntohl(cp->ctag), adu_len);
-#endif
+  log_trace("%s Encoded %08x (len=%d)", __func__, ntohl(cp->ctag), adu_len);
+  return(adu_len);
 }
 
 // Check that SHM TX has matches RX tag and crc. Also, (optionally) has newer timestamp
@@ -418,10 +415,14 @@ void shm_rcvr(vchan *cp) {
     while (wait_if_old(cp)) { ; }
     once = 0;
   }
+#ifdef PRINT_RX_THREAD
   log_trace("THREAD-2 waiting for tag=0x%08x on %s device %s: index=%d of %d (last=%d)", ntohl(cp->ctag), cp->dev_type, cp->dev_name, vb_index, cp->rvpb_count, cp->shm_addr->pkt_index_next);
+#endif
   while (vb_index == (cp->shm_addr->pkt_index_next)) { ; }
   pthread_mutex_lock(&(cp->lock));
+#ifdef PRINT_RX_THREAD
   log_trace("THREAD-3 rx SHM packet: ctag=0x%08x len=%d id=%d", ntohl(cp->ctag), cp->shm_addr->pinfo[vb_index].data_length, vb_index);
+#endif
 #if 1 >= PRINT_STATE_LEVEL
   shm_info_print(cp->shm_addr);
 #endif  // PRINT_STATE
@@ -430,7 +431,9 @@ void shm_rcvr(vchan *cp) {
   cp->rvpb[vb_index].newd     = 1;
 //  fprintf(stderr, "PPP %p = %08x ", cp->shm_addr->pdata[vb_index].data, ntohl(cp->shm_addr->pdata[vb_index].data[4]));
   cp->rvpb_index_thrd = (vb_index + 1) % cp->rvpb_count;     // Increement vp-buffer index
+#ifdef PRINT_RX_THREAD
   log_trace("THREAD-4 Copy rx packet (ctag=%08x len=%d) into rx Virtual Buffer (vb_index=%d)", ntohl(cp->ctag), cp->rvpb[vb_index].data_len, vb_index);
+#endif
   pthread_mutex_unlock(&(cp->lock));
 }
 
@@ -529,7 +532,7 @@ void file_write(vchan *cp, bw *p, size_t packet_len, int write_index) {
 }
 
 // Tx packet
-void file_send(vchan *cp, void *adu, gaps_tag *tag) {
+size_t file_send(vchan *cp, void *adu, gaps_tag *tag) {
   int            *last_ptr    = &(cp->file_info->pkt_index_last);
   int            *next_ptr    = &(cp->file_info->pkt_index_next);
   int             write_index = *next_ptr;
@@ -547,6 +550,7 @@ void file_send(vchan *cp, void *adu, gaps_tag *tag) {
   file_write(cp, p, packet_len, write_index);
   log_debug("XDCOMMS tx packet tag=<%d,%d,%d> data_len=%ld", tag->mux, tag->sec, tag->typ, adu_len);
   *next_ptr = (write_index + 1) % FILE_COUNT;
+  return(adu_len);
 }
 
 // Open file (if event file name is correct), else return NULL
@@ -965,7 +969,7 @@ json_t const *json_get_j_array(json_t const *j_node, char *match_str) {
   // A) Copy JSON file into buffer
   json_fp = fopen(xcf, "rb");
   assert(json_fp != NULL);
-  len = fread(file_as_str, 1, JSON_OBJECT_SIZE, json_fp);
+  len = fread(file_as_str, 1, (JSON_OBJECT_SIZE * 10), json_fp);
   fclose(json_fp);
   return (len);
 }
@@ -973,7 +977,7 @@ json_t const *json_get_j_array(json_t const *j_node, char *match_str) {
 // Open and parse JSON configuration file (using json-c library)
 //   enum: JSON_OBJ, JSON_ARRAY, JSON_TEXT, JSON_BOOLEAN, JSON_INTEGER, JSON_REAL, JSON_NULL
 void read_tiny_json_config_file(char *xcf) {
-  char          json_file_as_str[JSON_OBJECT_SIZE];
+  char          json_file_as_str[(JSON_OBJECT_SIZE * 10)];
   json_t        mem[JSON_OBJECT_SIZE];  // json node struct 'array' with ptrs to json_file_as_str
   int           json_file_len, helmap_len;
   gaps_tag      tag;
@@ -1034,6 +1038,7 @@ void config_channels(void) {
 /* Asynchronously send ADU to DMA driver in 'bw' packet */
 void asyn_send(void *adu, gaps_tag *tag) {
   vchan  *cp;        // abstract channel struct pointer for any device type
+  size_t  adu_len;   // data length */
 
   // a) Open channel once (and get device type, device name and channel struct
   log_trace("Start of %s for tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
@@ -1041,9 +1046,15 @@ void asyn_send(void *adu, gaps_tag *tag) {
   
   pthread_mutex_lock(&(cp->lock));
   // b) encode packet into TX buffer and send */
-  if (strcmp(cp->dev_type, "dma") == 0)  dma_send(cp, adu, tag);
-  if (strcmp(cp->dev_type, "shm") == 0)  shm_send(cp, adu, tag);
-  if (strcmp(cp->dev_type, "file") == 0) file_send(cp, adu, tag);
+#ifdef PRINT_US_TRACE
+  time_trace("XDC_Tx1 %08x Ready to encode", ntohl(cp->ctag));
+#endif
+  if (strcmp(cp->dev_type, "dma") == 0)  adu_len = dma_send(cp, adu, tag);
+  if (strcmp(cp->dev_type, "shm") == 0)  adu_len = shm_send(cp, adu, tag);
+  if (strcmp(cp->dev_type, "file") == 0) adu_len = file_send(cp, adu, tag);
+#ifdef PRINT_US_TRACE
+  time_trace("XDC_Tx2 %08x Sent data_len=%ld", ntohl(cp->ctag), adu_len);
+#endif
   pthread_mutex_unlock(&(cp->lock));
 }
 
@@ -1052,7 +1063,9 @@ void *rcvr_thread_function(thread_args *vargs) {
   vchan       *cp = (vchan *) vargs->cp;
 
   while (1) {
+#ifdef PRINT_RX_THREAD
     log_trace("THREAD-1 %s: fd=%d base_id=%d (ctag=0x%08x)", __func__, cp->fd, vargs->buffer_id_start, ntohl(cp->ctag));
+#endif
 #if 0 >= PRINT_STATE_LEVEL
     vchan_print(cp, enclave_name);
 #endif  // PRINT_STATE_LEVEL
@@ -1076,7 +1089,7 @@ void rcvr_thread_start(vchan *cp) {
 
 
 /* Receive packet from driver (via rx thread), storing data and length in ADU */
-int nonblock_recv(void *adu, gaps_tag *tag, vchan *cp) {
+int asyn_recv(void *adu, gaps_tag *tag, vchan *cp) {
   int index_buf = cp->rvpb_index_recv;
   int rv = -1;
   
@@ -1087,15 +1100,18 @@ int nonblock_recv(void *adu, gaps_tag *tag, vchan *cp) {
     fprintf(stderr, "%s on buff index=%d", __func__, index_buf);
     vchan_print(cp, enclave_name);
 #endif
-//#ifdef PRINT_US_TRACE
-//    time_trace("RX3 %08x (index=%d)", ntohl(cp->ctag), cp->rvpb_index_recv);
-//#endif
+#ifdef PRINT_US_TRACE
+    time_trace("XDC_Rx1 %08x Ready to decode (index=%d)", ntohl(cp->ctag), cp->rvpb_index_recv);
+#endif
     cmap_decode(cp->rvpb[index_buf].data, cp->rvpb[index_buf].data_len, adu, tag, xdc_cmap);   /* Put packet into ADU */
 //    log_trace("XDCOMMS reads from buff=%p (index=%d): len=%d", cp->rvpb[index_buf].data, index_buf, cp->rvpb[index_buf].data_len);
     cp->rvpb[index_buf].newd = 0;                      // unmark newdata
     log_debug("XDCOMMS rx packet tag=<%d,%d,%d> data_len=%d", tag->mux, tag->sec, tag->typ, cp->rvpb[index_buf].data_len);
     if (cp->rvpb[index_buf].data_len > 0) rv = cp->rvpb[index_buf].data_len;
     cp->rvpb_index_recv = (cp->rvpb_index_recv + 1) % cp->rvpb_count;
+#ifdef PRINT_US_TRACE
+    time_trace("XDC_Rx2 %08x Decoded data_len=%d", ntohl(cp->ctag), cp->rvpb[index_buf].data_len);
+#endif
   }
   pthread_mutex_unlock(&(cp->lock));
   return(rv);
@@ -1235,8 +1251,8 @@ int  xdc_recv(void *socket, void *adu, gaps_tag *tag) {
   ntries          = 1 + (cp->retries);           // number of tries to rx packet
 //  log_trace("%s: test %d times every %d (%d.%09d) ns", __func__, ntries, RX_POLL_INTERVAL_NSEC, request.tv_sec, request.tv_nsec);
   while ((ntries--) > 0)  {
-//    if (nonblock_recv(adu, tag, cp) > 0)  return 0;
-    if ((x=nonblock_recv(adu, tag, cp)) > 0) {
+//    if (asyn_recv(adu, tag, cp) > 0)  return 0;
+    if ((x=asyn_recv(adu, tag, cp)) > 0) {
 //#ifdef PRINT_US_TRACE
 //      time_trace("RX4 %08x (len=%d)", ntohl(cp->ctag), x);
 //#endif
