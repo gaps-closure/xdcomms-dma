@@ -4,13 +4,13 @@
  * maintains the same API as the Hardware Abstraction Layer (HAL).
  *
  *
- * v0.5 October 2023 Added support for file-based communication,
- * including interfacing with an X-ARBITOR gateway.
+ * v0.5 November 2023: Added support for file-based communication,
+ * including interfacing with an X-ARBITOR proxy sender and receiver.
  *
  * v0.4 August 2023: Virtual Hardware device layer defines abstract
  * channels added to support multiple communication technologies,
- * insread of only DMA channels (see v0.3), so renamed from
- * 'xdcomms-dma.c' to 'xdcomms.c'. In addition to DMA, it now supports
+ * insread of only DMA channels (see v0.3), so 'xdcomms-dma.c' was
+ * renamed to to 'xdcomms.c'. In addition to DMA, it now supports
  * Shared Memoru (SHM) channels, by copying data to specified regions
  * of mmap'ed host memory. The mmap'ed addresses can be in the host's
  * own memory or regions mapp'ed from the Intel ESCAPE FPGA board.
@@ -56,9 +56,9 @@
 #define DATA_TYP_MAX        50
 #define JSON_OBJECT_SIZE    1000
 
-#define PRINT_US_TRACE                        // print Performance traces when defined
 #define PRINT_STATE_LEVEL   2                 // Reduce level to help debug (min=0)
 #define PRINT_RX_THREAD                       // Log RX Thread (may be too much info if use pseudo-driver)
+//#define PRINT_US_TRACE                        // print Performance traces when defined
 //#define OPEN_WITH_NO_O_SYNC                   // Replaces slow open-O_SYNC with msync DOES NOT WORK
 
 codec_map       xdc_cmap[DATA_TYP_MAX];       // maps data type to its data encode + decode functions
