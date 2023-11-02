@@ -1055,6 +1055,8 @@ void asyn_send(void *adu, gaps_tag *tag) {
 #ifdef PRINT_US_TRACE
   time_trace("XDC_Tx2 %08x Sent data_len=%ld", ntohl(cp->ctag), adu_len);
 #endif
+  log_trace("Sent tag=<%d,%d,%d> data_len=%ld", __func__, tag->mux, tag->sec, tag->typ, adu_len);
+
   pthread_mutex_unlock(&(cp->lock));
 }
 
