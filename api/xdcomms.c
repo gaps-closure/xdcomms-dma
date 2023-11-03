@@ -64,7 +64,8 @@
 codec_map       xdc_cmap[DATA_TYP_MAX];       // maps data type to its data encode + decode functions
 char            enclave_name[STR_SIZE] = "";  // enclave name (e.g., green)
 vchan           vchan_info[GAPS_TAG_MAX];     // buffer array to store local virtual channel info per tag
-pthread_mutex_t vchan_create;
+pthread_mutex_t vchan_create;                 // No simultaneous read and writw of CP-list (both in get_cp_from_ctag)
+pthread_mutex_t send_lock;                    // No simultaneous sending by different flows
 
 void rcvr_thread_start(vchan *cp);
 vchan *get_cp_from_ctag(uint32_t ctag, char dir, int json_index);
@@ -131,7 +132,7 @@ void bw_gaps_header_encode(bw *p, size_t *p_len, uint8_t *buff_in, size_t *buff_
 // Copy packet from device buffer to virtual channel buffer (idx=vb_index)
 void bw_write_into_vpb(vchan *cp, bw *p) {
   int vb_index = cp->rvpb_index_thrd;
-  pthread_mutex_lock(&(cp->lock));
+  pthread_mutex_lock(&(cp->rvpb_lock));
   bw_len_decode(&(cp->rvpb[vb_index].data_len), p->data_len);
   cp->rvpb[vb_index].data = (uint8_t *) p->data;
   cp->rvpb[vb_index].ctag = ntohl(p->message_tag_ID);
@@ -140,7 +141,7 @@ void bw_write_into_vpb(vchan *cp, bw *p) {
   log_trace("THREAD-4 Copy rx packet (ctag=%08x len=%d) into rx Virtual Buffer (vb_index=%d)", cp->rvpb[vb_index].ctag, cp->rvpb[vb_index].data_len, vb_index);
 #endif
   cp->rvpb_index_thrd = (vb_index + 1) % cp->rvpb_count;     // Increement vp-buffer index
-  pthread_mutex_unlock(&(cp->lock));
+  pthread_mutex_unlock(&(cp->rvpb_lock));
 }
 
 void bw_process_rx_packet_if_good(bw *p) {
@@ -419,7 +420,7 @@ void shm_rcvr(vchan *cp) {
   log_trace("THREAD-2 waiting for tag=0x%08x on %s device %s: index=%d of %d (last=%d)", ntohl(cp->ctag), cp->dev_type, cp->dev_name, vb_index, cp->rvpb_count, cp->shm_addr->pkt_index_next);
 #endif
   while (vb_index == (cp->shm_addr->pkt_index_next)) { ; }
-  pthread_mutex_lock(&(cp->lock));
+  pthread_mutex_lock(&(cp->rvpb_lock));
 #ifdef PRINT_RX_THREAD
   log_trace("THREAD-3 rx SHM packet: ctag=0x%08x len=%d id=%d", ntohl(cp->ctag), cp->shm_addr->pinfo[vb_index].data_length, vb_index);
 #endif
@@ -434,7 +435,7 @@ void shm_rcvr(vchan *cp) {
 #ifdef PRINT_RX_THREAD
   log_trace("THREAD-4 Copy rx packet (ctag=%08x len=%d) into rx Virtual Buffer (vb_index=%d)", ntohl(cp->ctag), cp->rvpb[vb_index].data_len, vb_index);
 #endif
-  pthread_mutex_unlock(&(cp->lock));
+  pthread_mutex_unlock(&(cp->rvpb_lock));
 }
 
 /**********************************************************************/
@@ -692,7 +693,7 @@ void vchan_init_all_once(void) {
         vchan_info[i].rvpb[index_buf].data_len = 0;
         vchan_info[i].rvpb[index_buf].data = NULL;
       }
-      if (pthread_mutex_init(&(vchan_info[i].lock), NULL) != 0)   FATAL;
+      if (pthread_mutex_init(&(vchan_info[i].rvpb_lock), NULL) != 0)   FATAL;
     }
     once=0;
   }
@@ -1044,7 +1045,7 @@ void asyn_send(void *adu, gaps_tag *tag) {
   log_trace("Start of %s for tag=<%d,%d,%d>", __func__, tag->mux, tag->sec, tag->typ);
   cp = get_chan_info(tag, 't', -1);
   
-  pthread_mutex_lock(&(cp->lock));
+  pthread_mutex_lock(&send_lock);
   // b) encode packet into TX buffer and send */
 #ifdef PRINT_US_TRACE
   time_trace("XDC_Tx1 %08x Ready to encode", ntohl(cp->ctag));
@@ -1055,9 +1056,8 @@ void asyn_send(void *adu, gaps_tag *tag) {
 #ifdef PRINT_US_TRACE
   time_trace("XDC_Tx2 %08x Sent data_len=%ld", ntohl(cp->ctag), adu_len);
 #endif
+  pthread_mutex_unlock(&send_lock);
   log_trace("Sent tag=<%d,%d,%d> data_len=%ld", __func__, tag->mux, tag->sec, tag->typ, adu_len);
-
-  pthread_mutex_unlock(&(cp->lock));
 }
 
 // Receive packets via SHM/DMA in a loop (rate controled by FINISH_XFER blocking call)
@@ -1095,7 +1095,7 @@ int asyn_recv(void *adu, gaps_tag *tag, vchan *cp) {
   int index_buf = cp->rvpb_index_recv;
   int rv = -1;
   
-  pthread_mutex_lock(&(cp->lock));
+  pthread_mutex_lock(&(cp->rvpb_lock));
 //  log_trace("%s: Check for received packet on tag=<%d,%d,%d> cp=%p ix=%d new%d", __func__, tag->mux, tag->sec, tag->typ, cp, cp->rvpb_index_recv, cp->rvpb[index_buf].newd);
   if (cp->rvpb[index_buf].newd == 1) {                            // get packet from buffer if available)
 #if 0 >= PRINT_STATE_LEVEL
@@ -1115,7 +1115,7 @@ int asyn_recv(void *adu, gaps_tag *tag, vchan *cp) {
     time_trace("XDC_Rx2 %08x Decoded data_len=%d", ntohl(cp->ctag), cp->rvpb[index_buf].data_len);
 #endif
   }
-  pthread_mutex_unlock(&(cp->lock));
+  pthread_mutex_unlock(&(cp->rvpb_lock));
   return(rv);
 }
 

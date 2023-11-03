@@ -50,12 +50,12 @@ typedef struct virtual_channel {
   time_t           unix_seconds;           // When process was started
   unsigned long    wait4new_client;        // 1 = RX server checks if client started later (0 = no check)
   // RX Virtual Packet buffers between thread (reading from device) and nonblock_recv (sending to user)
-  pkt_info         rvpb[MAX_PKTS_PER_CHAN];  // RX packet info from RX thread (needs mutex lock)
+  pkt_info         rvpb[MAX_PKTS_PER_CHAN];  // RX Virtual Packet Buffer (RX thread writes) - needs mutex lock
   int              rvpb_count;             // Number of Receive Virtual Packet buffers: e.g., SHM=2, DMAt=1, DMAr=16
   int              rvpb_index_thrd;        // Thread's cyrrent Receive Virtual Packet buffer index
   int              rvpb_index_recv;        // Nonblock_recv cyrrent Receive Virtual Packet buffer index
   // RX THREAD(S)
-  pthread_mutex_t  lock;                   // Ensure RX thread does not write while xdcomms reads
+  pthread_mutex_t  rvpb_lock;              // No simultaneous rvpb read + (thread) write (rvpb is unique per flow)
   thread_args      thd_args;               // arguements passed rx thread for this tag
   pthread_t        thread_id;              // thread id for the rx thread
   // INFO FOR SPECIFIC CHANNELS
